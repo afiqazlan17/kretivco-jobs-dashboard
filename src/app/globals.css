@@ -1,0 +1,239 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600&display=swap');
+
+/* ========================================
+   KRETIVCO DESIGN SYSTEM — CSS VARIABLES
+   ======================================== */
+
+:root {
+  /* Brand Colors */
+  --brand-magenta: #E91E63;
+  --brand-deep-magenta: #AD1457;
+  --brand-amber: #FFA726;
+  --brand-light-pink: #F48FB1;
+  --brand-pale-pink: #FFD1DC;
+
+  /* Sidebar */
+  --sidebar-bg: #1A1025;
+  --sidebar-text: #FFFFFF;
+  --sidebar-text-inactive: #FFFFFF80;
+  --sidebar-accent: #E91E63;
+  --sidebar-width: 240px;
+
+  /* Page */
+  --page-bg: #F5F3F7;
+  --card-bg: #FFFFFF;
+  --card-border: #F0ECF4;
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --card-radius: 12px;
+
+  /* Header */
+  --header-gradient: linear-gradient(135deg, #E91E63 0%, #AD1457 100%);
+
+  /* Text */
+  --text-primary: #1A1025;
+  --text-secondary: #6B6080;
+  --text-muted: #9B93A8;
+  --text-on-dark: #FFFFFF;
+  --text-on-dark-muted: #FFFFFF80;
+
+  /* Borders */
+  --border-default: #E8E4ED;
+  --border-hover: #D4CDE0;
+
+  /* Inputs */
+  --input-bg: #FFFFFF;
+  --input-border: #E8E4ED;
+  --input-focus: #E91E63;
+  --input-placeholder: #B0A8BC;
+
+  /* Buttons */
+  --btn-primary-bg: #E91E63;
+  --btn-primary-hover: #D81558;
+  --btn-primary-text: #FFFFFF;
+  --btn-secondary-bg: #F5F3F7;
+  --btn-secondary-border: #E8E4ED;
+  --btn-secondary-text: #1A1025;
+
+  /* Department Colors */
+  --dept-print: #E85D04;
+  --dept-work: #7209B7;
+  --dept-tech: #3A86FF;
+  --dept-machine: #6B7280;
+
+  /* Status Colors */
+  --status-potential: #6366F1;
+  --status-potential-bg: #6366F118;
+  --status-active: #10B981;
+  --status-active-bg: #10B98118;
+  --status-ongoing: #F59E0B;
+  --status-ongoing-bg: #F59E0B18;
+  --status-completed: #6B7280;
+  --status-completed-bg: #6B728018;
+  --status-cancelled: #EF4444;
+  --status-cancelled-bg: #EF444418;
+
+  /* Alert Colors */
+  --alert-warning: #F59E0B;
+  --alert-danger: #EF4444;
+  --alert-success: #10B981;
+  --alert-info: #3A86FF;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  --space-4xl: 40px;
+
+  /* Radius */
+  --radius-badge: 20px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --radius-card: 12px;
+  --radius-modal: 16px;
+
+  /* Typography */
+  --font-primary: 'Poppins', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ========================================
+   RESET & BASE
+   ======================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--page-bg);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-primary);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* ========================================
+   TYPOGRAPHY UTILITIES
+   ======================================== */
+
+.text-logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.text-page-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.text-section-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.text-card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.text-body {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.text-small {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.text-caption {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ========================================
+   LAYOUT
+   ======================================== */
+
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-area {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-content {
+  flex: 1;
+  padding: var(--space-2xl);
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+/* Tablet: sidebar icons only */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: 64px;
+  }
+}
+
+/* Mobile: sidebar hidden, bottom nav */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+
+  .main-area {
+    margin-left: 0;
+    padding-bottom: 64px; /* space for bottom nav */
+  }
+
+  .page-content {
+    padding: var(--space-lg);
+  }
+}

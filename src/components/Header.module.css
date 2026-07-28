@@ -1,0 +1,51 @@
+.header {
+  background: var(--header-gradient);
+  padding: var(--space-2xl) var(--space-2xl) var(--space-xl);
+}
+
+.content {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.titleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-on-dark);
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-on-dark-muted);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+
+@media (max-width: 768px) {
+  .header {
+    padding: var(--space-xl) var(--space-lg) var(--space-lg);
+  }
+
+  .title {
+    font-size: 18px;
+  }
+}
