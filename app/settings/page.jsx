@@ -164,7 +164,7 @@ export default function Settings(){
           </div>
         </div>
 
-        {addModal&&<UserModal onSave={d=>{addUser({...d,id:`u${Date.now()}`,active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.l}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
+        {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.l}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
         {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
         {resetModal&&<Modal w={420} onClose={()=>{setResetModal(false);setResetInput('')}}>

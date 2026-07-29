@@ -468,7 +468,7 @@ export default function JobMonitor() {
     if (!newCust.name.trim()) return;
     const custId = genCustId();
     const custObj = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       customer_id: custId,
       name: newCust.name.trim(),
       company: newCust.company.trim() || null,
@@ -491,9 +491,9 @@ export default function JobMonitor() {
     const estNum = newJob.est ? Number(newJob.est) : 0;
 
     const jobObj = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       job_id: jobId,
-      customer_id: newJob.cid || '',
+      customer_id: newJob.cid || null,
       department: newJob.dept,
       job_type: newJob.type,
       status: newJob.status,

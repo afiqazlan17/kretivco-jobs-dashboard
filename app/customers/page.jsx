@@ -76,7 +76,7 @@ export default function CustomerDirectory(){
   const [toast,setToast]=useState(null);
   const [showNew,setShowNew]=useState(false);
   const [newForm,setNewForm]=useState({name:'',company:'',phone:'',email:'',source:'referral'});
-  const handleNewSave=()=>{if(!newForm.name.trim())return;const custId=genCustId();addCustomer({id:custId,customer_id:custId,name:newForm.name,company:newForm.company,phone:newForm.phone,email:newForm.email,source:newForm.source,created_at:new Date().toISOString()});setShowNew(false);setNewForm({name:'',company:'',phone:'',email:'',source:'referral'});setToast(`${custId} (${newForm.name}) ditambah.`)};
+  const handleNewSave=()=>{if(!newForm.name.trim())return;const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,name:newForm.name,company:newForm.company,phone:newForm.phone,email:newForm.email,source:newForm.source,created_at:new Date().toISOString()});setShowNew(false);setNewForm({name:'',company:'',phone:'',email:'',source:'referral'});setToast(`${custId} (${newForm.name}) ditambah.`)};
 
   const stats=useMemo(()=>{const m={};customers.forEach(c=>{const cj=visJobs.filter(j=>j.customer_id===c.id&&j.status!=="cancelled");m[c.id]={jobs:cj.length,est:cj.reduce((s,j)=>s+(j.estimation_value||0),0),rev:cj.filter(j=>j.status==="completed").reduce((s,j)=>s+(j.final_value||0),0)};});return m},[customers,visJobs]);
   const visCustomerIds=useMemo(()=>visDepts?new Set(visJobs.map(j=>j.customer_id)):null,[visDepts,visJobs]);
