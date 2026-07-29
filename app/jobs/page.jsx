@@ -1,6 +1,6 @@
 "use client"
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { useAuth, useData } from '@/lib/hooks';
+import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
 
 // ─── Micro Components ─────────────────────────────────────────
@@ -405,6 +405,7 @@ export default function JobMonitor() {
   const { profile } = useAuth() || {};
   const isBod = profile?.role === 'bod';
   const userDept = profile?.department || null;
+  const visDepts = useVisibleDepts();
 
   // Shared data store
   const { jobs, customers, addJob, updateJob, addCustomer, getActivity, genJobId, genCustId } = useData();
@@ -519,14 +520,14 @@ export default function JobMonitor() {
 
   const filtered = useMemo(() => {
     let list = jobs.filter(j => !j.archived);
-    // Non-BOD: force filter to user's department
-    if (!isBod && userDept) list = list.filter(j => j.department === userDept);
-    else if (fDept !== "all") list = list.filter(j => j.department === fDept);
+    // Filter by visible departments
+    if (visDepts) list = list.filter(j => visDepts.includes(j.department));
+    if (fDept !== "all") list = list.filter(j => j.department === fDept);
     if (fStatus !== "all") list = list.filter(j => j.status === fStatus);
     if (search.trim()) { const q = search.toLowerCase(); list = list.filter(j => (j.job_id||'').toLowerCase().includes(q) || (j.customer_name||'').toLowerCase().includes(q) || (j.job_type||'').toLowerCase().includes(q) || (j.pic||'').toLowerCase().includes(q)); }
     list.sort((a, b) => { let va, vb; switch (sortCol) { case "id": va=a.job_id||''; vb=b.job_id||''; break; case "customer": va=a.customer_name||""; vb=b.customer_name||""; break; case "dept": va=a.department||''; vb=b.department||''; break; case "status": va=a.status||''; vb=b.status||''; break; case "value": va=a.estimation_value||0; vb=b.estimation_value||0; break; case "deadline": va=a.deadline||"9999"; vb=b.deadline||"9999"; break; default: va=a.job_id||''; vb=b.job_id||''; } if (va<vb) return sortDir==="asc"?-1:1; if (va>vb) return sortDir==="asc"?1:-1; return 0; });
     return list;
-  }, [jobs, fDept, fStatus, search, sortCol, sortDir, isBod, userDept]);
+  }, [jobs, fDept, fStatus, search, sortCol, sortDir, visDepts]);
 
   const toggleSort = c => { if (sortCol===c) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortCol(c); setSortDir("asc"); } };
   const sortInd = c => sortCol!==c ? <span className="sort-idle">⇅</span> : <span className="sort-active">{sortDir==="asc"?"↑":"↓"}</span>;
@@ -655,14 +656,14 @@ export default function JobMonitor() {
               <span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
               <input className="field-input" style={{ paddingLeft: 36 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari job, customer, PIC..." />
             </div>
-            {isBod ? (
+            {(!visDepts || visDepts.length > 1) ? (
               <select className="field-select" style={{ width: 160 }} value={fDept} onChange={e=>setFDept(e.target.value)}>
                 <option value="all">Semua Department</option>
-                {Object.entries(DEPT).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                {Object.entries(DEPT).filter(([k])=>!visDepts||visDepts.includes(k)).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
               </select>
-            ) : (
-              <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[userDept]?.color||'#1A1025',background:(DEPT[userDept]?.color||'#6B7280')+'12',borderRadius:8}}>{DEPT[userDept]?.label||userDept}</div>
-            )}
+            ) : visDepts?.length === 1 ? (
+              <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[visDepts[0]]?.color||'#1A1025',background:(DEPT[visDepts[0]]?.color||'#6B7280')+'12',borderRadius:8}}>{DEPT[visDepts[0]]?.label||visDepts[0]}</div>
+            ) : null}
             <select className="field-select" style={{ width: 140 }} value={fStatus} onChange={e=>setFStatus(e.target.value)}>
               <option value="all">Semua Status</option>
               {Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}

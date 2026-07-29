@@ -13,11 +13,12 @@ function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500)
 
 function UserModal({user,onSave,onClose}){
   const isEdit=!!user;
-  const[f,setF]=useState({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||""});
+  const[f,setF]=useState({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||"",visible_departments:user?.visible_departments||[]});
   const[err,setErr]=useState({});
-  const s=(k,v)=>{setF(p=>{const n={...p,[k]:v};if(k==="role"&&v==="bod")n.department="";return n})};
+  const s=(k,v)=>{setF(p=>{const n={...p,[k]:v};if(k==="role"&&v==="bod"){n.department="";n.visible_departments=[]}return n})};
+  const toggleVisDept=(dept)=>{setF(p=>{const vd=[...(p.visible_departments||[])];const i=vd.indexOf(dept);if(i>=0)vd.splice(i,1);else vd.push(dept);return{...p,visible_departments:vd}})};
   const needsDept=f.role!=="bod";
-  const changed=isEdit?(f.name!==user.name||f.email!==user.email||f.role!==user.role||(f.department||null)!==(user.department||null)):true;
+  const changed=isEdit?(f.name!==user.name||f.email!==user.email||f.role!==user.role||(f.department||null)!==(user.department||null)||JSON.stringify(f.visible_departments||[])!==JSON.stringify(user.visible_departments||[])):true;
   const validate=()=>{const e={};if(!f.name.trim())e.name="Wajib.";if(!f.email.trim())e.email="Wajib.";if(needsDept&&!f.department)e.department="Pilih department.";setErr(e);return!Object.keys(e).length};
 
   return(
@@ -35,13 +36,14 @@ function UserModal({user,onSave,onClose}){
           ))}</div>
         </div>
         {needsDept&&<div className="fg"><label className="fl">Department *</label><div className="dept-btns">{Object.entries(DEPT).map(([k,v])=><button key={k} className="dept-btn" style={{border:f.department===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.department===k?v.color+"12":"#fff",color:f.department===k?v.color:"#6B6080"}} onClick={()=>s("department",k)}>{v.label}</button>)}</div>{err.department&&<div className="ferr">{err.department}</div>}</div>}
+        {needsDept&&<div className="fg"><label className="fl">Visible Departments</label><div className="text-xs text-muted" style={{marginBottom:8}}>Pilih department yang user ini boleh lihat. Kosong = department sendiri sahaja.</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{Object.entries(DEPT).map(([k,v])=>{const checked=(f.visible_departments||[]).includes(k);return<label key={k} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,cursor:'pointer',border:checked?`2px solid ${v.color}`:'1px solid #E8E4ED',background:checked?v.color+'08':'#fff',fontSize:12,fontWeight:checked?600:400,color:checked?v.color:'#6B6080'}}><input type="checkbox" checked={checked} onChange={()=>toggleVisDept(k)} style={{accentColor:v.color,width:14,height:14}}/>{v.label}</label>})}</div></div>}
         <div className="access-preview"><div className="section-label" style={{marginBottom:8}}>Preview Akses</div><div className="text-sm" style={{lineHeight:1.8}}>
           {f.role==="bod"?<><span className="text-green">✓</span> Semua department<br/><span className="text-green">✓</span> Full reports & export<br/><span className="text-green">✓</span> Settings & user management</>:
-          f.role==="dept_head"?<><span className="text-green">✓</span> Job {f.department?DEPT[f.department]?.label:"dept"} sahaja<br/><span className="text-green">✓</span> Reports dept sendiri<br/><span className="text-red">✕</span> Tidak boleh akses Settings</>:
-          <><span className="text-green">✓</span> Job {f.department?DEPT[f.department]?.label:"dept"} sahaja<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
+          f.role==="dept_head"?<><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Boleh lihat: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`Job ${f.department?DEPT[f.department]?.label:"dept"} sahaja`}<br/><span className="text-green">✓</span> Reports dept yang visible<br/><span className="text-red">✕</span> Tidak boleh akses Settings</>:
+          <><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Boleh lihat: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`Job ${f.department?DEPT[f.department]?.label:"dept"} sahaja`}<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
         </div></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null})}}>{isEdit?"Simpan":"Tambah"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Simpan":"Tambah"}</button></div>
     </Modal>
   );
 }
@@ -133,7 +135,7 @@ export default function Settings(){
                 <div className="tbl-c"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Sejak {formatDate(u.created_at)}</div></div>
                 <div className="tbl-c text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
-                <div className="tbl-c"><DTag d={u.department}/></div>
+                <div className="tbl-c">{u.visible_departments?.length>0?u.visible_departments.map(d=><DTag key={d} d={d}/>):<DTag d={u.department}/>}</div>
                 <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Aktif":"Tidak aktif"}</div>
                 <div className="tbl-c" style={{display:"flex",gap:6}}>
                   <button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button>

@@ -1,6 +1,6 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
-import { useData } from "@/lib/hooks";
+import { useData, useVisibleDepts } from "@/lib/hooks";
 import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, formatRM, formatDate } from "@/lib/constants";
 
 function SrcBadge({s}){const m=SOURCE[s];return m?<span className="src-badge" style={{color:m.color,background:m.color+"12"}}>{m.label}</span>:<span className="text-xs text-muted">—</span>}
@@ -67,6 +67,8 @@ function EditModal({cust,onSave,onClose}){
 // ─── Main ─────────────────────────────────────────────────────
 export default function CustomerDirectory(){
   const { customers, jobs, addCustomer, updateCustomer, genCustId } = useData();
+  const visDepts = useVisibleDepts();
+  const visJobs = visDepts ? jobs.filter(j => visDepts.includes(j.department)) : jobs;
   const [search,setSearch]=useState("");
   const [fSrc,setFSrc]=useState("all");
   const [profile,setProfile]=useState(null);
@@ -76,8 +78,9 @@ export default function CustomerDirectory(){
   const [newForm,setNewForm]=useState({name:'',company:'',phone:'',email:'',source:'referral'});
   const handleNewSave=()=>{if(!newForm.name.trim())return;const custId=genCustId();addCustomer({id:custId,customer_id:custId,name:newForm.name,company:newForm.company,phone:newForm.phone,email:newForm.email,source:newForm.source,created_at:new Date().toISOString()});setShowNew(false);setNewForm({name:'',company:'',phone:'',email:'',source:'referral'});setToast(`${custId} (${newForm.name}) ditambah.`)};
 
-  const stats=useMemo(()=>{const m={};customers.forEach(c=>{const cj=jobs.filter(j=>j.customer_id===c.id&&j.status!=="cancelled");m[c.id]={jobs:cj.length,est:cj.reduce((s,j)=>s+(j.estimation_value||0),0),rev:cj.filter(j=>j.status==="completed").reduce((s,j)=>s+(j.final_value||0),0)};});return m},[customers,jobs]);
-  const filtered=useMemo(()=>{let l=[...customers];if(fSrc!=="all")l=l.filter(c=>c.source===fSrc);if(search.trim()){const q=search.toLowerCase();l=l.filter(c=>c.name.toLowerCase().includes(q)||(c.customer_id||"").toLowerCase().includes(q));}return l},[customers,fSrc,search]);
+  const stats=useMemo(()=>{const m={};customers.forEach(c=>{const cj=visJobs.filter(j=>j.customer_id===c.id&&j.status!=="cancelled");m[c.id]={jobs:cj.length,est:cj.reduce((s,j)=>s+(j.estimation_value||0),0),rev:cj.filter(j=>j.status==="completed").reduce((s,j)=>s+(j.final_value||0),0)};});return m},[customers,visJobs]);
+  const visCustomerIds=useMemo(()=>visDepts?new Set(visJobs.map(j=>j.customer_id)):null,[visDepts,visJobs]);
+  const filtered=useMemo(()=>{let l=[...customers];if(visCustomerIds)l=l.filter(c=>visCustomerIds.has(c.id));if(fSrc!=="all")l=l.filter(c=>c.source===fSrc);if(search.trim()){const q=search.toLowerCase();l=l.filter(c=>c.name.toLowerCase().includes(q)||(c.customer_id||"").toLowerCase().includes(q));}return l},[customers,fSrc,search,visCustomerIds]);
   const totalRev=Object.values(stats).reduce((s,c)=>s+c.rev,0);
 
   // Keep profile/editCust in sync with latest customer data

@@ -1,5 +1,5 @@
 'use client'
-import { useDashboard, useData } from '@/lib/hooks'
+import { useDashboard, useData, useVisibleDepts } from '@/lib/hooks'
 import { DEPT, STATUS, formatRM, formatDate, daysUntil } from '@/lib/constants'
 import { PageHeader, Card, StatusBadge, DeptTag, JobId, DeadlineBadge } from '@/components/ui/kretivco'
 
@@ -13,7 +13,9 @@ function StatCard({ icon, label, value, sub, color }) {
 
 export default function Dashboard() {
   const { stats, deptBreakdown, alerts, recent } = useDashboard()
-  const { jobs } = useData()
+  const { jobs: allJobs } = useData()
+  const visDepts = useVisibleDepts()
+  const jobs = visDepts ? allJobs.filter(j => visDepts.includes(j.department)) : allJobs
   const today = new Date().toLocaleDateString('ms-MY', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
   const funnelTotal = (stats.potential_jobs||0)+(stats.active_jobs||0)+(stats.in_progress_jobs||0)+(stats.completed_jobs||0)
   const convPct = funnelTotal>0 ? Math.round((stats.completed_jobs||0)/funnelTotal*100) : 0
@@ -21,7 +23,7 @@ export default function Dashboard() {
 
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>BOD View</span>
+      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : 'BOD View'}</span>
     </PageHeader>
     <div style={{ padding:24, maxWidth:1200, margin:'0 auto' }}>
       {/* Row 1: Stat Cards */}
@@ -46,7 +48,7 @@ export default function Dashboard() {
         <Card style={{ padding:'20px 24px' }}>
           <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>Job by Department</div>
           {(() => {
-            const deptCounts = Object.keys(DEPT).map(k => {
+            const deptCounts = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k)).map(k => {
               const count = jobs.filter(j => j.department === k && !j.archived && j.status !== 'cancelled').length
               return { key: k, ...DEPT[k], count }
             })

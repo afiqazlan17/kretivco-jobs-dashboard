@@ -1,20 +1,19 @@
 "use client"
 import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { useAuth, useData } from '@/lib/hooks';
+import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, MONTHS, formatRM, formatRMShort, formatDate } from '@/lib/constants';
 
 export default function Reports(){
   const { profile } = useAuth() || {};
   const { jobs = [], customers = [] } = useData() || {};
-  const isBod = profile?.role === 'bod';
-  const userDept = profile?.department || null;
+  const visDepts = useVisibleDepts();
 
-  const[df,setDf]=useState("2026-01-01");const[dt,setDt]=useState("2026-07-31");const[fD,setFD]=useState(isBod ? "all" : (userDept || "all"));
+  const[df,setDf]=useState("2026-01-01");const[dt,setDt]=useState("2026-07-31");const[fD,setFD]=useState("all");
 
   const filtered=useMemo(()=>(jobs || []).filter(j=>{
-    const deptFilter = isBod ? fD : (userDept || fD);
-    if(deptFilter!=="all"&&j.department!==deptFilter)return false;if(df&&j.created_at<df)return false;if(dt&&j.created_at>dt)return false;return true}),[jobs,df,dt,fD,isBod,userDept]);
+    if(visDepts && !visDepts.includes(j.department))return false;
+    if(fD!=="all"&&j.department!==fD)return false;if(df&&j.created_at<df)return false;if(dt&&j.created_at>dt)return false;return true}),[jobs,df,dt,fD,visDepts]);
   const nc=filtered.filter(j=>j.status!=="cancelled");
   const comp=filtered.filter(j=>j.status==="completed");
   const totalJobs=nc.length;
@@ -86,11 +85,11 @@ export default function Reports(){
           <div className="card filter-bar" style={{marginBottom:20}}>
             <div style={{display:"flex",alignItems:"center",gap:6}}><label className="text-sm fw500 text-secondary">Dari</label><input type="date" className="fi" style={{width:150}} value={df} onChange={e=>setDf(e.target.value)}/></div>
             <div style={{display:"flex",alignItems:"center",gap:6}}><label className="text-sm fw500 text-secondary">Hingga</label><input type="date" className="fi" style={{width:150}} value={dt} onChange={e=>setDt(e.target.value)}/></div>
-            {isBod ? (
-              <select className="fs" style={{width:160}} value={fD} onChange={e=>setFD(e.target.value)}><option value="all">Semua Dept</option>{Object.entries(DEPT).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
-            ) : (
-              <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[userDept]?.color||'#1A1025',background:DEPT[userDept]?.color+'12'||'#F5F3F7',borderRadius:8}}>{DEPT[userDept]?.label||userDept}</div>
-            )}
+            {(!visDepts || visDepts.length > 1) ? (
+              <select className="fs" style={{width:160}} value={fD} onChange={e=>setFD(e.target.value)}><option value="all">Semua Dept</option>{Object.entries(DEPT).filter(([k])=>!visDepts||visDepts.includes(k)).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
+            ) : visDepts?.length === 1 ? (
+              <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[visDepts[0]]?.color||'#1A1025',background:(DEPT[visDepts[0]]?.color||'#6B7280')+'12',borderRadius:8}}>{DEPT[visDepts[0]]?.label||visDepts[0]}</div>
+            ) : null}
             <div style={{flex:1}}/><span className="text-sm text-muted">{filtered.length} job</span>
           </div>
 
