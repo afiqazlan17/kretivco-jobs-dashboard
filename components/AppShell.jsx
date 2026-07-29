@@ -19,15 +19,15 @@ export default function AppShell({ children }) {
   const { profile, loading } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
 
-  // Skip shell on login page
-  if (pathname === '/login') return children
-
   // Auth guard — redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !profile && pathname !== '/login') {
       router.push('/login')
     }
   }, [loading, profile, pathname, router])
+
+  // Skip shell on login page
+  if (pathname === '/login') return children
 
   // Show nothing while checking auth or redirecting
   if (loading || !profile) return null
