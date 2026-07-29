@@ -1,12 +1,6 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
-
-const USERS_INIT=[
-  {id:"u1",name:"Amirul Hafiz",title:"CEO",email:"amirul@kretiv.co",role:"bod",dept:null,active:true,since:"2026-01-01"},
-  {id:"u2",name:"Nurfadilah Rahmat",title:"CMO",email:"nurfadilah@kretiv.co",role:"bod",dept:null,active:true,since:"2026-01-01"},
-  {id:"u3",name:"Afiq Azlan",title:"COO",email:"afiq@kretiv.co",role:"bod",dept:null,active:true,since:"2026-01-01"},
-  {id:"u4",name:"Amnan Syahmi",title:"CTO",email:"amnan@kretiv.co",role:"dept_head",dept:"tech",active:true,since:"2026-03-01"},
-];
+import { useAuth, useData } from '@/lib/hooks';
 const DEPT={print:{code:"KP",label:"KretivPrint",color:"#E85D04"},work:{code:"KW",label:"KretivWork",color:"#7209B7"},tech:{code:"KT",label:"KretivTech",color:"#3A86FF"},machine:{code:"KM",label:"KretivMachine",color:"#6B7280"}};
 const ROLE={bod:{l:"BOD",c:"#E91E63",d:"Full access — semua department, reports, settings"},dept_head:{l:"Dept Head",c:"#3A86FF",d:"Department sendiri — jobs, reports"},staff:{l:"Staff",c:"#6B7280",d:"Department sendiri — limited actions"}};
 const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"short",year:"numeric"}):"—";
@@ -19,12 +13,12 @@ function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500)
 
 function UserModal({user,onSave,onClose}){
   const isEdit=!!user;
-  const[f,setF]=useState({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",dept:user?.dept||""});
+  const[f,setF]=useState({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||""});
   const[err,setErr]=useState({});
-  const s=(k,v)=>{setF(p=>{const n={...p,[k]:v};if(k==="role"&&v==="bod")n.dept="";return n})};
+  const s=(k,v)=>{setF(p=>{const n={...p,[k]:v};if(k==="role"&&v==="bod")n.department="";return n})};
   const needsDept=f.role!=="bod";
-  const changed=isEdit?(f.name!==user.name||f.email!==user.email||f.role!==user.role||(f.dept||null)!==(user.dept||null)):true;
-  const validate=()=>{const e={};if(!f.name.trim())e.name="Wajib.";if(!f.email.trim())e.email="Wajib.";if(needsDept&&!f.dept)e.dept="Pilih department.";setErr(e);return!Object.keys(e).length};
+  const changed=isEdit?(f.name!==user.name||f.email!==user.email||f.role!==user.role||(f.department||null)!==(user.department||null)):true;
+  const validate=()=>{const e={};if(!f.name.trim())e.name="Wajib.";if(!f.email.trim())e.email="Wajib.";if(needsDept&&!f.department)e.department="Pilih department.";setErr(e);return!Object.keys(e).length};
 
   return(
     <Modal w={500} onClose={onClose}>
@@ -40,14 +34,14 @@ function UserModal({user,onSave,onClose}){
             </label>
           ))}</div>
         </div>
-        {needsDept&&<div className="fg"><label className="fl">Department *</label><div className="dept-btns">{Object.entries(DEPT).map(([k,v])=><button key={k} className="dept-btn" style={{border:f.dept===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.dept===k?v.color+"12":"#fff",color:f.dept===k?v.color:"#6B6080"}} onClick={()=>s("dept",k)}>{v.label}</button>)}</div>{err.dept&&<div className="ferr">{err.dept}</div>}</div>}
+        {needsDept&&<div className="fg"><label className="fl">Department *</label><div className="dept-btns">{Object.entries(DEPT).map(([k,v])=><button key={k} className="dept-btn" style={{border:f.department===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.department===k?v.color+"12":"#fff",color:f.department===k?v.color:"#6B6080"}} onClick={()=>s("department",k)}>{v.label}</button>)}</div>{err.department&&<div className="ferr">{err.department}</div>}</div>}
         <div className="access-preview"><div className="section-label" style={{marginBottom:8}}>Preview Akses</div><div className="text-sm" style={{lineHeight:1.8}}>
           {f.role==="bod"?<><span className="text-green">✓</span> Semua department<br/><span className="text-green">✓</span> Full reports & export<br/><span className="text-green">✓</span> Settings & user management</>:
-          f.role==="dept_head"?<><span className="text-green">✓</span> Job {f.dept?DEPT[f.dept]?.label:"dept"} sahaja<br/><span className="text-green">✓</span> Reports dept sendiri<br/><span className="text-red">✕</span> Tidak boleh akses Settings</>:
-          <><span className="text-green">✓</span> Job {f.dept?DEPT[f.dept]?.label:"dept"} sahaja<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
+          f.role==="dept_head"?<><span className="text-green">✓</span> Job {f.department?DEPT[f.department]?.label:"dept"} sahaja<br/><span className="text-green">✓</span> Reports dept sendiri<br/><span className="text-red">✕</span> Tidak boleh akses Settings</>:
+          <><span className="text-green">✓</span> Job {f.department?DEPT[f.department]?.label:"dept"} sahaja<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
         </div></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,dept:needsDept?f.dept:null})}}>{isEdit?"Simpan":"Tambah"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null})}}>{isEdit?"Simpan":"Tambah"}</button></div>
     </Modal>
   );
 }
@@ -57,15 +51,17 @@ function ConfirmModal({title,msg,label,color,onConfirm,onClose}){
 }
 
 export default function Settings(){
-  const[users,setUsers]=useState(USERS_INIT);const[toast,setToast]=useState(null);
+  const { users, addUser, updateUser, resetAll } = useData();
+  const[toast,setToast]=useState(null);
   const[search,setSearch]=useState("");const[fRole,setFRole]=useState("all");const[showInactive,setShowInactive]=useState(false);
   const[addModal,setAddModal]=useState(false);const[editUser,setEditUser]=useState(null);const[confirm,setConfirm]=useState(null);
+  const[resetModal,setResetModal]=useState(false);const[resetInput,setResetInput]=useState('');
 
   const filtered=useMemo(()=>{let l=[...users];if(!showInactive)l=l.filter(u=>u.active);if(fRole!=="all")l=l.filter(u=>u.role===fRole);if(search.trim()){const q=search.toLowerCase();l=l.filter(u=>u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q))}return l},[users,fRole,search,showInactive]);
 
   const ac=users.filter(u=>u.active).length;const bc=users.filter(u=>u.role==="bod"&&u.active).length;const dc=users.filter(u=>u.role==="dept_head"&&u.active).length;const sc=users.filter(u=>u.role==="staff"&&u.active).length;
 
-  const handleToggle=u=>{if(u.active){setConfirm({title:"Nyahaktifkan?",msg:`${u.name} tidak akan boleh log masuk. Boleh aktifkan semula kemudian.`,label:"Nyahaktifkan",color:"#EF4444",onConfirm:()=>{setUsers(p=>p.map(x=>x.id===u.id?{...x,active:false}:x));setConfirm(null);setToast({msg:`${u.name} dinyahaktifkan.`,type:"danger"})}});}else{setUsers(p=>p.map(x=>x.id===u.id?{...x,active:true}:x));setToast({msg:`${u.name} diaktifkan.`,type:"success"});}};
+  const handleToggle=u=>{if(u.active){setConfirm({title:"Nyahaktifkan?",msg:`${u.name} tidak akan boleh log masuk. Boleh aktifkan semula kemudian.`,label:"Nyahaktifkan",color:"#EF4444",onConfirm:()=>{updateUser(u.id,{active:false});setConfirm(null);setToast({msg:`${u.name} dinyahaktifkan.`,type:"danger"})}});}else{updateUser(u.id,{active:true});setToast({msg:`${u.name} diaktifkan.`,type:"success"});}};
 
   const caps=[["Lihat semua dept",1,0,0],["Lihat dept sendiri",1,1,1],["Cipta job",1,1,1],["Edit job",1,1,0],["Tukar status",1,1,0],["Arkib/Batal",1,0,0],["Reports",1,1,0],["Export",1,0,0],["User Management",1,0,0],["Settings",1,0,0]];
 
@@ -134,10 +130,10 @@ export default function Settings(){
             {filtered.length===0?<div style={{padding:"48px 20px",textAlign:"center",color:"#9B93A8",fontSize:13}}>Tiada user.</div>:filtered.map(u=>(
               <div key={u.id} className="tbl-r" style={{opacity:u.active?1:.55}}>
                 <div className="tbl-c"><Av name={u.name}/></div>
-                <div className="tbl-c"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Sejak {formatDate(u.since)}</div></div>
+                <div className="tbl-c"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Sejak {formatDate(u.created_at)}</div></div>
                 <div className="tbl-c text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
-                <div className="tbl-c"><DTag d={u.dept}/></div>
+                <div className="tbl-c"><DTag d={u.department}/></div>
                 <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Aktif":"Tidak aktif"}</div>
                 <div className="tbl-c" style={{display:"flex",gap:6}}>
                   <button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button>
@@ -153,11 +149,36 @@ export default function Settings(){
               {caps.map(([cap,b,d,s],i)=><tr key={i}><td>{cap}</td><td style={{textAlign:"center"}}>{b?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{d?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{s?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td></tr>)}
             </tbody></table>
           </div>
+
+          {/* Reset All Data — Dev Phase */}
+          <div className="card" style={{marginTop:24,padding:"20px 24px",borderLeft:"4px solid #EF4444"}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:'#EF4444'}}>Reset Semua Data</div>
+                <div className="text-sm text-secondary" style={{marginTop:4}}>Padam semua jobs, customers & activity logs. Users kekal. Dev phase sahaja.</div>
+              </div>
+              <button className="btn-danger-sm" style={{padding:'9px 20px',fontSize:13}} onClick={()=>setResetModal(true)}>Reset Data</button>
+            </div>
+          </div>
         </div>
 
-        {addModal&&<UserModal onSave={d=>{setUsers(p=>[...p,{...d,id:`u${Date.now()}`,active:true,since:new Date().toISOString()}]);setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.l}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
-        {editUser&&<UserModal user={editUser} onSave={d=>{setUsers(p=>p.map(u=>u.id===d.id?{...u,...d}:u));setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
+        {addModal&&<UserModal onSave={d=>{addUser({...d,id:`u${Date.now()}`,active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.l}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
+        {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
+        {resetModal&&<Modal w={420} onClose={()=>{setResetModal(false);setResetInput('')}}>
+          <div style={{padding:"24px"}}>
+            <div className="mtitle" style={{color:'#EF4444'}}>⚠️ Reset Semua Data</div>
+            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>Ini akan padam semua jobs, customers, dan activity logs. Users akan kekal. Tindakan ini tidak boleh diundo.</p>
+            <div style={{marginTop:16}}>
+              <label className="fl">Taip &quot;RESET&quot; untuk sahkan</label>
+              <input className="fi" value={resetInput} onChange={e=>setResetInput(e.target.value)} placeholder="RESET" style={{borderColor:resetInput==='RESET'?'#EF4444':'#E8E4ED'}}/>
+            </div>
+          </div>
+          <div className="mfooter">
+            <button className="btn-secondary" onClick={()=>{setResetModal(false);setResetInput('')}}>Batal</button>
+            <button className="btn-primary" style={{background:resetInput==='RESET'?'#EF4444':'#E8E4ED',color:resetInput==='RESET'?'#fff':'#9B93A8',cursor:resetInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetInput==='RESET'){resetAll();setResetModal(false);setResetInput('');setToast({msg:'Semua data telah direset.',type:'danger'})}}}>Reset Semua</button>
+          </div>
+        </Modal>}
         {toast&&<Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
       </div>
     </>

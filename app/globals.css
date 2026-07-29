@@ -6,3 +6,30 @@ body{font-family:'Poppins',sans-serif;background:#F5F3F7;color:#1A1025;line-heig
 button:hover{filter:brightness(.97)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+
+/* ── Mobile Responsive ── */
+@media(max-width:768px){
+  /* Sidebar handled by AppShell JS */
+  main{margin-left:0!important}
+  /* Stacked grids */
+  .detail-grid,.g2,.cust-mini-grid{grid-template-columns:1fr!important}
+  /* Tables scroll */
+  .tbl-header,.tbl-row{min-width:700px}
+  .card{overflow-x:auto}
+  /* Modals full screen */
+  .modal-box,.mbox{width:100%!important;max-width:100vw!important;height:100vh;max-height:100vh;border-radius:0!important}
+  .modal-body,.mbody{max-height:calc(100vh - 140px)!important}
+  /* Stack stat cards */
+  .sum-grid{grid-template-columns:1fr 1fr!important}
+  /* Header smaller */
+  .header .h-title,.header div[style*="fontSize:20"]{font-size:16px!important}
+  /* Funnel stack */
+  .funnel-row{flex-direction:column!important;gap:8px!important}
+  .funnel-arrow{transform:rotate(90deg)}
+  /* Toast */
+  .toast{left:16px;right:16px;bottom:16px}
+  /* Filter bar wrap */
+  .filter-bar{flex-direction:column;align-items:stretch!important}
+  .search-wrap{width:100%!important;min-width:0!important}
+}

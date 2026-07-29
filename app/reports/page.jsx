@@ -1,64 +1,40 @@
 "use client"
 import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { useAuth } from '@/lib/hooks';
-
-const CUSTOMERS={"KCO-001":"CIDB Malaysia","KCO-002":"PETRONAS","KCO-004":"FinasXperts","KCO-007":"Undangan.my","KCO-009":"Tuflong","KCO-010":"PLANMalaysia","KCO-011":"GlamBooth.my","KCO-012":"SPRM","KCO-013":"Borneo","KCO-014":"MBI Selangor"};
-const ALL_JOBS=[
-  {id:"KP-2026-001",cid:"KCO-010",dept:"print",type:"Banner Printing",status:"completed",est:4500,final:4800,pic:"Amirul",cat:"2026-01-10"},
-  {id:"KW-2026-001",cid:"KCO-011",dept:"work",type:"Logo Design",status:"completed",est:3000,final:3000,pic:"Multazam",cat:"2026-01-15"},
-  {id:"KP-2026-002",cid:"KCO-002",dept:"print",type:"ID Card",status:"completed",est:3500,final:3800,pic:"Amirul",cat:"2026-02-05"},
-  {id:"KT-2026-001",cid:"KCO-013",dept:"tech",type:"Mobile App",status:"cancelled",est:28000,final:null,pic:"Amnan",cat:"2026-02-15"},
-  {id:"KW-2026-002",cid:"KCO-007",dept:"work",type:"Social Media Kit",status:"completed",est:4000,final:4000,pic:"Multazam",cat:"2026-03-01"},
-  {id:"KP-2026-003",cid:"KCO-001",dept:"print",type:"Poster A1",status:"completed",est:2200,final:2200,pic:"Amirul",cat:"2026-03-10"},
-  {id:"KP-2026-004",cid:"KCO-010",dept:"print",type:"Booklet",status:"completed",est:6800,final:7200,pic:"Amirul",cat:"2026-04-20"},
-  {id:"KW-2026-003",cid:"KCO-011",dept:"work",type:"Logo & Branding",status:"completed",est:5000,final:5000,pic:"Multazam",cat:"2026-04-01"},
-  {id:"KT-2026-002",cid:"KCO-007",dept:"tech",type:"Platform Enhancement",status:"ongoing",est:20000,final:null,pic:"Amnan",cat:"2026-05-20"},
-  {id:"KW-2026-004",cid:"KCO-004",dept:"work",type:"Brand Identity",status:"active",est:15000,final:null,pic:"Multazam",cat:"2026-06-10"},
-  {id:"KP-2026-005",cid:"KCO-001",dept:"print",type:"Large Format",status:"active",est:12500,final:null,pic:"Amirul",cat:"2026-06-28"},
-  {id:"KP-2026-006",cid:"KCO-002",dept:"print",type:"Corporate Gift",status:"ongoing",est:8700,final:null,pic:"Amirul",cat:"2026-07-05"},
-  {id:"KT-2026-003",cid:"KCO-007",dept:"tech",type:"Booking System",status:"active",est:35000,final:null,pic:"Amnan",cat:"2026-07-10"},
-  {id:"KM-2026-001",cid:"KCO-009",dept:"machine",type:"Mesin Industri",status:"potential",est:45000,final:null,pic:"Tarzan",cat:"2026-07-15"},
-  {id:"KW-2026-005",cid:"KCO-014",dept:"work",type:"Annual Report",status:"active",est:12000,final:null,pic:"Afiq",cat:"2026-07-15"},
-  {id:"KP-2026-007",cid:"KCO-012",dept:"print",type:"Bunting",status:"active",est:9200,final:null,pic:"Amirul",cat:"2026-07-18"},
-];
-const DEPT={print:{code:"KP",label:"KretivPrint",color:"#E85D04"},work:{code:"KW",label:"KretivWork",color:"#7209B7"},tech:{code:"KT",label:"KretivTech",color:"#3A86FF"},machine:{code:"KM",label:"KretivMachine",color:"#6B7280"}};
-const STATUS={potential:{l:"Potential",c:"#6366F1"},active:{l:"Active",c:"#10B981"},ongoing:{l:"Ongoing",c:"#F59E0B"},completed:{l:"Completed",c:"#6B7280"},cancelled:{l:"Cancelled",c:"#EF4444"}};
-const MONTHS=["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ogo","Sep","Okt","Nov","Dis"];
-const formatRM=v=>v!=null?`RM ${Number(v).toLocaleString("en-MY")}`:"—";
-const formatRMs=v=>{if(v==null)return"—";return v>=1000?`RM ${(v/1000).toFixed(v%1000===0?0:1)}k`:`RM ${v}`};
+import { useAuth, useData } from '@/lib/hooks';
+import { DEPT, STATUS, MONTHS, formatRM, formatRMShort, formatDate } from '@/lib/constants';
 
 export default function Reports(){
   const { profile } = useAuth() || {};
+  const { jobs = [], customers = [] } = useData() || {};
   const isBod = profile?.role === 'bod';
   const userDept = profile?.department || null;
 
   const[df,setDf]=useState("2026-01-01");const[dt,setDt]=useState("2026-07-31");const[fD,setFD]=useState(isBod ? "all" : (userDept || "all"));
 
-  const filtered=useMemo(()=>ALL_JOBS.filter(j=>{
-    // Non-BOD: force filter to user's department
+  const filtered=useMemo(()=>(jobs || []).filter(j=>{
     const deptFilter = isBod ? fD : (userDept || fD);
-    if(deptFilter!=="all"&&j.dept!==deptFilter)return false;if(df&&j.cat<df)return false;if(dt&&j.cat>dt)return false;return true}),[df,dt,fD,isBod,userDept]);
+    if(deptFilter!=="all"&&j.department!==deptFilter)return false;if(df&&j.created_at<df)return false;if(dt&&j.created_at>dt)return false;return true}),[jobs,df,dt,fD,isBod,userDept]);
   const nc=filtered.filter(j=>j.status!=="cancelled");
   const comp=filtered.filter(j=>j.status==="completed");
   const totalJobs=nc.length;
-  const totalEst=nc.reduce((s,j)=>s+(j.est||0),0);
-  const totalFinal=comp.reduce((s,j)=>s+(j.final||0),0);
-  const variance=totalFinal-comp.reduce((s,j)=>s+(j.est||0),0);
+  const totalEst=nc.reduce((s,j)=>s+(j.estimation_value||0),0);
+  const totalFinal=comp.reduce((s,j)=>s+(j.final_value||0),0);
+  const variance=totalFinal-comp.reduce((s,j)=>s+(j.estimation_value||0),0);
 
-  const monthly=useMemo(()=>{const m={};for(let i=0;i<12;i++){const k=String(i).padStart(2,"0");m[k]={label:MONTHS[i],total:0,est:0,final:0,byD:{}};Object.keys(DEPT).forEach(d=>m[k].byD[d]={count:0});}nc.forEach(j=>{const k=String(parseInt(j.cat.substring(5,7))-1).padStart(2,"0");if(!m[k])return;m[k].total++;m[k].est+=j.est||0;m[k].final+=j.final||0;if(m[k].byD[j.dept])m[k].byD[j.dept].count++;});const from=df?parseInt(df.substring(5,7))-1:0;const to=dt?parseInt(dt.substring(5,7))-1:11;return Object.entries(m).filter(([k])=>{const i=parseInt(k);return i>=from&&i<=to}).map(([,v])=>v)},[nc,df,dt]);
+  const monthly=useMemo(()=>{const m={};for(let i=0;i<12;i++){const k=String(i).padStart(2,"0");m[k]={label:MONTHS[i],total:0,est:0,final:0,byD:{}};Object.keys(DEPT).forEach(d=>m[k].byD[d]={count:0});}nc.forEach(j=>{const k=String(parseInt(j.created_at.substring(5,7))-1).padStart(2,"0");if(!m[k])return;m[k].total++;m[k].est+=j.estimation_value||0;m[k].final+=j.final_value||0;if(m[k].byD[j.department])m[k].byD[j.department].count++;});const from=df?parseInt(df.substring(5,7))-1:0;const to=dt?parseInt(dt.substring(5,7))-1:11;return Object.entries(m).filter(([k])=>{const i=parseInt(k);return i>=from&&i<=to}).map(([,v])=>v)},[nc,df,dt]);
 
-  const deptBr=useMemo(()=>{const m={};Object.keys(DEPT).forEach(d=>m[d]={count:0,est:0});nc.forEach(j=>{if(m[j.dept]){m[j.dept].count++;m[j.dept].est+=j.est||0}});return m},[nc]);
+  const deptBr=useMemo(()=>{const m={};Object.keys(DEPT).forEach(d=>m[d]={count:0,est:0});nc.forEach(j=>{if(m[j.department]){m[j.department].count++;m[j.department].est+=j.estimation_value||0}});return m},[nc]);
   const maxDE=Math.max(...Object.values(deptBr).map(d=>d.est),1);
 
-  const topCust=useMemo(()=>{const m={};nc.forEach(j=>{if(!m[j.cid])m[j.cid]={name:CUSTOMERS[j.cid]||j.cid,count:0,est:0,final:0};m[j.cid].count++;m[j.cid].est+=j.est||0;m[j.cid].final+=j.final||0});return Object.entries(m).sort((a,b)=>b[1].est-a[1].est).slice(0,5)},[nc]);
-  const picBr=useMemo(()=>{const m={};nc.forEach(j=>{if(!m[j.pic])m[j.pic]={count:0,est:0,comp:0,final:0};m[j.pic].count++;m[j.pic].est+=j.est||0;if(j.status==="completed"){m[j.pic].comp++;m[j.pic].final+=j.final||0}});return Object.entries(m).sort((a,b)=>b[1].count-a[1].count)},[nc]);
+  const topCust=useMemo(()=>{const m={};nc.forEach(j=>{const custName=j.customer_name||customers.find(c=>c.id===j.customer_id)?.name||j.customer_id;if(!m[j.customer_id])m[j.customer_id]={name:custName,count:0,est:0,final:0};m[j.customer_id].count++;m[j.customer_id].est+=j.estimation_value||0;m[j.customer_id].final+=j.final_value||0});return Object.entries(m).sort((a,b)=>b[1].est-a[1].est).slice(0,5)},[nc,customers]);
+  const picBr=useMemo(()=>{const m={};nc.forEach(j=>{if(!m[j.pic])m[j.pic]={count:0,est:0,comp:0,final:0};m[j.pic].count++;m[j.pic].est+=j.estimation_value||0;if(j.status==="completed"){m[j.pic].comp++;m[j.pic].final+=j.final_value||0}});return Object.entries(m).sort((a,b)=>b[1].count-a[1].count)},[nc]);
 
-  const funnel={pot:filtered.filter(j=>j.status==="potential").length,act:filtered.filter(j=>j.status==="active").length,ong:filtered.filter(j=>j.status==="ongoing").length,comp:comp.length};
+  const funnel={pot:filtered.filter(j=>j.status==="potential").length,act:filtered.filter(j=>j.status==="active").length,ong:filtered.filter(j=>j.status==="in_progress").length,comp:comp.length};
   const fTotal=funnel.pot+funnel.act+funnel.ong+funnel.comp;
   const convPct=fTotal>0?Math.round(funnel.comp/fTotal*100):0;
 
-  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metrik","Nilai"],["Jumlah Job",totalJobs],["Anggaran",totalEst],["Final",totalFinal],["Varian",variance]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Bulan","Jobs","Est","Final",...Object.values(DEPT).map(d=>d.code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...Object.keys(DEPT).map(d=>m.byD[d].count)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.id,CUSTOMERS[j.cid]||j.cid,DEPT[j.dept]?.label,j.type,STATUS[j.status]?.l,j.est,j.final,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
+  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metrik","Nilai"],["Jumlah Job",totalJobs],["Anggaran",totalEst],["Final",totalFinal],["Varian",variance]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Bulan","Jobs","Est","Final",...Object.values(DEPT).map(d=>d.code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...Object.keys(DEPT).map(d=>m.byD[d].count)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.job_id,j.customer_name||customers.find(c=>c.id===j.customer_id)?.name||j.customer_id,DEPT[j.department]?.label,j.job_type,STATUS[j.status]?.label,j.estimation_value,j.final_value,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
 
   return(
     <>
@@ -126,11 +102,11 @@ export default function Reports(){
 
           <div className="g2">
             <div className="card"><div className="card-title">Pecahan Department</div><div className="section-label" style={{marginBottom:16}}>By estimation value</div>
-              {Object.entries(deptBr).map(([d,data])=><div key={d} className="bar-row"><div className="bar-label" style={{color:DEPT[d].color}}>{DEPT[d].code}</div><div className="bar-track"><div className="bar-fill" style={{width:`${Math.max(data.est/maxDE*100,data.est>0?5:0)}%`,backgroundColor:DEPT[d].color}}>{data.est/maxDE*100>15&&<span className="bar-count">{formatRMs(data.est)}</span>}</div></div></div>)}
+              {Object.entries(deptBr).map(([d,data])=><div key={d} className="bar-row"><div className="bar-label" style={{color:DEPT[d].color}}>{DEPT[d].code}</div><div className="bar-track"><div className="bar-fill" style={{width:`${Math.max(data.est/maxDE*100,data.est>0?5:0)}%`,backgroundColor:DEPT[d].color}}>{data.est/maxDE*100>15&&<span className="bar-count">{formatRMShort(data.est)}</span>}</div></div></div>)}
             </div>
             <div className="card"><div className="card-title">Conversion Funnel</div><div className="section-label" style={{marginBottom:16}}>Potential → Completed</div>
               <div className="funnel-row">
-                {[{l:"Potential",n:funnel.pot,v:formatRMs(filtered.filter(j=>j.status==="potential").reduce((s,j)=>s+(j.est||0),0)),c:"#6366F1"},{l:"Active",n:funnel.act,v:formatRMs(filtered.filter(j=>j.status==="active").reduce((s,j)=>s+(j.est||0),0)),c:"#10B981"},{l:"Ongoing",n:funnel.ong,v:formatRMs(filtered.filter(j=>j.status==="ongoing").reduce((s,j)=>s+(j.est||0),0)),c:"#F59E0B"},{l:"Selesai",n:funnel.comp,v:formatRM(totalFinal),c:"#6B7280",last:true}].map((s,i)=>(
+                {[{l:"Potential",n:funnel.pot,v:formatRMShort(filtered.filter(j=>j.status==="potential").reduce((s,j)=>s+(j.estimation_value||0),0)),c:"#6366F1"},{l:"Active",n:funnel.act,v:formatRMShort(filtered.filter(j=>j.status==="active").reduce((s,j)=>s+(j.estimation_value||0),0)),c:"#10B981"},{l:"In Progress",n:funnel.ong,v:formatRMShort(filtered.filter(j=>j.status==="in_progress").reduce((s,j)=>s+(j.estimation_value||0),0)),c:"#F59E0B"},{l:"Selesai",n:funnel.comp,v:formatRM(totalFinal),c:"#6B7280",last:true}].map((s,i)=>(
                   <div key={i} className="funnel-step"><div className="funnel-box" style={{backgroundColor:s.c+"10",borderColor:s.c+"25"}}><div className="funnel-lbl" style={{color:s.c}}>{s.l}</div><div className="funnel-val">{s.n}</div><div className="funnel-sub">{s.v}</div>{s.last&&<div className="funnel-pct">{convPct}% conversion</div>}</div>{!s.last&&<div className="funnel-arrow">›</div>}</div>
                 ))}
               </div>

@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, SOURCE, PIC_OPTIONS, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -51,11 +51,52 @@ function CompleteModal({ job, onConfirm, onClose }) {
   );
 }
 
-function ConfirmModal({ title, msg, label, color, onConfirm, onClose }) {
+function ConfirmModal({ title, msg, label, color, onConfirm, onClose, showReasonField }) {
+  const [reasonText, setReasonText] = useState("");
   return (
     <Modal width={400} onClose={onClose}>
-      <div style={{ padding: "24px 24px 16px" }}><div className="modal-title">{title}</div><p className="text-body text-secondary" style={{ marginTop: 8, lineHeight: 1.6 }}>{msg}</p></div>
-      <div className="modal-footer"><button className="btn-secondary" onClick={onClose}>Batal</button><button className="btn-primary" style={{ background: color }} onClick={onConfirm}>{label}</button></div>
+      <div style={{ padding: "24px 24px 16px" }}>
+        <div className="modal-title">{title}</div>
+        <p className="text-body text-secondary" style={{ marginTop: 8, lineHeight: 1.6 }}>{msg}</p>
+        {showReasonField && (
+          <div style={{ marginTop: 12 }}>
+            <label className="field-label">Sebab (optional)</label>
+            <input className="field-input" value={reasonText} onChange={e => setReasonText(e.target.value)} placeholder="Nyatakan sebab..." />
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-primary" style={{ background: color }} onClick={() => onConfirm(reasonText)}>{label}</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Cancel Modal ────────────────────────────────────────────
+function CancelModal({ job, onConfirm, onClose }) {
+  const [reason, setReason] = useState(CANCEL_REASONS[0].value);
+  const [customText, setCustomText] = useState("");
+  return (
+    <Modal width={440} onClose={onClose}>
+      <div className="modal-header"><span className="modal-title">Batalkan Job</span><button className="modal-close" onClick={onClose}>×</button></div>
+      <div className="modal-body">
+        <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}</div>
+        <label className="field-label">Sebab Pembatalan *</label>
+        <select className="field-select" style={{ width: '100%', marginBottom: 12 }} value={reason} onChange={e => setReason(e.target.value)}>
+          {CANCEL_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+        {reason === 'other' && (
+          <div>
+            <label className="field-label">Nyatakan sebab</label>
+            <input className="field-input" value={customText} onChange={e => setCustomText(e.target.value)} placeholder="Sebab pembatalan..." />
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-primary" style={{ background: '#EF4444' }} onClick={() => onConfirm(reason, customText)}>Ya, Batalkan</button>
+      </div>
     </Modal>
   );
 }
@@ -64,16 +105,45 @@ function ConfirmModal({ title, msg, label, color, onConfirm, onClose }) {
 function Timeline({ jobId, getActivity }) {
   const logs = getActivity(jobId);
   if (!logs.length) return <div className="text-sm text-muted" style={{ padding: "12px 0" }}>Tiada activity log.</div>;
+
+  const sorted = [...logs].sort((a, b) => new Date(a.time) - new Date(b.time));
+
+  const actionIcon = (action) => {
+    switch (action) {
+      case 'created': return '📝';
+      case 'status_change': return '🔄';
+      case 'rollback': return '⏪';
+      case 'cancelled': return '✕';
+      case 'edited': return '✏️';
+      case 'completed': return '✅';
+      default: return '🔄';
+    }
+  };
+
+  const actionText = (l) => {
+    switch (l.action) {
+      case 'created': return 'cipta job ini';
+      case 'status_change': return <><span>tukar status: </span><StatusBadge s={l.from || l.old?.toLowerCase()} /> → <StatusBadge s={l.to || l.val?.toLowerCase()} /></>;
+      case 'rollback': return <><span>rollback status: </span><StatusBadge s={l.from} /> → <StatusBadge s={l.to} /></>;
+      case 'cancelled': return <span>batalkan job{l.detail ? ` — ${l.detail}` : ''}</span>;
+      case 'completed': return <span>tandakan selesai{l.detail ? ` — ${l.detail}` : ''}</span>;
+      case 'edited': return <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
+      default: return l.action;
+    }
+  };
+
   return (
     <div className="timeline">
       <div className="timeline-line" />
-      {logs.map((l, i) => (
+      {sorted.map((l, i) => (
         <div key={i} className="timeline-entry">
-          <div className="timeline-dot" style={{ background: l.action === "created" ? "#E91E63" : l.action === "completed" ? "#10B981" : "#E8E4ED" }} />
+          <div className="timeline-dot" style={{ background: l.action === "created" ? "#E91E63" : l.action === "completed" ? "#10B981" : l.action === "cancelled" ? "#EF4444" : l.action === "rollback" ? "#F59E0B" : "#E8E4ED" }} />
           <div className="text-body">
+            <span style={{ marginRight: 4 }}>{actionIcon(l.action)}</span>
             <strong>{l.user}</strong>{" "}
-            {l.action === "created" ? "cipta job ini" : l.action === "status_change" ? <>tukar status: <StatusBadge s={l.old?.toLowerCase()} /> → <StatusBadge s={l.val?.toLowerCase()} /></> : l.action === "edited" ? <>update {l.field}: {l.old} → <strong>{l.val}</strong></> : l.action}
+            {actionText(l)}
           </div>
+          {l.reason && <div className="text-sm text-secondary">Sebab: "{l.reason}"</div>}
           {l.note && <div className="text-sm text-secondary">"{l.note}"</div>}
           <div className="text-xs text-muted">{formatDateTime(l.time)}</div>
         </div>
@@ -177,8 +247,11 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 }
 
 // ─── Job Detail Panel ─────────────────────────────────────────
-function DetailPanel({ job, customers, getActivity, onStatus, onArchive, onToggleInstallment }) {
-  const next = STATUS_FLOW[job.status] || [];
+function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment }) {
+  const forward = STATUS_FLOW[job.status] || [];
+  const rollback = STATUS_ROLLBACK[job.status] || [];
+  const canCancel = !["completed", "cancelled"].includes(job.status);
+
   return (
     <div className="detail-panel">
       <div className="detail-grid">
@@ -194,6 +267,7 @@ function DetailPanel({ job, customers, getActivity, onStatus, onArchive, onToggl
             {job.final_value && <><span className="info-label">Final Value</span><span className="font-semibold text-green">{formatRM(job.final_value)}</span></>}
             <span className="info-label">Mula</span><span>{formatDate(job.start_date)}</span>
             <span className="info-label">Deadline</span><DLBadge deadline={job.deadline} status={job.status} />
+            {job.cancel_reason && <><span className="info-label">Sebab Batal</span><span className="text-body">{CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}{job.cancel_reason_text ? ` — ${job.cancel_reason_text}` : ''}</span></>}
           </div>
           {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
 
@@ -202,9 +276,15 @@ function DetailPanel({ job, customers, getActivity, onStatus, onArchive, onToggl
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
           </div>
 
-          {next.length > 0 && (
+          {(forward.length > 0 || rollback.length > 0 || canCancel) && (
             <div className="action-row">
-              {next.map(s => <button key={s} className="btn-status" style={{ color: STATUS[s].color, background: STATUS[s].color + "15" }} onClick={() => onStatus(job, s)}>→ {STATUS[s].label}</button>)}
+              {/* Forward buttons */}
+              {forward.map(s => <button key={s} className="btn-status" style={{ color: STATUS[s].color, background: STATUS[s].color + "15" }} onClick={() => onStatus(job, s)}>→ {STATUS[s].label}</button>)}
+              {/* Rollback buttons */}
+              {rollback.map(s => <button key={'rb-'+s} className="btn-status" style={{ color: STATUS[s].color, background: '#fff', border: `1px solid ${STATUS[s].color}` }} onClick={() => onRollback(job, s)}>← {STATUS[s].label}</button>)}
+              {/* Cancel button */}
+              {canCancel && <button className="btn-status" style={{ color: '#EF4444', background: '#EF444415' }} onClick={() => onCancel(job)}>✕ Cancel</button>}
+              {/* Archive button */}
               {!job.archived && job.status !== "cancelled" && <button className="btn-archive" onClick={() => onArchive(job)}>Arkib</button>}
             </div>
           )}
@@ -327,7 +407,7 @@ export default function JobMonitor() {
   const userDept = profile?.department || null;
 
   // Shared data store
-  const { jobs, customers, addJob, updateJob, getActivity, genJobId } = useData();
+  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, genJobId, genCustId } = useData();
 
   const DEPT_LIST = Object.entries(DEPT).map(([k,v])=>({key:k,...v}));
 
@@ -339,9 +419,14 @@ export default function JobMonitor() {
   const [sortDir, setSortDir] = useState("asc");
   const [completeJob, setCompleteJob] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newJob, setNewJob] = useState({dept:'',cid:'',type:'',status:'potential',est:'',pic:'',start:'',deadline:'',notes:''});
+
+  // Inline customer creation state
+  const [showInlineCust, setShowInlineCust] = useState(false);
+  const [newCust, setNewCust] = useState({name:'',company:'',phone:'',email:'',source:'referral'});
 
   // Special arrangement state for create modal
   const [specialArr, setSpecialArr] = useState(false);
@@ -374,6 +459,28 @@ export default function JobMonitor() {
     setCostBreakdown([]);
     setHasInstallment(false);
     setInstallments([]);
+    setShowInlineCust(false);
+    setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
+  };
+
+  const handleSaveInlineCustomer = () => {
+    if (!newCust.name.trim()) return;
+    const custId = genCustId();
+    const custObj = {
+      id: Date.now().toString(),
+      customer_id: custId,
+      name: newCust.name.trim(),
+      company: newCust.company.trim() || null,
+      phone: newCust.phone.trim() || null,
+      email: newCust.email.trim() || null,
+      source: newCust.source || 'referral',
+      created_at: new Date().toISOString(),
+    };
+    addCustomer(custObj, profile?.name);
+    nj('cid', custObj.id);
+    setShowInlineCust(false);
+    setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
+    setToast(`Customer ${custId} berjaya ditambah.`);
   };
 
   const handleCreateSave = () => {
@@ -403,7 +510,7 @@ export default function JobMonitor() {
       baki_kretivco: specialArr ? estNum - breakdownTotal : estNum,
     };
 
-    addJob(jobObj);
+    addJob(jobObj, profile?.name);
     setShowCreate(false);
     resetCreateForm();
     setToast(`Job ${jobId} berjaya dicipta.`);
@@ -426,18 +533,46 @@ export default function JobMonitor() {
 
   const handleStatus = useCallback((job, s) => {
     if (s==="completed") { setCompleteJob(job); return; }
-    if (s==="cancelled") { setConfirm({ title:"Batalkan Job?", msg:`Adakah anda pasti mahu batalkan ${job.job_id}?`, label:"Ya, Batalkan", color:"#EF4444", onConfirm:()=>{ updateJob(job.id, { status: "cancelled" }); setConfirm(null); setExpandedId(null); setToast(`${job.job_id} dibatalkan.`); } }); return; }
-    updateJob(job.id, { status: s });
+    updateJob(job.id, { status: s }, profile?.name, { action: 'status_change', from: job.status, to: s });
     setToast(`${job.job_id}: → ${STATUS[s].label}`);
-  },[updateJob]);
+  },[updateJob, profile]);
 
-  const handleArchive = useCallback((job)=>{ setConfirm({ title:"Arkib Job?", msg:`${job.job_id} akan diarkibkan.`, label:"Arkib", color:"#6B7280", onConfirm:()=>{ updateJob(job.id, { archived: true }); setConfirm(null); setExpandedId(null); setToast(`${job.job_id} diarkibkan.`); } }); },[updateJob]);
+  const handleRollback = useCallback((job, s) => {
+    setConfirm({
+      title: "Rollback Status?",
+      msg: `Adakah anda pasti mahu rollback ${job.job_id} dari ${STATUS[job.status]?.label} ke ${STATUS[s]?.label}?`,
+      label: `← ${STATUS[s]?.label}`,
+      color: "#F59E0B",
+      showReasonField: true,
+      onConfirm: (reasonText) => {
+        updateJob(job.id, { status: s }, profile?.name, { action: 'rollback', from: job.status, to: s, reason: reasonText || undefined });
+        setConfirm(null);
+        setToast(`${job.job_id}: ← ${STATUS[s].label}`);
+      }
+    });
+  }, [updateJob, profile]);
+
+  const handleCancel = useCallback((job) => {
+    setCancelJob(job);
+  }, []);
+
+  const handleCancelConfirm = useCallback((reason, customText) => {
+    if (!cancelJob) return;
+    const reasonLabel = CANCEL_REASONS.find(r => r.value === reason)?.label || reason;
+    const detail = reason === 'other' && customText ? customText : reasonLabel;
+    updateJob(cancelJob.id, { status: 'cancelled', cancel_reason: reason, cancel_reason_text: reason === 'other' ? customText : '' }, profile?.name, { action: 'cancelled', detail });
+    setCancelJob(null);
+    setExpandedId(null);
+    setToast(`${cancelJob.job_id} dibatalkan.`);
+  }, [cancelJob, updateJob, profile]);
+
+  const handleArchive = useCallback((job)=>{ setConfirm({ title:"Arkib Job?", msg:`${job.job_id} akan diarkibkan.`, label:"Arkib", color:"#6B7280", onConfirm:(reasonText)=>{ updateJob(job.id, { archived: true }, profile?.name, { action: 'edited', field: 'archived', old: 'false', val: 'true' }); setConfirm(null); setExpandedId(null); setToast(`${job.job_id} diarkibkan.`); } }); },[updateJob, profile]);
 
   const handleToggleInstallment = useCallback((job, installmentIndex) => {
     const updated = [...(job.installments || [])];
     updated[installmentIndex] = { ...updated[installmentIndex], status: updated[installmentIndex].status === 'paid' ? 'pending' : 'paid' };
-    updateJob(job.id, { installments: updated });
-  }, [updateJob]);
+    updateJob(job.id, { installments: updated }, profile?.name);
+  }, [updateJob, profile]);
 
   const cols = [{ k:"id", l:"Job ID", w:"105px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Jenis", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
   const grid = cols.map(c=>c.w).join(" ");
@@ -554,14 +689,14 @@ export default function JobMonitor() {
                     <div className="tbl-cell text-body text-secondary">{job.pic}</div>
                     <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                   </div>
-                  {isExp && <DetailPanel job={job} customers={customers} getActivity={getActivity} onStatus={handleStatus} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} />}
+                  {isExp && <DetailPanel job={job} customers={customers} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} />}
                 </div>
               );
             })}
           </div>
           <div className="summary-footer">
             <span>{filtered.length} job</span>
-            <span>Pipeline: {formatRM(filtered.filter(j=>["active","ongoing"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
+            <span>Pipeline: {formatRM(filtered.filter(j=>["active","in_progress"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
           </div>
         </div>
 
@@ -569,8 +704,64 @@ export default function JobMonitor() {
           <div className="modal-header"><div><div className="modal-title">Job Baru</div><div className="text-sm text-muted" style={{marginTop:4}}>Job ID: <span className="jid" style={{color:newJob.dept?'#1A1025':'#9B93A8'}}>{newJob.dept?genJobId(newJob.dept):'—'}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></div></div><button className="modal-close" onClick={()=>{setShowCreate(false);resetCreateForm();}}>×</button></div>
           <div className="modal-body" style={{padding:24,overflowY:'auto',maxHeight:'60vh'}}>
             <div style={{marginBottom:16}}><label className="field-label">Department *</label><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{DEPT_LIST.map(d=><button key={d.key} style={{fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:"8px 16px",borderRadius:8,cursor:"pointer",border:newJob.dept===d.key?`2px solid ${d.color}`:"1px solid #E8E4ED",background:newJob.dept===d.key?d.color+"12":"#fff",color:newJob.dept===d.key?d.color:"#6B6080"}} onClick={()=>nj('dept',d.key)}>{d.label}</button>)}</div></div>
-            <div style={{marginBottom:16}}><label className="field-label">Customer</label><select className="field-select" style={{width:'100%'}} value={newJob.cid} onChange={e=>nj('cid',e.target.value)}><option value="">— Pilih Customer —</option>{customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {c.name}</option>)}</select></div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Jenis Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Banner, Website" /></div><div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option></select></div></div>
+
+            {/* Customer dropdown + inline create */}
+            <div style={{marginBottom:16}}>
+              <label className="field-label">Customer</label>
+              <select className="field-select" style={{width:'100%'}} value={newJob.cid} onChange={e=>nj('cid',e.target.value)}>
+                <option value="">— Pilih Customer —</option>
+                {customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {c.name}</option>)}
+              </select>
+              {!showInlineCust && (
+                <button
+                  onClick={() => setShowInlineCust(true)}
+                  style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0 0 0' }}
+                >+ Customer Baru</button>
+              )}
+              {showInlineCust && (
+                <div style={{ marginTop: 10, padding: 14, background: '#F9F8FB', borderRadius: 10, border: '1px solid #F0ECF4' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span className="field-label" style={{ margin: 0, fontWeight: 600 }}>Customer Baru</span>
+                    <button onClick={() => { setShowInlineCust(false); setNewCust({name:'',company:'',phone:'',email:'',source:'referral'}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9B93A8', fontSize: 16 }}>×</button>
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <label className="field-label">Nama *</label>
+                    <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.name} onChange={e => setNewCust(p => ({...p, name: e.target.value}))} placeholder="Nama customer" />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    <div>
+                      <label className="field-label">Company</label>
+                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.company} onChange={e => setNewCust(p => ({...p, company: e.target.value}))} placeholder="Nama syarikat" />
+                    </div>
+                    <div>
+                      <label className="field-label">Phone</label>
+                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.phone} onChange={e => setNewCust(p => ({...p, phone: e.target.value}))} placeholder="No. telefon" />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                    <div>
+                      <label className="field-label">Email</label>
+                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.email} onChange={e => setNewCust(p => ({...p, email: e.target.value}))} placeholder="Email" />
+                    </div>
+                    <div>
+                      <label className="field-label">Source</label>
+                      <select className="field-select" style={{ width: '100%', height: 36, fontSize: 12 }} value={newCust.source} onChange={e => setNewCust(p => ({...p, source: e.target.value}))}>
+                        {SOURCE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSaveInlineCustomer}
+                    style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '7px 16px', borderRadius: 8, border: 'none', cursor: newCust.name.trim() ? 'pointer' : 'not-allowed', background: newCust.name.trim() ? '#E91E63' : '#E8E4ED', color: newCust.name.trim() ? '#fff' : '#9B93A8' }}
+                  >Simpan Customer</button>
+                </div>
+              )}
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div><label className="field-label">Jenis Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Banner, Website" /></div>
+              <div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option><option value="in_progress">In Progress</option></select></div>
+            </div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Anggaran (RM)</label><input type="number" className="field-input" value={newJob.est} onChange={e=>nj('est',e.target.value)} placeholder="0" /></div><div><label className="field-label">PIC *</label><select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}</select></div></div>
 
             {/* Special Arrangement Section */}
@@ -587,7 +778,8 @@ export default function JobMonitor() {
           </div>
           <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={()=>{setShowCreate(false);resetCreateForm();}}>Batal</button><button className="btn-primary" style={{background:newJob.dept&&newJob.type.trim()&&newJob.pic?"#E91E63":"#E8E4ED",color:newJob.dept&&newJob.type.trim()&&newJob.pic?"#fff":"#9B93A8",cursor:newJob.dept&&newJob.type.trim()&&newJob.pic?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
         </Modal>}
-        {completeJob && <CompleteModal job={completeJob} onConfirm={fv=>{updateJob(completeJob.id, { status:"completed", final_value:fv });setCompleteJob(null);setExpandedId(null);setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`);}} onClose={()=>setCompleteJob(null)} />}
+        {completeJob && <CompleteModal job={completeJob} onConfirm={fv=>{updateJob(completeJob.id, { status:"completed", final_value:fv }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(fv)}` });setCompleteJob(null);setExpandedId(null);setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`);}} onClose={()=>setCompleteJob(null)} />}
+        {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={()=>setCancelJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={()=>setConfirm(null)} />}
         {toast && <Toast msg={toast} onDone={()=>setToast(null)} />}
       </div>
