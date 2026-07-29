@@ -247,10 +247,23 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 }
 
 // ─── Job Detail Panel ─────────────────────────────────────────
-function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment }) {
+function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, userName }) {
   const forward = STATUS_FLOW[job.status] || [];
   const rollback = STATUS_ROLLBACK[job.status] || [];
   const canCancel = !["completed", "cancelled"].includes(job.status);
+  const [editingItems, setEditingItems] = useState(false);
+  const [editItems, setEditItems] = useState([]);
+  const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
+  const eiAdd = () => setEditItems(p=>[...p,{item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiTotal = editItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
+  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({...li})) : [{item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
+  const saveItems = () => {
+    const valid = editItems.filter(li=>li.item.trim()).map(li=>({item:li.item.trim(),desc:li.desc?.trim()||'',size:li.size?.trim()||'',qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)}));
+    const total = valid.reduce((s,li)=>s+li.total,0);
+    onUpdateJob(job.id, { line_items: valid, estimation_value: total || job.estimation_value }, userName, { action:'edited', field:'line_items', detail:'Item dikemaskini' });
+    setEditingItems(false);
+  };
 
   return (
     <div className="detail-panel">
@@ -270,6 +283,58 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
             {job.cancel_reason && <><span className="info-label">Sebab Batal</span><span className="text-body">{CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}{job.cancel_reason_text ? ` — ${job.cancel_reason_text}` : ''}</span></>}
           </div>
           {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
+
+          {/* Line Items */}
+          <div style={{marginTop:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div className="section-label" style={{margin:0}}>Item</div>
+              {!editingItems ? <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>
+              : <div style={{display:'flex',gap:6}}><button onClick={saveItems} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button><button onClick={()=>setEditingItems(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button></div>}
+            </div>
+            {!editingItems && job.line_items?.length > 0 && (
+              <div style={{border:'1px solid #E8E4ED',borderRadius:8,overflow:'hidden',fontSize:12}}>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
+                </div>
+                {job.line_items.map((li,i)=>(
+                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
+                    <span style={{fontWeight:600,color:'#1A1025'}}>{li.item}</span>
+                    <span style={{color:'#6B6080'}}>{li.desc||'—'}</span>
+                    <span style={{color:'#6B6080'}}>{li.size||'—'}</span>
+                    <span>{li.qty}</span>
+                    <span>{formatRM(li.price)}</span>
+                    <span style={{textAlign:'right',fontWeight:600}}>{formatRM(li.total||(li.qty*li.price))}</span>
+                  </div>
+                ))}
+                <div style={{padding:'7px 10px',borderTop:'1px solid #E8E4ED',background:'#F9F8FB',display:'flex',justifyContent:'flex-end',fontWeight:700,fontSize:13}}>
+                  Jumlah: {formatRM(job.line_items.reduce((s,li)=>s+(li.total||(li.qty*li.price)||0),0))}
+                </div>
+              </div>
+            )}
+            {editingItems && (
+              <div style={{border:'1px solid #E91E6330',borderRadius:8,overflow:'hidden',fontSize:12}}>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item *</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
+                </div>
+                {editItems.map((li,i)=>(
+                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
+                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.item} onChange={e=>eiUpdate(i,'item',e.target.value)} />
+                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.desc||''} onChange={e=>eiUpdate(i,'desc',e.target.value)} />
+                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />
+                    <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.qty} onChange={e=>eiUpdate(i,'qty',e.target.value)} min="1" />
+                    <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.price} onChange={e=>eiUpdate(i,'price',e.target.value)} />
+                    <span style={{fontSize:11,fontWeight:600,textAlign:'right'}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
+                    <button onClick={()=>eiRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0}}>×</button>
+                  </div>
+                ))}
+                <div style={{padding:'6px 10px',borderTop:'1px solid #F0ECF4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <button onClick={eiAdd} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>+ Tambah</button>
+                  <span style={{fontSize:12,fontWeight:700}}>Jumlah: RM {eiTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
+                </div>
+              </div>
+            )}
+            {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
+          </div>
 
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
@@ -429,6 +494,14 @@ export default function JobMonitor() {
   const [showInlineCust, setShowInlineCust] = useState(false);
   const [newCust, setNewCust] = useState({name:'',company:'',phone:'',email:'',source:'referral'});
 
+  // Line items state for create modal
+  const emptyItem = {item:'',desc:'',size:'',qty:1,price:0};
+  const [lineItems, setLineItems] = useState([{...emptyItem}]);
+  const liUpdate = (i,k,v) => setLineItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
+  const liAdd = () => setLineItems(p=>[...p,{...emptyItem}]);
+  const liRemove = (i) => setLineItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{...emptyItem}]);
+  const lineItemsTotal = lineItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
+
   // Special arrangement state for create modal
   const [specialArr, setSpecialArr] = useState(false);
   const [costBreakdown, setCostBreakdown] = useState([]);
@@ -456,6 +529,7 @@ export default function JobMonitor() {
 
   const resetCreateForm = () => {
     setNewJob({dept:'',cid:'',type:'',status:'potential',est:'',pic:'',start:'',deadline:'',notes:''});
+    setLineItems([{...emptyItem}]);
     setSpecialArr(false);
     setCostBreakdown([]);
     setHasInstallment(false);
@@ -488,7 +562,8 @@ export default function JobMonitor() {
     if(!newJob.dept||!newJob.type.trim()||!newJob.pic) return;
     const jobId = genJobId(newJob.dept);
     const breakdownTotal = costBreakdown.reduce((s, item) => s + (Number(item.amount) || 0), 0);
-    const estNum = newJob.est ? Number(newJob.est) : 0;
+    const estNum = lineItemsTotal || (newJob.est ? Number(newJob.est) : 0);
+    const validItems = lineItems.filter(li => li.item.trim());
 
     const jobObj = {
       id: crypto.randomUUID(),
@@ -497,7 +572,8 @@ export default function JobMonitor() {
       department: newJob.dept,
       job_type: newJob.type,
       status: newJob.status,
-      estimation_value: newJob.est ? Number(newJob.est) : null,
+      estimation_value: estNum || null,
+      line_items: validItems.length ? validItems.map(li=>({item:li.item.trim(),desc:li.desc.trim(),size:li.size.trim(),qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)})) : [],
       final_value: null,
       pic: newJob.pic,
       start_date: newJob.start || null,
@@ -690,7 +766,7 @@ export default function JobMonitor() {
                     <div className="tbl-cell text-body text-secondary">{job.pic}</div>
                     <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                   </div>
-                  {isExp && <DetailPanel job={job} customers={customers} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} />}
+                  {isExp && <DetailPanel job={job} customers={customers} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} userName={profile?.name} />}
                 </div>
               );
             })}
@@ -763,7 +839,35 @@ export default function JobMonitor() {
               <div><label className="field-label">Jenis Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Banner, Website" /></div>
               <div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option><option value="in_progress">In Progress</option></select></div>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Anggaran (RM)</label><input type="number" className="field-input" value={newJob.est} onChange={e=>nj('est',e.target.value)} placeholder="0" /></div><div><label className="field-label">PIC *</label><select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}</select></div></div>
+            <div style={{marginBottom:16}}>
+              <label className="field-label">PIC *</label>
+              <select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}</select>
+            </div>
+
+            {/* Line Items */}
+            <div style={{marginBottom:16}}>
+              <label className="field-label">Item & Harga</label>
+              <div style={{border:'1px solid #E8E4ED',borderRadius:10,overflow:'hidden'}}>
+                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.7fr 1fr 0.8fr 32px',gap:0,padding:'8px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item *</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga (RM)</span><span>Jumlah</span><span></span>
+                </div>
+                {lineItems.map((li,i)=>(
+                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.7fr 1fr 0.8fr 32px',gap:4,padding:'6px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
+                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.item} onChange={e=>liUpdate(i,'item',e.target.value)} placeholder="Banner" />
+                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.desc} onChange={e=>liUpdate(i,'desc',e.target.value)} placeholder="Full colour" />
+                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.size} onChange={e=>liUpdate(i,'size',e.target.value)} placeholder="3x6ft" />
+                    <input type="number" className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.qty} onChange={e=>liUpdate(i,'qty',e.target.value)} min="1" />
+                    <input type="number" className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.price} onChange={e=>liUpdate(i,'price',e.target.value)} placeholder="0" />
+                    <span style={{fontSize:12,fontWeight:600,color:'#1A1025',textAlign:'right',paddingRight:4}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
+                    <button onClick={()=>liRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:14,padding:0}}>×</button>
+                  </div>
+                ))}
+                <div style={{padding:'8px 10px',borderTop:'1px solid #F0ECF4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <button onClick={liAdd} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>+ Tambah Item</button>
+                  <div style={{fontSize:13,fontWeight:700,color:'#1A1025'}}>Jumlah: RM {lineItemsTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</div>
+                </div>
+              </div>
+            </div>
 
             {/* Special Arrangement Section */}
             <SpecialArrangementSection
@@ -771,7 +875,7 @@ export default function JobMonitor() {
               costBreakdown={costBreakdown} setCostBreakdown={setCostBreakdown}
               hasInstallment={hasInstallment} setHasInstallment={setHasInstallment}
               installments={installments} setInstallments={setInstallments}
-              estValue={newJob.est}
+              estValue={lineItemsTotal || newJob.est}
             />
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Tarikh Mula</label><input type="date" className="field-input" value={newJob.start} onChange={e=>nj('start',e.target.value)} /></div><div><label className="field-label">Deadline</label><input type="date" className="field-input" value={newJob.deadline} onChange={e=>nj('deadline',e.target.value)} /></div></div>
