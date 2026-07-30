@@ -273,7 +273,7 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
           <div className="info-grid">
             <span className="info-label">Job ID</span><JID>{job.job_id}</JID>
             <span className="info-label">Department</span><span><DTag d={job.department} /> <span className="text-secondary ml-1">{DEPT[job.department]?.label}</span></span>
-            <span className="info-label">Jenis</span><span>{job.job_type}</span>
+            <span className="info-label">Nama Job</span><span>{job.job_type}</span>
             <span className="info-label">Status</span><StatusBadge s={job.status} />
             <span className="info-label">PIC</span><span>{job.pic}</span>
             <span className="info-label">Est. Value</span><span className="font-semibold">{formatRM(job.estimation_value)}</span>
@@ -651,7 +651,7 @@ export default function JobMonitor() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
-  const cols = [{ k:"id", l:"Job ID", w:"105px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Jenis", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
+  const cols = [{ k:"id", l:"Job ID", w:"105px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
   const grid = cols.map(c=>c.w).join(" ");
 
   return (
@@ -836,7 +836,7 @@ export default function JobMonitor() {
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-              <div><label className="field-label">Jenis Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Banner, Website" /></div>
+              <div><label className="field-label">Nama Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Pakej Printing Majlis" /></div>
               <div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option><option value="in_progress">In Progress</option></select></div>
             </div>
             <div style={{marginBottom:16}}>
