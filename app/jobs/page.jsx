@@ -2,6 +2,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { generateDocument } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -247,6 +248,61 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 }
 
 // ─── Job Detail Panel ─────────────────────────────────────────
+// ─── Document Generation Buttons ─────────────────────────────
+function DocButtons({ job, customers }) {
+  const [generating, setGenerating] = useState(null);
+  const cust = customers.find(c => c.id === job.customer_id) || null;
+
+  const handleGen = async (type) => {
+    setGenerating(type);
+    try {
+      await generateDocument(type, job, cust);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+    }
+    setGenerating(null);
+  };
+
+  const btnStyle = (color) => ({
+    fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600,
+    padding: '7px 14px', borderRadius: 8, border: `1px solid ${color}20`,
+    background: `${color}10`, color, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 5,
+  });
+
+  // Determine which docs are available based on status
+  const docs = [];
+  if (['potential','active','in_progress','completed'].includes(job.status)) {
+    docs.push({ type: 'quotation', label: 'Sebut Harga', icon: '📄', color: '#6366F1' });
+  }
+  if (['active','in_progress','completed'].includes(job.status)) {
+    docs.push({ type: 'proforma', label: 'Invois Proforma', icon: '📋', color: '#3A86FF' });
+    docs.push({ type: 'invoice', label: 'Invois', icon: '📑', color: '#10B981' });
+  }
+  if (job.status === 'completed') {
+    docs.push({ type: 'receipt', label: 'Resit', icon: '🧾', color: '#E85D04' });
+  }
+
+  if (docs.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="section-label" style={{ marginBottom: 6 }}>Dokumen</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {docs.map(d => (
+          <button key={d.type} onClick={() => handleGen(d.type)} disabled={generating === d.type} style={btnStyle(d.color)}>
+            <span>{d.icon}</span>
+            {generating === d.type ? 'Menjana...' : d.label}
+          </button>
+        ))}
+      </div>
+      {(!job.line_items || job.line_items.length === 0) && (
+        <div style={{ fontSize: 11, color: '#E85D04', marginTop: 6, fontStyle: 'italic' }}>⚠ Tiada item — sila tambah item sebelum menjana dokumen.</div>
+      )}
+    </div>
+  );
+}
+
 function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, userName }) {
   const forward = STATUS_FLOW[job.status] || [];
   const rollback = STATUS_ROLLBACK[job.status] || [];
@@ -335,6 +391,9 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
             )}
             {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
           </div>
+
+          {/* Document Generation */}
+          <DocButtons job={job} customers={customers} />
 
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
