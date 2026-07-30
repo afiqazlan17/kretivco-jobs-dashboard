@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
 import { generateDocument } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
@@ -330,6 +330,8 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
             <span className="info-label">Job ID</span><JID>{job.job_id}</JID>
             <span className="info-label">Department</span><span><DTag d={job.department} /> <span className="text-secondary ml-1">{DEPT[job.department]?.label}</span></span>
             <span className="info-label">Nama Job</span><span>{job.job_type}</span>
+            <span className="info-label">Job Type</span><span style={{fontSize:12}}>{JOB_TYPE[job.job_type_category]?.label || '—'}</span>
+            <span className="info-label">Bank</span><span style={{fontSize:12}}>{BANK[job.bank]?.label || '—'}</span>
             <span className="info-label">Status</span><StatusBadge s={job.status} />
             <span className="info-label">PIC</span><span>{job.pic}</span>
             <span className="info-label">Est. Value</span><span className="font-semibold">{formatRM(job.estimation_value)}</span>
@@ -547,25 +549,11 @@ export default function JobMonitor() {
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newJob, setNewJob] = useState({dept:'',cid:'',type:'',status:'potential',est:'',pic:'',start:'',deadline:'',notes:''});
+  const [newJob, setNewJob] = useState({dept:'',cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',start:'',deadline:'',notes:''});
 
   // Inline customer creation state
   const [showInlineCust, setShowInlineCust] = useState(false);
   const [newCust, setNewCust] = useState({name:'',company:'',phone:'',email:'',source:'referral'});
-
-  // Line items state for create modal
-  const emptyItem = {item:'',desc:'',size:'',qty:1,price:0};
-  const [lineItems, setLineItems] = useState([{...emptyItem}]);
-  const liUpdate = (i,k,v) => setLineItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
-  const liAdd = () => setLineItems(p=>[...p,{...emptyItem}]);
-  const liRemove = (i) => setLineItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{...emptyItem}]);
-  const lineItemsTotal = lineItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
-
-  // Special arrangement state for create modal
-  const [specialArr, setSpecialArr] = useState(false);
-  const [costBreakdown, setCostBreakdown] = useState([]);
-  const [hasInstallment, setHasInstallment] = useState(false);
-  const [installments, setInstallments] = useState([]);
 
   // Auto-open from sidebar or URL param
   useEffect(()=>{
@@ -587,12 +575,7 @@ export default function JobMonitor() {
   const nj = (k,v) => setNewJob(p=>({...p,[k]:v}));
 
   const resetCreateForm = () => {
-    setNewJob({dept:'',cid:'',type:'',status:'potential',est:'',pic:'',start:'',deadline:'',notes:''});
-    setLineItems([{...emptyItem}]);
-    setSpecialArr(false);
-    setCostBreakdown([]);
-    setHasInstallment(false);
-    setInstallments([]);
+    setNewJob({dept:'',cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',start:'',deadline:'',notes:''});
     setShowInlineCust(false);
     setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
   };
@@ -620,19 +603,17 @@ export default function JobMonitor() {
   const handleCreateSave = () => {
     if(!newJob.dept||!newJob.type.trim()||!newJob.pic) return;
     const jobId = genJobId(newJob.dept);
-    const breakdownTotal = costBreakdown.reduce((s, item) => s + (Number(item.amount) || 0), 0);
-    const estNum = lineItemsTotal || (newJob.est ? Number(newJob.est) : 0);
-    const validItems = lineItems.filter(li => li.item.trim());
-
     const jobObj = {
       id: crypto.randomUUID(),
       job_id: jobId,
       customer_id: newJob.cid || null,
       department: newJob.dept,
       job_type: newJob.type,
+      job_type_category: newJob.jobType || 'client_project',
+      bank: newJob.bank || null,
       status: newJob.status,
-      estimation_value: estNum || null,
-      line_items: validItems.length ? validItems.map(li=>({item:li.item.trim(),desc:li.desc.trim(),size:li.size.trim(),qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)})) : [],
+      estimation_value: null,
+      line_items: [],
       final_value: null,
       pic: newJob.pic,
       start_date: newJob.start || null,
@@ -640,12 +621,7 @@ export default function JobMonitor() {
       notes: newJob.notes || null,
       created_at: new Date().toISOString(),
       archived: false,
-      special_arrangement: specialArr,
-      cost_breakdown: specialArr ? costBreakdown.map(item => ({ type: item.type, recipient: item.recipient, amount: Number(item.amount) || 0 })) : [],
-      installments: specialArr && hasInstallment ? installments.map(inst => ({ amount: Number(inst.amount) || 0, due_date: inst.due_date, status: 'pending' })) : [],
-      baki_kretivco: specialArr ? estNum - breakdownTotal : estNum,
     };
-
     addJob(jobObj, profile?.name);
     setShowCreate(false);
     resetCreateForm();
@@ -894,48 +870,20 @@ export default function JobMonitor() {
               )}
             </div>
 
+            {/* Job Type & Bank */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-              <div><label className="field-label">Nama Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Pakej Printing Majlis" /></div>
+              <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${newJob.jobType===k?v.color:'#E8E4ED'}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:newJob.jobType===k?v.color+'15':'#fff',color:newJob.jobType===k?v.color:'#6B6080'}} onClick={()=>nj('jobType',k)}>{v.label}</button>)}</div></div>
+              <div><label className="field-label">Bank</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i,arr)=><button key={k} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${newJob.bank===k?v.color:'#E8E4ED'}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:newJob.bank===k?v.color+'15':'#fff',color:newJob.bank===k?v.color:'#6B6080'}} onClick={()=>nj('bank',k)}>{v.label}</button>)}</div></div>
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+              <div><label className="field-label">Nama Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Design & Print Roti Bakar" /></div>
               <div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option><option value="in_progress">In Progress</option></select></div>
             </div>
             <div style={{marginBottom:16}}>
               <label className="field-label">PIC *</label>
-              <select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}</select>
+              <select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{(newJob.dept && PIC_BY_DEPT[newJob.dept] ? PIC_BY_DEPT[newJob.dept] : PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}</select>
             </div>
-
-            {/* Line Items */}
-            <div style={{marginBottom:16}}>
-              <label className="field-label">Item & Harga</label>
-              <div style={{border:'1px solid #E8E4ED',borderRadius:10,overflow:'hidden'}}>
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.7fr 1fr 0.8fr 32px',gap:0,padding:'8px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item *</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga (RM)</span><span>Jumlah</span><span></span>
-                </div>
-                {lineItems.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.7fr 1fr 0.8fr 32px',gap:4,padding:'6px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
-                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.item} onChange={e=>liUpdate(i,'item',e.target.value)} placeholder="Banner" />
-                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.desc} onChange={e=>liUpdate(i,'desc',e.target.value)} placeholder="Full colour" />
-                    <input className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.size} onChange={e=>liUpdate(i,'size',e.target.value)} placeholder="3x6ft" />
-                    <input type="number" className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.qty} onChange={e=>liUpdate(i,'qty',e.target.value)} min="1" />
-                    <input type="number" className="field-input" style={{height:32,fontSize:12,margin:0}} value={li.price} onChange={e=>liUpdate(i,'price',e.target.value)} placeholder="0" />
-                    <span style={{fontSize:12,fontWeight:600,color:'#1A1025',textAlign:'right',paddingRight:4}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
-                    <button onClick={()=>liRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:14,padding:0}}>×</button>
-                  </div>
-                ))}
-                <div style={{padding:'8px 10px',borderTop:'1px solid #F0ECF4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <button onClick={liAdd} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>+ Tambah Item</button>
-                  <div style={{fontSize:13,fontWeight:700,color:'#1A1025'}}>Jumlah: RM {lineItemsTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Special Arrangement Section */}
-            <SpecialArrangementSection
-              specialArr={specialArr} setSpecialArr={setSpecialArr}
-              costBreakdown={costBreakdown} setCostBreakdown={setCostBreakdown}
-              hasInstallment={hasInstallment} setHasInstallment={setHasInstallment}
-              installments={installments} setInstallments={setInstallments}
-              estValue={lineItemsTotal || newJob.est}
-            />
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Tarikh Mula</label><input type="date" className="field-input" value={newJob.start} onChange={e=>nj('start',e.target.value)} /></div><div><label className="field-label">Deadline</label><input type="date" className="field-input" value={newJob.deadline} onChange={e=>nj('deadline',e.target.value)} /></div></div>
             <div style={{marginBottom:16}}><label className="field-label">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:72,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={newJob.notes} onChange={e=>nj('notes',e.target.value)} placeholder="Maklumat tambahan..." /></div>

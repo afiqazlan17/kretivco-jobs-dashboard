@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
-const DEPT={print:{code:"KP",label:"KretivPrint",color:"#E85D04"},work:{code:"KW",label:"KretivWork",color:"#7209B7"},tech:{code:"KT",label:"KretivTech",color:"#3A86FF"},machine:{code:"KM",label:"KretivMachine",color:"#6B7280"}};
+const DEPT={print:{code:"KP",label:"KretivPrint",color:"#E85D04"},work:{code:"KW",label:"KretivWork",color:"#7209B7"},tech:{code:"KT",label:"KretivTech",color:"#3A86FF"},event:{code:"KE",label:"KretivEvent",color:"#E91E63"},wisb:{code:"WISB",label:"Wafiy Industries",color:"#6B7280"}};
 const ROLE={bod:{l:"BOD",c:"#E91E63",d:"Full access — semua department, reports, settings"},dept_head:{l:"Dept Head",c:"#3A86FF",d:"Department sendiri — jobs, reports"},staff:{l:"Staff",c:"#6B7280",d:"Department sendiri — limited actions"}};
 const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"short",year:"numeric"}):"—";
 

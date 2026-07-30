@@ -9,6 +9,7 @@ const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
   { key:'jobs', label:'Job Monitor', path:'/jobs', icon:'📋' },
   { key:'customers', label:'Customers', path:'/customers', icon:'👥' },
+  { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
   { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
   { key:'settings', label:'Settings', path:'/settings', icon:'⚙️', roles:['bod'] },
 ]
