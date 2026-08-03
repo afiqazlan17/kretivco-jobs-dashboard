@@ -23,6 +23,18 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
   const pipeline=active.reduce((s,j)=>s+(j.estimation_value||0),0);
   const depts=useMemo(()=>{const m={};cj.filter(j=>j.status!=="cancelled").forEach(j=>{if(!m[j.department])m[j.department]={count:0,est:0};m[j.department].count++;m[j.department].est+=j.estimation_value||0});return m},[cj]);
 
+  // Group jobs created together as one Project (multi-department) so they
+  // read as one linked unit in the history list, instead of a flat list.
+  const jobGroups=useMemo(()=>{
+    const map=new Map();
+    cj.forEach(j=>{
+      const key=j.project_id||`solo-${j.id}`;
+      if(!map.has(key))map.set(key,[]);
+      map.get(key).push(j);
+    });
+    return Array.from(map.values());
+  },[cj]);
+
   // Combine multiple jobs (often across departments) into one document —
   // e.g. one cheque paying for a KretivWork job and a KretivTech job at once.
   const [combineIds,setCombineIds]=useState(new Set());
@@ -55,7 +67,22 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
         {/* Job history */}
         <div className="card-title mb-3">Sejarah Job ({cj.length})</div>
         {cj.length===0?<div className="empty-sm">Belum ada job.</div>:(<>
-          <div className="mini-table">{cj.map((j,i)=>{const canSeeFull=!visDepts||visDepts.includes(j.department);return(<div key={j.id} className="mini-row"><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/>{canSeeFull?<span className="text-body text-secondary flex-1 truncate">{j.job_type}</span>:<span className="text-body text-muted flex-1" style={{fontStyle:"italic"}}>(department lain)</span>}<StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>)})}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {jobGroups.map((group,gi)=>{
+              const isProject=group.length>1;
+              const rows=group.map(j=>{
+                const canSeeFull=!visDepts||visDepts.includes(j.department);
+                return(<div key={j.id} className="mini-row" style={isProject?{border:"none",borderBottom:"1px solid #F3F1F6"}:undefined}><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/>{canSeeFull?<span className="text-body text-secondary flex-1 truncate">{j.job_type}</span>:<span className="text-body text-muted flex-1" style={{fontStyle:"italic"}}>(department lain)</span>}<StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>);
+              });
+              if(!isProject) return <div key={gi} className="mini-table">{rows}</div>;
+              return (
+                <div key={gi} className="mini-table" style={{borderLeft:"3px solid #E91E63",background:"rgba(233,30,99,.03)"}}>
+                  <div style={{padding:"7px 14px",fontSize:11,fontWeight:600,color:"#E91E63",borderBottom:"1px solid #F3F1F6"}}>🔗 Project {group[0].project_id}</div>
+                  {rows}
+                </div>
+              );
+            })}
+          </div>
           {selectedJobs.length>1&&(
             <div style={{marginTop:12,padding:14,background:"#F9F8FB",borderRadius:10,border:"1px solid #F0ECF4"}}>
               <div className="text-sm fw600 mb-2">{selectedJobs.length} job dipilih · {formatRM(selectedJobs.reduce((s,j)=>s+(j.estimation_value||0),0))}</div>

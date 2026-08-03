@@ -128,6 +128,7 @@ function Timeline({ jobId, getActivity }) {
       case 'edited': return '✏️';
       case 'completed': return '✅';
       case 'note': return '💬';
+      case 'document_generated': return '🧾';
       default: return '🔄';
     }
   };
@@ -141,6 +142,7 @@ function Timeline({ jobId, getActivity }) {
       case 'completed': return <span>tandakan selesai{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'edited': return <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
       case 'note': return 'menulis catatan';
+      case 'document_generated': return <span>menjana {l.detail}</span>;
       default: return l.action;
     }
   };
@@ -261,16 +263,17 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 
 // ─── Job Detail Panel ─────────────────────────────────────────
 // ─── Document Generation Buttons ─────────────────────────────
-function DocButtons({ job, jobs, customers, visDepts }) {
+function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
   const [generating, setGenerating] = useState(null);
   const [showCombine, setShowCombine] = useState(false);
   const [combineIds, setCombineIds] = useState(new Set());
   const cust = customers.find(c => c.id === job.customer_id) || null;
 
-  const handleGen = async (type) => {
+  const handleGen = async (type, label) => {
     setGenerating(type);
     try {
-      await generateDocument(type, job, cust);
+      const result = await generateDocument(type, job, cust);
+      onDocGenerated && onDocGenerated([job.job_id], label, result.docNumber);
     } catch (err) {
       console.error('PDF generation error:', err);
     }
@@ -295,10 +298,11 @@ function DocButtons({ job, jobs, customers, visDepts }) {
   const combineJobs = [job, ...selectedSiblings];
   const combineDocs = availableDocTypes(job.status);
 
-  const handleGenCombined = async (type) => {
+  const handleGenCombined = async (type, label) => {
     setGenerating(`combined-${type}`);
     try {
-      await generateCombinedDocument(type, combineJobs, cust);
+      const result = await generateCombinedDocument(type, combineJobs, cust);
+      onDocGenerated && onDocGenerated(combineJobs.map(j => j.job_id), `${label} gabungan`, result.docNumber);
     } catch (err) {
       console.error('Combined PDF generation error:', err);
     }
@@ -312,7 +316,7 @@ function DocButtons({ job, jobs, customers, visDepts }) {
       <div className="section-label" style={{ marginBottom: 6 }}>Dokumen</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {docs.map(d => (
-          <button key={d.type} onClick={() => handleGen(d.type)} disabled={generating === d.type} style={btnStyle(d.color)}>
+          <button key={d.type} onClick={() => handleGen(d.type, d.label)} disabled={generating === d.type} style={btnStyle(d.color)}>
             <span>{d.icon}</span>
             {generating === d.type ? 'Menjana...' : d.label}
           </button>
@@ -348,7 +352,7 @@ function DocButtons({ job, jobs, customers, visDepts }) {
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 6 }}>Jana Dokumen Gabungan ({combineJobs.length} job · {formatRM(combineJobs.reduce((sum,j)=>sum+(j.estimation_value||0),0))}):</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {combineDocs.map(d => (
-                      <button key={d.type} onClick={() => handleGenCombined(d.type)} disabled={generating === `combined-${d.type}`} style={btnStyle(d.color)}>
+                      <button key={d.type} onClick={() => handleGenCombined(d.type, d.label)} disabled={generating === `combined-${d.type}`} style={btnStyle(d.color)}>
                         <span>{d.icon}</span>
                         {generating === `combined-${d.type}` ? 'Menjana...' : d.label}
                       </button>
@@ -365,7 +369,40 @@ function DocButtons({ job, jobs, customers, visDepts }) {
   );
 }
 
-function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onAddNote, userName }) {
+// ─── Progress Stepper — full-width pipeline view at top of job detail ──
+const PIPELINE_STAGES = ['potential', 'active', 'in_progress', 'completed'];
+function ProgressStepper({ status }) {
+  if (status === 'cancelled') {
+    return <div className="stepper-cancelled">✕ Job Dibatalkan</div>;
+  }
+  const idx = PIPELINE_STAGES.indexOf(status);
+  return (
+    <div className="stepper-wrap">
+      <div className="stepper-top">
+        <span className="stepper-label">Progress Job</span>
+        <span className="stepper-current" style={{ color: STATUS[status]?.color }}>Peringkat semasa: {STATUS[status]?.label}</span>
+      </div>
+      <div className="stepper">
+        {PIPELINE_STAGES.map((s, i) => {
+          const state = i < idx ? 'done' : i === idx ? 'current' : '';
+          const dotStyle = state === 'done' ? { background: '#10B981', borderColor: '#10B981', color: '#fff' }
+            : state === 'current' ? { borderColor: STATUS[s].color, color: STATUS[s].color, background: STATUS[s].color + '15' }
+            : {};
+          const lblStyle = state === 'done' ? { color: '#10B981' } : state === 'current' ? { color: STATUS[s].color } : {};
+          return (
+            <div key={s} className={`step ${state}`}>
+              <div className="line" />
+              <div className="dot" style={dotStyle}>{state === 'done' ? '✓' : i + 1}</div>
+              <div className="lbl" style={lblStyle}>{STATUS[s].label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const [noteText, setNoteText] = useState('');
   const submitNote = () => {
     if (!noteText.trim()) return;
@@ -389,8 +426,11 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
     setEditingItems(false);
   };
 
+  const projectSiblings = job.project_id ? (jobs || []).filter(j => j.project_id === job.project_id && j.id !== job.id) : [];
+
   return (
     <div className="detail-panel">
+      <ProgressStepper status={job.status} />
       <div className="detail-grid">
         <div>
           <div className="card-title mb-4">Maklumat Job</div>
@@ -408,6 +448,16 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
             <span className="info-label">Deadline</span><DLBadge deadline={job.deadline} status={job.status} />
             {job.cancel_reason && <><span className="info-label">Sebab Batal</span><span className="text-body">{CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}{job.cancel_reason_text ? ` — ${job.cancel_reason_text}` : ''}</span></>}
           </div>
+          {job.project_id && (
+            <div className="project-line">
+              🔗 Project <span className="jid">{job.project_id}</span>
+              {projectSiblings.length > 0 && <>
+                {' '}— bersama {projectSiblings.map((s, i) => (
+                  <span key={s.id}>{i > 0 && ', '}<a onClick={() => onJumpToJob(s.job_id)}>{s.job_id} · {DEPT[s.department]?.label}</a></span>
+                ))}
+              </>}
+            </div>
+          )}
           {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
 
           {/* Line Items */}
@@ -462,9 +512,6 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
             {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
           </div>
 
-          {/* Document Generation */}
-          <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} />
-
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
@@ -488,6 +535,13 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           <CustMini job={job} customers={customers} />
           <div className="card-title mt-6 mb-3">Activity Log</div>
           <Timeline jobId={job.job_id} getActivity={getActivity} />
+
+          {/* Document Generation — moved below the timeline so staff sees */}
+          {/* history first, then can act (generate a doc) right after it. */}
+          <div style={{ marginTop: 12 }}>
+            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} />
+          </div>
+
           <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <textarea
               className="field-input"
@@ -616,7 +670,7 @@ export default function JobMonitor() {
   const visDepts = useVisibleDepts();
 
   // Shared data store
-  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, addLog, genJobId, genCustId } = useData();
+  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, addLog, genJobId, genCustId, genProjectId } = useData();
 
   const DEPT_LIST = Object.entries(DEPT).map(([k,v])=>({key:k,...v}));
 
@@ -631,7 +685,7 @@ export default function JobMonitor() {
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newJob, setNewJob] = useState({dept:'',cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',start:'',deadline:'',notes:''});
+  const [newJob, setNewJob] = useState({depts:[],cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',picByDept:{},start:'',deadline:'',notes:''});
 
   // Inline customer creation state
   const [showInlineCust, setShowInlineCust] = useState(false);
@@ -657,9 +711,17 @@ export default function JobMonitor() {
   }, []);
 
   const nj = (k,v) => setNewJob(p=>({...p,[k]:v}));
+  const toggleDept = (key) => setNewJob(p => {
+    const has = p.depts.includes(key);
+    const depts = has ? p.depts.filter(d=>d!==key) : [...p.depts, key];
+    const picByDept = { ...p.picByDept };
+    if (has) delete picByDept[key];
+    return { ...p, depts, picByDept };
+  });
+  const setPicForDept = (key, pic) => setNewJob(p => ({ ...p, picByDept: { ...p.picByDept, [key]: pic } }));
 
   const resetCreateForm = () => {
-    setNewJob({dept:'',cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',start:'',deadline:'',notes:''});
+    setNewJob({depts:[],cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',picByDept:{},start:'',deadline:'',notes:''});
     setShowInlineCust(false);
     setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
   };
@@ -684,34 +746,48 @@ export default function JobMonitor() {
     setToast(`Customer ${custId} berjaya ditambah.`);
   };
 
+  const canSaveJob = newJob.depts.length > 0 && newJob.type.trim() && (
+    newJob.depts.length === 1 ? !!newJob.pic : newJob.depts.every(d => newJob.picByDept[d])
+  );
+
   const handleCreateSave = () => {
-    if(!newJob.dept||!newJob.type.trim()||!newJob.pic) return;
-    const jobId = genJobId(newJob.dept);
+    if (!canSaveJob) return;
     const cid = newJob.cid;
-    const jobObj = {
-      id: crypto.randomUUID(),
-      job_id: jobId,
-      customer_id: newJob.cid || null,
-      department: newJob.dept,
-      job_type: newJob.type,
-      job_type_category: newJob.jobType || 'client_project',
-      bank: newJob.bank || null,
-      status: newJob.status,
-      estimation_value: null,
-      line_items: [],
-      final_value: null,
-      pic: newJob.pic,
-      start_date: newJob.start || null,
-      deadline: newJob.deadline || null,
-      notes: newJob.notes || null,
-      created_at: new Date().toISOString(),
-      archived: false,
-    };
-    addJob(jobObj, profile?.name);
+    const isMulti = newJob.depts.length > 1;
+    const projectId = isMulti ? genProjectId() : null;
+
+    const createdIds = newJob.depts.map(dept => {
+      const jobId = genJobId(dept);
+      const jobObj = {
+        id: crypto.randomUUID(),
+        job_id: jobId,
+        customer_id: cid || null,
+        department: dept,
+        project_id: projectId,
+        job_type: newJob.type,
+        job_type_category: newJob.jobType || 'client_project',
+        bank: newJob.bank || null,
+        status: newJob.status,
+        estimation_value: null,
+        line_items: [],
+        final_value: null,
+        pic: isMulti ? newJob.picByDept[dept] : newJob.pic,
+        start_date: newJob.start || null,
+        deadline: newJob.deadline || null,
+        notes: newJob.notes || null,
+        created_at: new Date().toISOString(),
+        archived: false,
+      };
+      addJob(jobObj, profile?.name);
+      return jobId;
+    });
+
     setShowCreate(false);
     resetCreateForm();
     setToast({
-      msg: `Job ${jobId} berjaya dicipta.`,
+      msg: isMulti
+        ? `${createdIds.length} job dicipta dalam Project ${projectId} (${createdIds.join(', ')}).`
+        : `Job ${createdIds[0]} berjaya dicipta.`,
       action: cid ? {
         label: '+ Tambah Department Lain',
         onClick: () => { setNewJob(p=>({...p, cid})); setShowCreate(true); setToast(null); },
@@ -726,7 +802,7 @@ export default function JobMonitor() {
     if (visDepts) list = list.filter(j => visDepts.includes(j.department));
     if (fDept !== "all") list = list.filter(j => j.department === fDept);
     if (fStatus !== "all") list = list.filter(j => j.status === fStatus);
-    if (search.trim()) { const q = search.toLowerCase(); list = list.filter(j => (j.job_id||'').toLowerCase().includes(q) || (j.customer_name||'').toLowerCase().includes(q) || (j.job_type||'').toLowerCase().includes(q) || (j.pic||'').toLowerCase().includes(q)); }
+    if (search.trim()) { const q = search.toLowerCase(); list = list.filter(j => (j.job_id||'').toLowerCase().includes(q) || (j.customer_name||'').toLowerCase().includes(q) || (j.job_type||'').toLowerCase().includes(q) || (j.pic||'').toLowerCase().includes(q) || (j.project_id||'').toLowerCase().includes(q)); }
     list.sort((a, b) => { let va, vb; switch (sortCol) { case "id": va=a.job_id||''; vb=b.job_id||''; break; case "customer": va=a.customer_name||""; vb=b.customer_name||""; break; case "dept": va=a.department||''; vb=b.department||''; break; case "status": va=a.status||''; vb=b.status||''; break; case "value": va=a.estimation_value||0; vb=b.estimation_value||0; break; case "deadline": va=a.deadline||"9999"; vb=b.deadline||"9999"; break; default: va=a.job_id||''; vb=b.job_id||''; } if (va<vb) return sortDir==="asc"?-1:1; if (va>vb) return sortDir==="asc"?1:-1; return 0; });
     return list;
   }, [jobs, fDept, fStatus, search, sortCol, sortDir, visDepts]);
@@ -763,6 +839,21 @@ export default function JobMonitor() {
     addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text });
   }, [addLog, profile]);
 
+  const handleDocGenerated = useCallback((jobIds, label, docNumber) => {
+    jobIds.forEach(jobId => {
+      addLog(jobId, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` });
+    });
+  }, [addLog, profile]);
+
+  const handleJumpToJob = useCallback((jobId) => {
+    const target = jobs.find(j => j.job_id === jobId);
+    if (!target) return;
+    setSearch('');
+    setFDept('all');
+    setFStatus('all');
+    setExpandedId(target.id);
+  }, [jobs]);
+
   const handleCancelConfirm = useCallback((reason, customText) => {
     if (!cancelJob) return;
     const reasonLabel = CANCEL_REASONS.find(r => r.value === reason)?.label || reason;
@@ -781,7 +872,7 @@ export default function JobMonitor() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
-  const cols = [{ k:"id", l:"Job ID", w:"105px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
+  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
   const grid = cols.map(c=>c.w).join(" ");
 
   return (
@@ -816,6 +907,23 @@ export default function JobMonitor() {
         .sort-idle{color:#D4CDE0;font-size:10px;margin-left:2px} .sort-active{color:#E91E63;font-size:10px;margin-left:2px}
         .detail-panel{background:#FAFAFA;border-top:2px solid rgba(233,30,99,.2);padding:24px 28px}
         .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+        .stepper-wrap{padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid #F0ECF4}
+        .stepper-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:6px}
+        .stepper-label{font-size:11px;font-weight:700;color:#9B93A8;text-transform:uppercase;letter-spacing:.05em}
+        .stepper-current{font-size:12.5px;font-weight:600}
+        .stepper{display:flex;align-items:center}
+        .step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
+        .step .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;z-index:2;border:2px solid #E8E4ED;background:#fff;color:#9B93A8}
+        .step .lbl{font-size:11.5px;font-weight:600;color:#9B93A8;margin-top:7px}
+        .step .line{position:absolute;top:13px;right:50%;width:100%;height:2px;background:#E8E4ED;z-index:1}
+        .step:first-child .line{display:none}
+        .step.done .line,.step.current .line{background:#10B981}
+        .stepper-cancelled{padding:12px 16px;border-radius:10px;background:#EF444412;border:1px solid #EF444430;color:#EF4444;font-weight:700;font-size:13px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+        .project-line{margin-top:10px;padding:9px 12px;border-radius:8px;background:rgba(233,30,99,.08);font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+        .project-line a{color:#E91E63;font-weight:600;text-decoration:none;cursor:pointer}
+        .project-line a:hover{text-decoration:underline}
+        .link-badge{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:#E91E63;background:rgba(233,30,99,.1);padding:1px 6px;border-radius:20px;margin-left:6px;cursor:pointer;vertical-align:middle}
+        .link-badge:hover{background:rgba(233,30,99,.18)}
         .info-grid{display:grid;grid-template-columns:120px 1fr;gap:10px 12px;font-size:13px}
         .info-label{color:#9B93A8;font-weight:500}
         .card-title{font-size:14px;font-weight:700;color:#1A1025}
@@ -884,10 +992,14 @@ export default function JobMonitor() {
             </div>
             {filtered.length===0 ? <div className="empty">Tiada job dijumpai.</div> : filtered.map(job=>{
               const isExp = expandedId===job.id;
+              const sibling = job.project_id ? jobs.find(j => j.project_id === job.project_id && j.id !== job.id) : null;
               return (
                 <div key={job.id}>
                   <div className={`tbl-row ${isExp?"expanded":""}`} style={{ gridTemplateColumns: grid }} onClick={()=>setExpandedId(isExp?null:job.id)}>
-                    <div className="tbl-cell"><JID>{job.job_id}</JID></div>
+                    <div className="tbl-cell">
+                      <JID>{job.job_id}</JID>
+                      {sibling && <span className="link-badge" title={`Sebahagian dari Project ${job.project_id} — bersama ${sibling.job_id}`} onClick={(e)=>{e.stopPropagation(); handleJumpToJob(sibling.job_id);}}>🔗</span>}
+                    </div>
                     <div className="tbl-cell text-body">{job.customer_name}</div>
                     <div className="tbl-cell"><DTag d={job.department} /></div>
                     <div className="tbl-cell text-body text-secondary">{job.job_type}</div>
@@ -896,7 +1008,7 @@ export default function JobMonitor() {
                     <div className="tbl-cell text-body text-secondary">{job.pic}</div>
                     <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                   </div>
-                  {isExp && <DetailPanel job={job} jobs={jobs} customers={customers} visDepts={visDepts} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} onAddNote={handleAddNote} userName={profile?.name} />}
+                  {isExp && <DetailPanel job={job} jobs={jobs} customers={customers} visDepts={visDepts} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} onAddNote={handleAddNote} onDocGenerated={handleDocGenerated} onJumpToJob={handleJumpToJob} userName={profile?.name} />}
                 </div>
               );
             })}
@@ -908,10 +1020,18 @@ export default function JobMonitor() {
         </div>
 
         {showCreate && <Modal width={640} onClose={()=>{setShowCreate(false);resetCreateForm();}}>
-          <div className="modal-header"><div><div className="modal-title">Job Baru</div><div className="text-sm text-muted" style={{marginTop:4}}>Job ID: <span className="jid" style={{color:newJob.dept?'#1A1025':'#9B93A8'}}>{newJob.dept?genJobId(newJob.dept):'—'}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></div></div><button className="modal-close" onClick={()=>{setShowCreate(false);resetCreateForm();}}>×</button></div>
+          <div className="modal-header">
+            <div>
+              <div className="modal-title">Job Baru</div>
+              <div className="text-sm text-muted" style={{marginTop:4}}>
+                {newJob.depts.length===0 && <>Job ID: <span className="jid" style={{color:'#9B93A8'}}>—</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
+                {newJob.depts.length===1 && <>Job ID: <span className="jid" style={{color:'#1A1025'}}>{genJobId(newJob.depts[0])}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
+                {newJob.depts.length>1 && <>Job ID: <span className="jid" style={{color:'#1A1025'}}>{newJob.depts.map(d=>genJobId(d)).join(' + ')}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
+              </div>
+            </div>
+            <button className="modal-close" onClick={()=>{setShowCreate(false);resetCreateForm();}}>×</button>
+          </div>
           <div className="modal-body" style={{padding:24,overflowY:'auto',maxHeight:'60vh'}}>
-            <div style={{marginBottom:16}}><label className="field-label">Department *</label><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{DEPT_LIST.map(d=><button key={d.key} style={{fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:"8px 16px",borderRadius:8,cursor:"pointer",border:newJob.dept===d.key?`2px solid ${d.color}`:"1px solid #E8E4ED",background:newJob.dept===d.key?d.color+"12":"#fff",color:newJob.dept===d.key?d.color:"#6B6080"}} onClick={()=>nj('dept',d.key)}>{d.label}</button>)}</div></div>
-
             {/* Customer dropdown + inline create */}
             <div style={{marginBottom:16}}>
               <label className="field-label">Customer</label>
@@ -965,6 +1085,27 @@ export default function JobMonitor() {
               )}
             </div>
 
+            {/* Department — multi-select: pick more than one when the same customer request spans departments */}
+            <div style={{marginBottom:16}}>
+              <label className="field-label">Department * <span style={{fontWeight:400,color:'#9B93A8'}}>— boleh pilih lebih dari satu</span></label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {DEPT_LIST.map(d=>{
+                  const on = newJob.depts.includes(d.key);
+                  return (
+                    <button key={d.key} type="button" onClick={()=>toggleDept(d.key)} style={{fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:"8px 14px",borderRadius:8,cursor:"pointer",border:on?`1.5px solid ${d.color}`:"1.5px solid #E8E4ED",background:on?d.color+"12":"#fff",color:on?d.color:"#6B6080",display:"flex",alignItems:"center",gap:7}}>
+                      <span style={{width:14,height:14,borderRadius:4,border:on?'none':'1.5px solid #B0A8BC',background:on?d.color:'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff'}}>{on?'✓':''}</span>
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {newJob.depts.length>1 && (
+                <div style={{marginTop:10,padding:'9px 12px',borderRadius:8,background:'rgba(233,30,99,.08)',border:'1px dashed #E91E63',fontSize:11.5,color:'#1A1025',lineHeight:1.5}}>
+                  {newJob.depts.length} department dipilih — satu <strong>Project ID</strong> akan dijana untuk kumpulkan job-job ni. Setiap department tetap dapat Job ID &amp; status sendiri.
+                </div>
+              )}
+            </div>
+
             {/* Job Type & Bank */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
               <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${newJob.jobType===k?v.color:'#E8E4ED'}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:newJob.jobType===k?v.color+'15':'#fff',color:newJob.jobType===k?v.color:'#6B6080'}} onClick={()=>nj('jobType',k)}>{v.label}</button>)}</div></div>
@@ -975,15 +1116,35 @@ export default function JobMonitor() {
               <div><label className="field-label">Nama Job *</label><input className="field-input" value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Design & Print Roti Bakar" /></div>
               <div><label className="field-label">Status</label><select className="field-select" style={{width:'100%'}} value={newJob.status} onChange={e=>nj('status',e.target.value)}><option value="potential">Potential</option><option value="active">Active</option><option value="in_progress">In Progress</option></select></div>
             </div>
-            <div style={{marginBottom:16}}>
-              <label className="field-label">PIC *</label>
-              <select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{(newJob.dept && PIC_BY_DEPT[newJob.dept] ? PIC_BY_DEPT[newJob.dept] : PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}</select>
-            </div>
+            {newJob.depts.length <= 1 ? (
+              <div style={{marginBottom:16}}>
+                <label className="field-label">PIC *</label>
+                <select className="field-select" style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{(newJob.depts[0] && PIC_BY_DEPT[newJob.depts[0]] ? PIC_BY_DEPT[newJob.depts[0]] : PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}</select>
+              </div>
+            ) : (
+              <div style={{marginBottom:16}}>
+                <label className="field-label">PIC setiap department *</label>
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {newJob.depts.map(d=>{
+                    const meta = DEPT[d];
+                    return (
+                      <div key={d} style={{display:'grid',gridTemplateColumns:'110px 1fr',gap:10,alignItems:'center'}}>
+                        <span style={{fontSize:10.5,fontWeight:700,padding:'4px 9px',borderRadius:6,textAlign:'center',color:meta.color,background:meta.color+'15'}}>{meta.code}</span>
+                        <select className="field-select" style={{width:'100%'}} value={newJob.picByDept[d]||''} onChange={e=>setPicForDept(d,e.target.value)}>
+                          <option value="">— Pilih PIC {meta.label} —</option>
+                          {(PIC_BY_DEPT[d]||PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Tarikh Mula</label><input type="date" className="field-input" value={newJob.start} onChange={e=>nj('start',e.target.value)} /></div><div><label className="field-label">Deadline</label><input type="date" className="field-input" value={newJob.deadline} onChange={e=>nj('deadline',e.target.value)} /></div></div>
             <div style={{marginBottom:16}}><label className="field-label">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:72,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={newJob.notes} onChange={e=>nj('notes',e.target.value)} placeholder="Maklumat tambahan..." /></div>
           </div>
-          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={()=>{setShowCreate(false);resetCreateForm();}}>Batal</button><button className="btn-primary" style={{background:newJob.dept&&newJob.type.trim()&&newJob.pic?"#E91E63":"#E8E4ED",color:newJob.dept&&newJob.type.trim()&&newJob.pic?"#fff":"#9B93A8",cursor:newJob.dept&&newJob.type.trim()&&newJob.pic?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
+          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={()=>{setShowCreate(false);resetCreateForm();}}>Batal</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
         </Modal>}
         {completeJob && <CompleteModal job={completeJob} onConfirm={fv=>{updateJob(completeJob.id, { status:"completed", final_value:fv }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(fv)}` });setCompleteJob(null);setExpandedId(null);setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`);}} onClose={()=>setCompleteJob(null)} />}
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={()=>setCancelJob(null)} />}
