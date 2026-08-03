@@ -1,8 +1,8 @@
 "use client"
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
-import { generateDocument } from '@/lib/pdf-generator';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { generateDocument, generateCombinedDocument } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -117,6 +117,7 @@ function Timeline({ jobId, getActivity }) {
       case 'cancelled': return '✕';
       case 'edited': return '✏️';
       case 'completed': return '✅';
+      case 'note': return '💬';
       default: return '🔄';
     }
   };
@@ -129,6 +130,7 @@ function Timeline({ jobId, getActivity }) {
       case 'cancelled': return <span>batalkan job{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'completed': return <span>tandakan selesai{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'edited': return <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
+      case 'note': return 'menulis catatan';
       default: return l.action;
     }
   };
@@ -249,8 +251,10 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 
 // ─── Job Detail Panel ─────────────────────────────────────────
 // ─── Document Generation Buttons ─────────────────────────────
-function DocButtons({ job, customers }) {
+function DocButtons({ job, jobs, customers, visDepts }) {
   const [generating, setGenerating] = useState(null);
+  const [showCombine, setShowCombine] = useState(false);
+  const [combineIds, setCombineIds] = useState(new Set());
   const cust = customers.find(c => c.id === job.customer_id) || null;
 
   const handleGen = async (type) => {
@@ -270,18 +274,26 @@ function DocButtons({ job, customers }) {
     display: 'flex', alignItems: 'center', gap: 5,
   });
 
-  // Determine which docs are available based on status
-  const docs = [];
-  if (['potential','active','in_progress','completed'].includes(job.status)) {
-    docs.push({ type: 'quotation', label: 'Sebut Harga', icon: '📄', color: '#6366F1' });
-  }
-  if (['active','in_progress','completed'].includes(job.status)) {
-    docs.push({ type: 'proforma', label: 'Invois Proforma', icon: '📋', color: '#3A86FF' });
-    docs.push({ type: 'invoice', label: 'Invois', icon: '📑', color: '#10B981' });
-  }
-  if (job.status === 'completed') {
-    docs.push({ type: 'receipt', label: 'Resit', icon: '🧾', color: '#E85D04' });
-  }
+  const docs = availableDocTypes(job.status);
+
+  // Other jobs for the same customer, across departments — e.g. one cheque
+  // covering both a KretivWork job and a KretivTech job needs one combined doc.
+  const siblings = job.customer_id ? (jobs || []).filter(j => j.customer_id === job.customer_id && j.id !== job.id && !j.archived) : [];
+  const toggleCombine = (id) => setCombineIds(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectedSiblings = siblings.filter(s => combineIds.has(s.id));
+  const statusMismatch = selectedSiblings.some(s => s.status !== job.status);
+  const combineJobs = [job, ...selectedSiblings];
+  const combineDocs = availableDocTypes(job.status);
+
+  const handleGenCombined = async (type) => {
+    setGenerating(`combined-${type}`);
+    try {
+      await generateCombinedDocument(type, combineJobs, cust);
+    } catch (err) {
+      console.error('Combined PDF generation error:', err);
+    }
+    setGenerating(null);
+  };
 
   if (docs.length === 0) return null;
 
@@ -299,11 +311,57 @@ function DocButtons({ job, customers }) {
       {(!job.line_items || job.line_items.length === 0) && (
         <div style={{ fontSize: 11, color: '#E85D04', marginTop: 6, fontStyle: 'italic' }}>⚠ Tiada item — sila tambah item sebelum menjana dokumen.</div>
       )}
+
+      {siblings.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          {!showCombine ? (
+            <button onClick={() => setShowCombine(true)} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>+ Gabung dengan Job Lain (Customer Sama)</button>
+          ) : (
+            <div style={{ padding: 12, background: '#F9F8FB', borderRadius: 8, border: '1px solid #F0ECF4' }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 8 }}>Pilih job lain untuk digabung dalam satu dokumen (cth: 1 cek bayar untuk beberapa department):</div>
+              {siblings.map(s => {
+                const canSeeFull = !visDepts || visDepts.includes(s.department);
+                return (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={combineIds.has(s.id)} onChange={() => toggleCombine(s.id)} />
+                    <JID>{s.job_id}</JID> <DTag d={s.department} />
+                    {canSeeFull ? <span className="text-secondary">{s.job_type}</span> : <span className="text-muted" style={{ fontStyle: 'italic' }}>(department lain)</span>}
+                    <StatusBadge s={s.status} /> <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{formatRM(s.estimation_value)}</span>
+                  </label>
+                );
+              })}
+              {statusMismatch && (
+                <div style={{ fontSize: 11, color: '#EF4444', marginTop: 8, fontStyle: 'italic' }}>⚠ Status job tak sepadan — selaraskan status dahulu sebelum digabung.</div>
+              )}
+              {selectedSiblings.length > 0 && !statusMismatch && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F0ECF4' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 6 }}>Jana Dokumen Gabungan ({combineJobs.length} job · {formatRM(combineJobs.reduce((sum,j)=>sum+(j.estimation_value||0),0))}):</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {combineDocs.map(d => (
+                      <button key={d.type} onClick={() => handleGenCombined(d.type)} disabled={generating === `combined-${d.type}`} style={btnStyle(d.color)}>
+                        <span>{d.icon}</span>
+                        {generating === `combined-${d.type}` ? 'Menjana...' : d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => { setShowCombine(false); setCombineIds(new Set()); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 500, color: '#9B93A8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 10 }}>Batal</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, userName }) {
+function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onAddNote, userName }) {
+  const [noteText, setNoteText] = useState('');
+  const submitNote = () => {
+    if (!noteText.trim()) return;
+    onAddNote(job.job_id, noteText.trim());
+    setNoteText('');
+  };
   const forward = STATUS_FLOW[job.status] || [];
   const rollback = STATUS_ROLLBACK[job.status] || [];
   const canCancel = !["completed", "cancelled"].includes(job.status);
@@ -395,7 +453,7 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
           </div>
 
           {/* Document Generation */}
-          <DocButtons job={job} customers={customers} />
+          <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} />
 
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
@@ -420,6 +478,20 @@ function DetailPanel({ job, customers, getActivity, onStatus, onRollback, onCanc
           <CustMini job={job} customers={customers} />
           <div className="card-title mt-6 mb-3">Activity Log</div>
           <Timeline jobId={job.job_id} getActivity={getActivity} />
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <textarea
+              className="field-input"
+              style={{ height: 60, paddingTop: 8, resize: 'vertical', flex: 1 }}
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="Tulis catatan untuk job ini..."
+            />
+            <button
+              onClick={submitNote}
+              disabled={!noteText.trim()}
+              style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: noteText.trim() ? 'pointer' : 'not-allowed', background: noteText.trim() ? '#E91E63' : '#E8E4ED', color: noteText.trim() ? '#fff' : '#9B93A8', whiteSpace: 'nowrap' }}
+            >Tambah Catatan</button>
+          </div>
         </div>
       </div>
     </div>
@@ -534,7 +606,7 @@ export default function JobMonitor() {
   const visDepts = useVisibleDepts();
 
   // Shared data store
-  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, genJobId, genCustId } = useData();
+  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, addLog, genJobId, genCustId } = useData();
 
   const DEPT_LIST = Object.entries(DEPT).map(([k,v])=>({key:k,...v}));
 
@@ -667,6 +739,10 @@ export default function JobMonitor() {
   const handleCancel = useCallback((job) => {
     setCancelJob(job);
   }, []);
+
+  const handleAddNote = useCallback((jobId, text) => {
+    addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text });
+  }, [addLog, profile]);
 
   const handleCancelConfirm = useCallback((reason, customText) => {
     if (!cancelJob) return;
@@ -801,7 +877,7 @@ export default function JobMonitor() {
                     <div className="tbl-cell text-body text-secondary">{job.pic}</div>
                     <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                   </div>
-                  {isExp && <DetailPanel job={job} customers={customers} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} userName={profile?.name} />}
+                  {isExp && <DetailPanel job={job} jobs={jobs} customers={customers} visDepts={visDepts} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} onAddNote={handleAddNote} userName={profile?.name} />}
                 </div>
               );
             })}
