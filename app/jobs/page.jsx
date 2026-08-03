@@ -251,7 +251,7 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 
 // ─── Job Detail Panel ─────────────────────────────────────────
 // ─── Document Generation Buttons ─────────────────────────────
-function DocButtons({ job, jobs, customers }) {
+function DocButtons({ job, jobs, customers, visDepts }) {
   const [generating, setGenerating] = useState(null);
   const [showCombine, setShowCombine] = useState(false);
   const [combineIds, setCombineIds] = useState(new Set());
@@ -319,12 +319,17 @@ function DocButtons({ job, jobs, customers }) {
           ) : (
             <div style={{ padding: 12, background: '#F9F8FB', borderRadius: 8, border: '1px solid #F0ECF4' }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 8 }}>Pilih job lain untuk digabung dalam satu dokumen (cth: 1 cek bayar untuk beberapa department):</div>
-              {siblings.map(s => (
-                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={combineIds.has(s.id)} onChange={() => toggleCombine(s.id)} />
-                  <JID>{s.job_id}</JID> <DTag d={s.department} /> <span className="text-secondary">{s.job_type}</span> <StatusBadge s={s.status} /> <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{formatRM(s.estimation_value)}</span>
-                </label>
-              ))}
+              {siblings.map(s => {
+                const canSeeFull = !visDepts || visDepts.includes(s.department);
+                return (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={combineIds.has(s.id)} onChange={() => toggleCombine(s.id)} />
+                    <JID>{s.job_id}</JID> <DTag d={s.department} />
+                    {canSeeFull ? <span className="text-secondary">{s.job_type}</span> : <span className="text-muted" style={{ fontStyle: 'italic' }}>(department lain)</span>}
+                    <StatusBadge s={s.status} /> <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{formatRM(s.estimation_value)}</span>
+                  </label>
+                );
+              })}
               {statusMismatch && (
                 <div style={{ fontSize: 11, color: '#EF4444', marginTop: 8, fontStyle: 'italic' }}>⚠ Status job tak sepadan — selaraskan status dahulu sebelum digabung.</div>
               )}
@@ -350,7 +355,7 @@ function DocButtons({ job, jobs, customers }) {
   );
 }
 
-function DetailPanel({ job, jobs, customers, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onAddNote, userName }) {
+function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onAddNote, userName }) {
   const [noteText, setNoteText] = useState('');
   const submitNote = () => {
     if (!noteText.trim()) return;
@@ -448,7 +453,7 @@ function DetailPanel({ job, jobs, customers, getActivity, onStatus, onRollback, 
           </div>
 
           {/* Document Generation */}
-          <DocButtons job={job} jobs={jobs} customers={customers} />
+          <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} />
 
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
@@ -872,7 +877,7 @@ export default function JobMonitor() {
                     <div className="tbl-cell text-body text-secondary">{job.pic}</div>
                     <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                   </div>
-                  {isExp && <DetailPanel job={job} jobs={jobs} customers={customers} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} onAddNote={handleAddNote} userName={profile?.name} />}
+                  {isExp && <DetailPanel job={job} jobs={jobs} customers={customers} visDepts={visDepts} getActivity={getActivity} onStatus={handleStatus} onRollback={handleRollback} onCancel={handleCancel} onArchive={handleArchive} onToggleInstallment={handleToggleInstallment} onUpdateJob={updateJob} onAddNote={handleAddNote} userName={profile?.name} />}
                 </div>
               );
             })}

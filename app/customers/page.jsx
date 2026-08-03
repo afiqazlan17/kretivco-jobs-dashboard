@@ -12,7 +12,7 @@ function Modal({w,children,onClose}){return<div className="overlay" onClick={onC
 function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);return<div className="toast">✓ {msg}</div>}
 
 // ─── Profile Modal (720px) ────────────────────────────────────
-function ProfileModal({cust,jobs,onEdit,onClose}){
+function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
   const cj=jobs.filter(j=>j.customer_id===cust.id);
   const active=cj.filter(j=>!["completed","cancelled"].includes(j.status));
   const comp=cj.filter(j=>j.status==="completed");
@@ -53,7 +53,7 @@ function ProfileModal({cust,jobs,onEdit,onClose}){
         {/* Job history */}
         <div className="card-title mb-3">Sejarah Job ({cj.length})</div>
         {cj.length===0?<div className="empty-sm">Belum ada job.</div>:(<>
-          <div className="mini-table">{cj.map((j,i)=>(<div key={j.id} className="mini-row"><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/><span className="text-body text-secondary flex-1 truncate">{j.job_type}</span><StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>))}</div>
+          <div className="mini-table">{cj.map((j,i)=>{const canSeeFull=!visDepts||visDepts.includes(j.department);return(<div key={j.id} className="mini-row"><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/>{canSeeFull?<span className="text-body text-secondary flex-1 truncate">{j.job_type}</span>:<span className="text-body text-muted flex-1" style={{fontStyle:"italic"}}>(department lain)</span>}<StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>)})}</div>
           {selectedJobs.length>1&&(
             <div style={{marginTop:12,padding:14,background:"#F9F8FB",borderRadius:10,border:"1px solid #F0ECF4"}}>
               <div className="text-sm fw600 mb-2">{selectedJobs.length} job dipilih · {formatRM(selectedJobs.reduce((s,j)=>s+(j.estimation_value||0),0))}</div>
@@ -202,7 +202,7 @@ export default function CustomerDirectory(){
           </div>
           <div className="text-sm text-muted mt-4">{filtered.length} customer</div>
         </div>
-        {currentProfile&&<ProfileModal cust={currentProfile} jobs={jobs} onEdit={()=>setEditCust(currentProfile)} onClose={()=>setProfile(null)}/>}
+        {currentProfile&&<ProfileModal cust={currentProfile} jobs={jobs} visDepts={visDepts} onEdit={()=>setEditCust(currentProfile)} onClose={()=>setProfile(null)}/>}
         {currentEditCust&&<EditModal cust={currentEditCust} onSave={u=>{updateCustomer(currentEditCust.id,u);setEditCust(null);if(profile?.id===currentEditCust.id)setProfile({...currentEditCust,...u});setToast(`${currentEditCust.customer_id} dikemaskini.`);}} onClose={()=>setEditCust(null)}/>}
         {showNew&&<Modal w={480} onClose={()=>setShowNew(false)}><div className="mheader"><div><div className="mtitle">Customer Baru</div><div className="jid text-muted" style={{marginTop:4}}>ID: {genCustId()}</div></div><button className="mclose" onClick={()=>setShowNew(false)}>×</button></div><div className="mbody"><div className="fg"><label className="fl">Nama Customer *</label><input className="fi" value={newForm.name} onChange={e=>setNewForm(p=>({...p,name:e.target.value}))} placeholder="Nama penuh"/></div><div className="fg"><label className="fl">Nama Syarikat</label><input className="fi" value={newForm.company} onChange={e=>setNewForm(p=>({...p,company:e.target.value}))} placeholder="Optional"/></div><div className="frow"><div><label className="fl">Telefon</label><input className="fi" value={newForm.phone} onChange={e=>setNewForm(p=>({...p,phone:e.target.value}))}/></div><div><label className="fl">Email</label><input className="fi" value={newForm.email} onChange={e=>setNewForm(p=>({...p,email:e.target.value}))}/></div></div><div className="fg"><label className="fl">Sumber</label><select className="fs" value={newForm.source} onChange={e=>setNewForm(p=>({...p,source:e.target.value}))}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div></div><div className="mfooter"><button className="btn-secondary" onClick={()=>setShowNew(false)}>Batal</button><button className={newForm.name.trim()?"btn-primary":"btn-disabled"} onClick={handleNewSave}>Simpan Customer</button></div></Modal>}
         {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
