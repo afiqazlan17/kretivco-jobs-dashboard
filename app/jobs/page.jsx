@@ -516,9 +516,17 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           <div style={{ marginTop: 16 }}>
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
           </div>
+        </div>
+        <div>
+          <div className="card-title mb-3">Customer</div>
+          <CustMini job={job} customers={customers} />
+          <div className="card-title mt-6 mb-3">Activity Log</div>
+          <Timeline jobId={job.job_id} getActivity={getActivity} />
 
+          {/* Status movement — moved here so staff reads history first, then
+              acts (change stage, generate a doc) right below it. */}
           {(forward.length > 0 || rollback.length > 0 || canCancel) && (
-            <div className="action-row">
+            <div className="action-row" style={{ marginTop: 12 }}>
               {/* Forward buttons */}
               {forward.map(s => <button key={s} className="btn-status" style={{ color: STATUS[s].color, background: STATUS[s].color + "15" }} onClick={() => onStatus(job, s)}>→ {STATUS[s].label}</button>)}
               {/* Rollback buttons */}
@@ -529,15 +537,8 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
               {!job.archived && job.status !== "cancelled" && <button className="btn-archive" onClick={() => onArchive(job)}>Arkib</button>}
             </div>
           )}
-        </div>
-        <div>
-          <div className="card-title mb-3">Customer</div>
-          <CustMini job={job} customers={customers} />
-          <div className="card-title mt-6 mb-3">Activity Log</div>
-          <Timeline jobId={job.job_id} getActivity={getActivity} />
 
-          {/* Document Generation — moved below the timeline so staff sees */}
-          {/* history first, then can act (generate a doc) right after it. */}
+          {/* Document Generation */}
           <div style={{ marginTop: 12 }}>
             <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} />
           </div>
