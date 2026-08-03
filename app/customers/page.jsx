@@ -1,7 +1,8 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
 import { useData, useVisibleDepts } from "@/lib/hooks";
-import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, formatRM, formatDate } from "@/lib/constants";
+import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, availableDocTypes, formatRM, formatDate } from "@/lib/constants";
+import { generateCombinedDocument } from "@/lib/pdf-generator";
 
 function SrcBadge({s}){const m=SOURCE[s];return m?<span className="src-badge" style={{color:m.color,background:m.color+"12"}}>{m.label}</span>:<span className="text-xs text-muted">—</span>}
 function StatusBadge({s}){const m=STATUS[s];return m?<span className="badge-s" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
@@ -20,6 +21,21 @@ function ProfileModal({cust,jobs,onEdit,onClose}){
   const pipeline=active.reduce((s,j)=>s+(j.estimation_value||0),0);
   const depts=useMemo(()=>{const m={};cj.filter(j=>j.status!=="cancelled").forEach(j=>{if(!m[j.department])m[j.department]={count:0,est:0};m[j.department].count++;m[j.department].est+=j.estimation_value||0});return m},[cj]);
 
+  // Combine multiple jobs (often across departments) into one document —
+  // e.g. one cheque paying for a KretivWork job and a KretivTech job at once.
+  const [combineIds,setCombineIds]=useState(new Set());
+  const [generating,setGenerating]=useState(null);
+  const toggleCombine=(id)=>setCombineIds(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n});
+  const selectedJobs=cj.filter(j=>combineIds.has(j.id));
+  const statusMismatch=selectedJobs.length>1&&selectedJobs.some(j=>j.status!==selectedJobs[0].status);
+  const combineDocs=selectedJobs.length>1&&!statusMismatch?availableDocTypes(selectedJobs[0].status):[];
+  const handleGenCombined=async(type)=>{
+    setGenerating(type);
+    try{ await generateCombinedDocument(type,selectedJobs,cust); }
+    catch(err){ console.error('Combined PDF generation error:',err); }
+    setGenerating(null);
+  };
+
   return(
     <Modal w={720} onClose={onClose}>
       <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
@@ -36,9 +52,25 @@ function ProfileModal({cust,jobs,onEdit,onClose}){
         {Object.keys(depts).length>0&&<div className="mb-6"><div className="section-label mb-2">Department Breakdown</div><div className="dept-chips">{Object.entries(depts).map(([d,data])=><div key={d} className="dept-chip" style={{background:DEPT[d].color+"08",border:`1px solid ${DEPT[d].color}20`}}><DTag d={d}/><div><div className="text-body fw600">{data.count} job</div><div className="text-xs text-secondary">{formatRM(data.est)}</div></div></div>)}</div></div>}
         {/* Job history */}
         <div className="card-title mb-3">Sejarah Job ({cj.length})</div>
-        {cj.length===0?<div className="empty-sm">Belum ada job.</div>:(
-          <div className="mini-table">{cj.map((j,i)=>(<div key={j.id} className="mini-row"><span className="jid">{j.job_id}</span><DTag d={j.department}/><span className="text-body text-secondary flex-1 truncate">{j.job_type}</span><StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>))}</div>
-        )}
+        {cj.length===0?<div className="empty-sm">Belum ada job.</div>:(<>
+          <div className="mini-table">{cj.map((j,i)=>(<div key={j.id} className="mini-row"><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/><span className="text-body text-secondary flex-1 truncate">{j.job_type}</span><StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>))}</div>
+          {selectedJobs.length>1&&(
+            <div style={{marginTop:12,padding:14,background:"#F9F8FB",borderRadius:10,border:"1px solid #F0ECF4"}}>
+              <div className="text-sm fw600 mb-2">{selectedJobs.length} job dipilih · {formatRM(selectedJobs.reduce((s,j)=>s+(j.estimation_value||0),0))}</div>
+              {statusMismatch?(
+                <div className="text-xs" style={{color:"#EF4444",fontStyle:"italic"}}>⚠ Status job tak sepadan (cth: satu Active, satu Potential) — selaraskan status dahulu sebelum digabung jadi satu dokumen.</div>
+              ):(
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {combineDocs.map(d=>(
+                    <button key={d.type} onClick={()=>handleGenCombined(d.type)} disabled={generating===d.type} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"7px 14px",borderRadius:8,border:`1px solid ${d.color}20`,background:`${d.color}10`,color:d.color,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                      <span>{d.icon}</span>{generating===d.type?"Menjana...":`${d.label} Gabungan`}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>)}
         <div className="text-xs text-placeholder mt-4">Customer sejak {formatDate(cust.created_at)}</div>
       </div>
     </Modal>
