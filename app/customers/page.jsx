@@ -1,5 +1,6 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useData, useVisibleDepts } from "@/lib/hooks";
 import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, availableDocTypes, formatRM, formatDate } from "@/lib/constants";
 import { generateCombinedDocument } from "@/lib/pdf-generator";
@@ -13,6 +14,7 @@ function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);retu
 
 // ─── Profile Modal (720px) ────────────────────────────────────
 function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
+  const router=useRouter();
   const cj=jobs.filter(j=>j.customer_id===cust.id);
   const active=cj.filter(j=>!["completed","cancelled"].includes(j.status));
   const comp=cj.filter(j=>j.status==="completed");
@@ -38,7 +40,7 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
 
   return(
     <Modal w={720} onClose={onClose}>
-      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
+      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={()=>router.push(`/jobs?new=1&cid=${cust.id}`)}>+ Job Baru</button><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
       <div className="mbody">
         {/* Contact */}
         <div className="info-cards">{[{icon:"🏢",l:"Syarikat",v:cust.company||"—"},{icon:"📞",l:"Telefon",v:cust.phone||"—"},{icon:"✉️",l:"Email",v:cust.email||"—"}].map((c,i)=>(<div key={i} className="info-card"><div className="section-label">{c.icon} {c.l}</div><div className="text-body fw500">{c.v}</div></div>))}</div>

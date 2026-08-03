@@ -27,9 +27,19 @@ function Modal({ width, children, onClose }) {
   );
 }
 
-function Toast({ msg, onDone }) {
-  useState(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); });
-  return <div className="toast">✓ {msg}</div>;
+function Toast({ msg, action, onDone }) {
+  useState(() => { const t = setTimeout(onDone, action ? 6000 : 2500); return () => clearTimeout(t); });
+  return (
+    <div className="toast" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <span>✓ {msg}</span>
+      {action && (
+        <button
+          onClick={action.onClick}
+          style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, color: '#fff', background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        >{action.label}</button>
+      )}
+    </div>
+  );
 }
 
 // ─── Complete Job Modal ───────────────────────────────────────
@@ -632,6 +642,8 @@ export default function JobMonitor() {
     const checkAndOpen = () => {
       const params = new URLSearchParams(window.location.search);
       if(params.get('new') === '1') {
+        const cid = params.get('cid');
+        if (cid) setNewJob(p=>({...p, cid}));
         setShowCreate(true);
         window.history.replaceState(null,'','/jobs');
       }
@@ -675,6 +687,7 @@ export default function JobMonitor() {
   const handleCreateSave = () => {
     if(!newJob.dept||!newJob.type.trim()||!newJob.pic) return;
     const jobId = genJobId(newJob.dept);
+    const cid = newJob.cid;
     const jobObj = {
       id: crypto.randomUUID(),
       job_id: jobId,
@@ -697,7 +710,13 @@ export default function JobMonitor() {
     addJob(jobObj, profile?.name);
     setShowCreate(false);
     resetCreateForm();
-    setToast(`Job ${jobId} berjaya dicipta.`);
+    setToast({
+      msg: `Job ${jobId} berjaya dicipta.`,
+      action: cid ? {
+        label: '+ Tambah Department Lain',
+        onClick: () => { setNewJob(p=>({...p, cid})); setShowCreate(true); setToast(null); },
+      } : null,
+    });
     if(typeof window!=='undefined') window.history.replaceState(null,'','/jobs');
   };
 
@@ -969,7 +988,7 @@ export default function JobMonitor() {
         {completeJob && <CompleteModal job={completeJob} onConfirm={fv=>{updateJob(completeJob.id, { status:"completed", final_value:fv }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(fv)}` });setCompleteJob(null);setExpandedId(null);setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`);}} onClose={()=>setCompleteJob(null)} />}
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={()=>setCancelJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={()=>setConfirm(null)} />}
-        {toast && <Toast msg={toast} onDone={()=>setToast(null)} />}
+        {toast && <Toast msg={typeof toast==='string'?toast:toast.msg} action={typeof toast==='object'?toast.action:null} onDone={()=>setToast(null)} />}
       </div>
     </>
   );
