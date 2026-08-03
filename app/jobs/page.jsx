@@ -536,17 +536,17 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           <div style={{ marginTop: 16 }}>
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
           </div>
+
+          {/* Document Generation */}
+          <div style={{ marginTop: 16 }}>
+            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} />
+          </div>
         </div>
         <div>
           <div className="card-title mb-3">Customer</div>
           <CustMini job={job} customers={customers} />
           <div className="card-title mt-6 mb-3">Activity Log</div>
           <Timeline jobId={job.job_id} getActivity={getActivity} />
-
-          {/* Document Generation */}
-          <div style={{ marginTop: 12 }}>
-            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} />
-          </div>
 
           <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
             <textarea
