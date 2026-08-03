@@ -273,7 +273,7 @@ function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
     setGenerating(type);
     try {
       const result = await generateDocument(type, job, cust);
-      onDocGenerated && onDocGenerated([job.job_id], label, result.docNumber);
+      onDocGenerated && onDocGenerated({ jobs: [job], type, label, docNumber: result.docNumber });
     } catch (err) {
       console.error('PDF generation error:', err);
     }
@@ -302,7 +302,7 @@ function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
     setGenerating(`combined-${type}`);
     try {
       const result = await generateCombinedDocument(type, combineJobs, cust);
-      onDocGenerated && onDocGenerated(combineJobs.map(j => j.job_id), `${label} gabungan`, result.docNumber);
+      onDocGenerated && onDocGenerated({ jobs: combineJobs, type, label: `${label} gabungan`, docNumber: result.docNumber });
     } catch (err) {
       console.error('Combined PDF generation error:', err);
     }
@@ -676,7 +676,7 @@ export default function JobMonitor() {
   const visDepts = useVisibleDepts();
 
   // Shared data store
-  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, addLog, genJobId, genCustId, genProjectId } = useData();
+  const { jobs, customers, addJob, updateJob, addCustomer, getActivity, addLog, genJobId, genCustId, genProjectId, postInvoiceEntry, postReceiptEntry, reverseJobLedgerEntries } = useData();
 
   const DEPT_LIST = Object.entries(DEPT).map(([k,v])=>({key:k,...v}));
 
@@ -845,11 +845,13 @@ export default function JobMonitor() {
     addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text });
   }, [addLog, profile]);
 
-  const handleDocGenerated = useCallback((jobIds, label, docNumber) => {
-    jobIds.forEach(jobId => {
-      addLog(jobId, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` });
+  const handleDocGenerated = useCallback(({ jobs: involvedJobs, type, label, docNumber }) => {
+    involvedJobs.forEach(j => {
+      addLog(j.job_id, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` });
     });
-  }, [addLog, profile]);
+    if (type === 'invoice') involvedJobs.forEach(j => postInvoiceEntry(j, docNumber, profile?.name));
+    if (type === 'receipt') involvedJobs.forEach(j => postReceiptEntry(j, docNumber, profile?.name));
+  }, [addLog, postInvoiceEntry, postReceiptEntry, profile]);
 
   const handleJumpToJob = useCallback((jobId) => {
     const target = jobs.find(j => j.job_id === jobId);
@@ -865,10 +867,11 @@ export default function JobMonitor() {
     const reasonLabel = CANCEL_REASONS.find(r => r.value === reason)?.label || reason;
     const detail = reason === 'other' && customText ? customText : reasonLabel;
     updateJob(cancelJob.id, { status: 'cancelled', cancel_reason: reason, cancel_reason_text: reason === 'other' ? customText : '' }, profile?.name, { action: 'cancelled', detail });
+    reverseJobLedgerEntries(cancelJob.job_id, profile?.name);
     setCancelJob(null);
     setExpandedId(null);
     setToast(`${cancelJob.job_id} dibatalkan.`);
-  }, [cancelJob, updateJob, profile]);
+  }, [cancelJob, updateJob, reverseJobLedgerEntries, profile]);
 
   const handleArchive = useCallback((job)=>{ setConfirm({ title:"Arkib Job?", msg:`${job.job_id} akan diarkibkan.`, label:"Arkib", color:"#6B7280", onConfirm:(reasonText)=>{ updateJob(job.id, { archived: true }, profile?.name, { action: 'edited', field: 'archived', old: 'false', val: 'true' }); setConfirm(null); setExpandedId(null); setToast(`${job.job_id} diarkibkan.`); } }); },[updateJob, profile]);
 

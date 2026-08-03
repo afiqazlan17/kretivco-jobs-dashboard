@@ -11,6 +11,7 @@ const NAV = [
   { key:'customers', label:'Customers', path:'/customers', icon:'👥' },
   { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
   { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
+  { key:'finance', label:'Finance', path:'/finance', icon:'💰', roles:['bod','dept_head'] },
   { key:'settings', label:'Settings', path:'/settings', icon:'⚙️', roles:['bod'] },
 ]
 
