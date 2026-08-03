@@ -382,82 +382,83 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
             </>}
           </div>
 
-          {/* Live preview */}
+          {/* Live preview — font/spacing sizes mirror the actual PDF's point
+              sizes 1:1 (px≈pt on screen) so this isn't a miniaturized mockup */}
           <div style={{ flex: 1, padding: 20, overflowY: 'auto', background: '#F5F3F7' }}>
-            <div style={{ background: '#fff', borderRadius: 4, padding: '18px 22px', fontSize: 11, color: '#141414', boxShadow: '0 1px 4px rgba(0,0,0,.08)', minHeight: '100%' }}>
+            <div style={{ background: '#fff', borderRadius: 4, padding: '32px 40px', fontSize: 10, lineHeight: 1.5, color: '#141414', boxShadow: '0 1px 4px rgba(0,0,0,.08)', minHeight: '100%', width: 595, margin: '0 auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <img src="/kretivco-logo.png" alt="Kretivco" style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }} />
+                <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
+                  <img src="/kretivco-logo.png" alt="Kretivco" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>Kretivco Mediaworks</div>
-                    <div style={{ color: '#555', marginTop: 2 }}>(SA0463354-A)</div>
+                    <div style={{ fontWeight: 700, fontSize: 12 }}>Kretivco Mediaworks</div>
+                    <div style={{ color: '#555', marginTop: 4 }}>(SA0463354-A)</div>
                     <div style={{ color: '#555' }}>No.15A, Jalan USJ1/19</div>
                     <div style={{ color: '#555' }}>47600, Subang Jaya, Selangor</div>
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 700, fontSize: 20 }}>{cfg.title}</div>
-                  <div style={{ marginTop: 4 }}><b>{cfg.noLabel}:</b> {docNumber}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{cfg.title}</div>
+                  <div style={{ marginTop: 8 }}><b>{cfg.noLabel}:</b> {docNumber}</div>
                   <div><b>Date:</b> {new Date().toLocaleDateString('en-GB')}</div>
                   <div><b>By:</b> {form.staffName || '—'}</div>
                 </div>
               </div>
-              <div style={{ borderTop: '1px solid #ccc', margin: '10px 0' }} />
-              <div style={{ fontWeight: 700, fontSize: 12 }}>Customer:</div>
+              <div style={{ borderTop: '0.75px solid #999', margin: '14px 0' }} />
+              <div style={{ fontWeight: 700 }}>Customer:</div>
               <div>{form.customerCompany ? `${form.customerName} (${form.customerCompany})` : (form.customerName || '—')}</div>
               {form.addressLine1 && <div>{form.addressLine1}</div>}
               {form.addressLine2 && <div>{form.addressLine2}</div>}
-              <div style={{ marginTop: 6 }}><b>Title:</b> {form.jobTitle || '—'}</div>
+              <div style={{ marginTop: 15 }}><b>Title:</b> {form.jobTitle || '—'}</div>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, fontSize: 10.5 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 10 }}>
                 <thead>
-                  <tr style={{ background: '#F0F0F0' }}>
-                    <th style={{ padding: 5, textAlign: 'left', border: '1px solid #ddd' }}>No</th>
-                    <th style={{ padding: 5, textAlign: 'left', border: '1px solid #ddd' }}>Description</th>
-                    {isReceipt ? <th style={{ padding: 5, textAlign: 'left', border: '1px solid #ddd' }}>Payment Method</th> : <>
-                      {showSize && <th style={{ padding: 5, textAlign: 'left', border: '1px solid #ddd' }}>Size</th>}
-                      <th style={{ padding: 5, textAlign: 'left', border: '1px solid #ddd' }}>Unit</th>
-                      <th style={{ padding: 5, textAlign: 'right', border: '1px solid #ddd' }}>Price</th>
+                  <tr style={{ background: '#F2F2F2' }}>
+                    <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>No</th>
+                    <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Description</th>
+                    {isReceipt ? <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Payment Method</th> : <>
+                      {showSize && <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Size</th>}
+                      <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Unit</th>
+                      <th style={{ padding: 8, textAlign: 'right', border: '0.5px solid #000' }}>Price</th>
                     </>}
-                    <th style={{ padding: 5, textAlign: 'right', border: '1px solid #ddd' }}>Amount</th>
+                    <th style={{ padding: 8, textAlign: 'right', border: '0.5px solid #000' }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {form.items.map((it, i) => (
                     <tr key={i}>
-                      <td style={{ padding: 5, border: '1px solid #ddd' }}>{i + 1}</td>
-                      <td style={{ padding: 5, border: '1px solid #ddd' }}>{it.item || '—'}{it.desc ? <div style={{ color: '#777', fontSize: 9.5 }}>{it.desc}</div> : null}</td>
-                      {isReceipt ? <td style={{ padding: 5, border: '1px solid #ddd' }}>{form.paymentMethod}</td> : <>
-                        {showSize && <td style={{ padding: 5, border: '1px solid #ddd' }}>{it.size || '—'}</td>}
-                        <td style={{ padding: 5, border: '1px solid #ddd' }}>{it.qty || 1}</td>
-                        <td style={{ padding: 5, border: '1px solid #ddd', textAlign: 'right' }}>{formatRM(it.price)}</td>
+                      <td style={{ padding: 8, border: '0.5px solid #000' }}>{i + 1}</td>
+                      <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.item || '—'}{it.desc ? <div style={{ color: '#777', fontSize: 9 }}>{it.desc}</div> : null}</td>
+                      {isReceipt ? <td style={{ padding: 8, border: '0.5px solid #000' }}>{form.paymentMethod}</td> : <>
+                        {showSize && <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.size || '—'}</td>}
+                        <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.qty || 1}</td>
+                        <td style={{ padding: 8, border: '0.5px solid #000', textAlign: 'right' }}>{formatRM(it.price)}</td>
                       </>}
-                      <td style={{ padding: 5, border: '1px solid #ddd', textAlign: 'right' }}>{formatRM((Number(it.qty) || 1) * (Number(it.price) || 0))}</td>
+                      <td style={{ padding: 8, border: '0.5px solid #000', textAlign: 'right' }}>{formatRM((Number(it.qty) || 1) * (Number(it.price) || 0))}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
-              <div style={{ marginTop: 10, textAlign: 'right' }}>
+              <div style={{ marginTop: 24, textAlign: 'right' }}>
                 {isReceipt ? <>
                   <div><b>Amount Paid (MYR):</b> {formatRM(form.amountPaid)}</div>
-                  <div><b>Balance Due (MYR):</b> {formatRM(form.balanceDue)}</div>
+                  <div style={{ marginTop: 6 }}><b>Balance Due (MYR):</b> {formatRM(form.balanceDue)}</div>
                 </> : <>
-                  <div>Subtotal: {formatRM(subtotal)}</div>
-                  <div>Delivery: {formatRM(form.delivery)}</div>
-                  <div>Discount: ({formatRM(form.discount)})</div>
-                  <div style={{ fontWeight: 700, marginTop: 3 }}>Total (MYR): {formatRM(total)}</div>
+                  <div><b>Subtotal:</b> {formatRM(subtotal)}</div>
+                  <div style={{ marginTop: 6 }}><b>Delivery:</b> {formatRM(form.delivery)}</div>
+                  <div style={{ marginTop: 6 }}><b>Discount:</b> ({formatRM(form.discount)})</div>
+                  <div style={{ marginTop: 6 }}><b>Total (MYR):</b> {formatRM(total)}</div>
                 </>}
               </div>
 
-              <div style={{ marginTop: 14, fontWeight: 700 }}>Note:</div>
-              <div style={{ color: '#555', fontSize: 9.5, marginTop: 3 }}>
-                {notes.map((n, i) => <div key={i}>{i + 1}. {n}</div>)}
+              <div style={{ marginTop: 25, fontWeight: 700 }}>Note:</div>
+              <div style={{ color: '#3c3c3c', marginTop: 4 }}>
+                {notes.map((n, i) => <div key={i} style={{ marginTop: i ? 4 : 0 }}>{i + 1}. {n}</div>)}
               </div>
-              <div style={{ marginTop: 10, fontWeight: 700 }}>Thank you for your business!</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24 }}>
-                <div>Issued by:<div style={{ borderTop: '1px solid #333', width: 120, marginTop: 16 }} /></div>
-                <div>Accepted by:<div style={{ borderTop: '1px solid #333', width: 120, marginTop: 16 }} /></div>
+              <div style={{ marginTop: 14 }}>Thank you for your business!</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 19 }}>
+                <div style={{ fontWeight: 700 }}>Issued by:<div style={{ borderTop: '0.5px solid #141414', width: 150, marginTop: 26 }} /></div>
+                <div style={{ fontWeight: 700 }}>Accepted by:<div style={{ borderTop: '0.5px solid #141414', width: 150, marginTop: 26 }} /></div>
               </div>
             </div>
           </div>
