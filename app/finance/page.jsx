@@ -44,6 +44,7 @@ export default function Finance() {
   const [showOpening, setShowOpening] = useState(false);
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
+  const [fBank, setFBank] = useState('all');
 
   const [expForm, setExpForm] = useState({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const [openForm, setOpenForm] = useState({ bank: 'mbb', amount: '', notes: '' });
@@ -61,8 +62,9 @@ export default function Finance() {
   const filteredEntries = useMemo(() => {
     let list = [...scopedEntries].sort((a,b) => new Date(b.date) - new Date(a.date));
     if (fDept !== 'all') list = list.filter(e => e.department === fDept);
+    if (fBank !== 'all') list = list.filter(e => e.bank === fBank);
     return list;
-  }, [scopedEntries, fDept]);
+  }, [scopedEntries, fDept, fBank]);
 
   const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(scopedEntries, `revenue_${d}`), 0);
   const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(scopedEntries, `cogs_${d}`), 0);
@@ -172,7 +174,7 @@ export default function Finance() {
               <div className="card-title" style={{marginBottom:14}}>Baki Bank</div>
               <div className="bank-grid">
                 {bankBalances.map(b => (
-                  <div key={b.key} className="bank-chip">
+                  <div key={b.key} className="bank-chip" style={{cursor:'pointer', outline: fBank===b.key ? '2px solid #E91E63' : 'none'}} onClick={()=>setFBank(p=>p===b.key?'all':b.key)} title="Klik untuk tapis Ledger ikut bank ini">
                     <div className="text-xs text-muted">{b.label}</div>
                     <div style={{fontSize:19,fontWeight:700,marginTop:4}}>{formatRM(b.bal)}</div>
                   </div>
@@ -199,18 +201,24 @@ export default function Finance() {
           <div className="card">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div className="card-title">Ledger</div>
-              {(!visDepts || visDepts.length > 1) && (
-                <select className="fs" style={{width:170}} value={fDept} onChange={e=>setFDept(e.target.value)}>
-                  <option value="all">Semua Department</option>
-                  {deptKeys.map(k => <option key={k} value={k}>{DEPT[k].label}</option>)}
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {(!visDepts || visDepts.length > 1) && (
+                  <select className="fs" style={{width:170}} value={fDept} onChange={e=>setFDept(e.target.value)}>
+                    <option value="all">Semua Department</option>
+                    {deptKeys.map(k => <option key={k} value={k}>{DEPT[k].label}</option>)}
+                  </select>
+                )}
+                <select className="fs" style={{width:150}} value={fBank} onChange={e=>setFBank(e.target.value)}>
+                  <option value="all">Semua Bank</option>
+                  {Object.keys(BANK).map(k => <option key={k} value={k}>{BANK[k].label}</option>)}
                 </select>
-              )}
+              </div>
             </div>
             <div style={{overflowX:"auto"}}>
               <table>
-                <thead><tr><th>Tarikh</th><th>Keterangan</th><th>Department</th><th>Jenis</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
+                <thead><tr><th>Tarikh</th><th>Keterangan</th><th>Department</th><th>Bank</th><th>Jenis</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
                 <tbody>
-                  {filteredEntries.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry lagi.</td></tr>}
+                  {filteredEntries.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry lagi.</td></tr>}
                   {filteredEntries.map(e => {
                     const meta = TYPE_META[e.type] || { label: e.type, color: "#9B93A8", sign: "" };
                     return (
@@ -218,6 +226,7 @@ export default function Finance() {
                         <td className="text-sm">{formatDate(e.date)}</td>
                         <td className="text-sm">{e.description}{e.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
                         <td>{e.department ? <span className="dept-tag" style={{color:DEPT[e.department]?.color,background:(DEPT[e.department]?.color||'#6B7280')+"15"}}>{DEPT[e.department]?.code}</span> : <span className="text-xs text-muted">—</span>}</td>
+                        <td className="text-sm">{e.bank ? BANK[e.bank]?.label || e.bank : <span className="text-xs text-muted">—</span>}</td>
                         <td><span className="type-badge" style={{color:meta.color,background:meta.color+"15"}}>{meta.label}</span></td>
                         <td style={{textAlign:"right",fontWeight:600}}>{meta.sign}{formatRM(e.amount)}</td>
                       </tr>

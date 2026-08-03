@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
-import { generateDocument, generateCombinedDocument } from '@/lib/pdf-generator';
+import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -263,22 +263,221 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 
 // ─── Job Detail Panel ─────────────────────────────────────────
 // ─── Document Generation Buttons ─────────────────────────────
-function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
-  const [generating, setGenerating] = useState(null);
-  const [showCombine, setShowCombine] = useState(false);
-  const [combineIds, setCombineIds] = useState(new Set());
-  const cust = customers.find(c => c.id === job.customer_id) || null;
+// ─── Document Preview — live edit + live preview before generating ──
+// Staff can adjust customer info, items, delivery/discount (or payment
+// method/amounts for a receipt) and see the layout update instantly. Terms
+// and bank are fixed — bank always follows whatever was set on the job.
+function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerated }) {
+  const isReceipt = type === 'receipt';
+  const showSize = !!DEPT[job.department]?.usesSize;
+  const cfg = DOC_TYPES[type];
+  const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
+  const notes = notesFor(type, bank);
+  const docNumber = genDocNumber(type, job.job_id);
 
-  const handleGen = async (type, label) => {
-    setGenerating(type);
+  const [form, setForm] = useState(() => {
+    const initItems = (job.line_items || []).map(li => ({ ...li }));
+    return {
+      staffName: userName || '',
+      customerName: cust?.name || job.customer_name || '',
+      customerCompany: cust?.company || job.customer_company || '',
+      addressLine1: '', addressLine2: '',
+      jobTitle: job.job_type || '',
+      items: initItems.length ? initItems : [{ item: '', desc: '', size: '', qty: 1, price: 0 }],
+      delivery: 0, discount: 0,
+      paymentMethod: 'Bank Transfer',
+      amountPaid: job.final_value || job.estimation_value || 0,
+      balanceDue: 0,
+    };
+  });
+  const [generating, setGenerating] = useState(false);
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
+  const addItem = () => setForm(p => ({ ...p, items: [...p.items, { item: '', desc: '', size: '', qty: 1, price: 0 }] }));
+  const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
+
+  const subtotal = form.items.reduce((s, it) => s + ((Number(it.qty) || 0) * (Number(it.price) || 0)), 0);
+  const total = subtotal + (Number(form.delivery) || 0) - (Number(form.discount) || 0);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
     try {
-      const result = await generateDocument(type, job, cust);
-      onDocGenerated && onDocGenerated({ jobs: [job], type, label, docNumber: result.docNumber });
+      const overrides = {
+        staffName: form.staffName, customerName: form.customerName, customerCompany: form.customerCompany,
+        addressLine1: form.addressLine1, addressLine2: form.addressLine2, jobTitle: form.jobTitle,
+        items: form.items.filter(it => it.item?.trim()),
+        delivery: form.delivery, discount: form.discount,
+        paymentMethod: form.paymentMethod,
+        amountPaid: isReceipt ? form.amountPaid : undefined,
+        balanceDue: isReceipt ? form.balanceDue : undefined,
+      };
+      const result = await generateDocument(type, job, cust, overrides);
+      onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total });
+      onClose();
     } catch (err) {
       console.error('PDF generation error:', err);
     }
-    setGenerating(null);
+    setGenerating(false);
   };
+
+  const inputSt = { fontFamily: "'Poppins',sans-serif", fontSize: 12, border: '1px solid #E8E4ED', borderRadius: 6, padding: '6px 8px', width: '100%', boxSizing: 'border-box' };
+  const labelSt = { fontSize: 11, fontWeight: 600, color: '#6B6080', display: 'block', marginBottom: 4, marginTop: 10 };
+
+  return (
+    <Modal width={1040} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid #F0ECF4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Preview {label} — {job.job_id}</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B93A8' }}>×</button>
+        </div>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Edit form */}
+          <div style={{ width: 340, padding: '4px 20px 20px', overflowY: 'auto', borderRight: '1px solid #F0ECF4', flexShrink: 0 }}>
+            <label style={{ ...labelSt, marginTop: 12 }}>Nama Customer</label>
+            <input style={inputSt} value={form.customerName} onChange={e => set('customerName', e.target.value)} />
+            <label style={labelSt}>Syarikat</label>
+            <input style={inputSt} value={form.customerCompany} onChange={e => set('customerCompany', e.target.value)} />
+            <label style={labelSt}>Alamat Baris 1</label>
+            <input style={inputSt} value={form.addressLine1} onChange={e => set('addressLine1', e.target.value)} />
+            <label style={labelSt}>Alamat Baris 2</label>
+            <input style={inputSt} value={form.addressLine2} onChange={e => set('addressLine2', e.target.value)} />
+            <label style={labelSt}>Tajuk Job/Project</label>
+            <input style={inputSt} value={form.jobTitle} onChange={e => set('jobTitle', e.target.value)} />
+            <label style={labelSt}>By (Staff)</label>
+            <input style={inputSt} value={form.staffName} onChange={e => set('staffName', e.target.value)} />
+
+            <div style={{ ...labelSt, marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Item</span>
+              <button onClick={addItem} style={{ fontSize: 11, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer' }}>+ Tambah</button>
+            </div>
+            {form.items.map((it, i) => (
+              <div key={i} style={{ border: '1px solid #F0ECF4', borderRadius: 8, padding: 8, marginBottom: 6 }}>
+                <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Nama item" value={it.item} onChange={e => setItem(i, 'item', e.target.value)} />
+                <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Keterangan (optional)" value={it.desc || ''} onChange={e => setItem(i, 'desc', e.target.value)} />
+                {showSize && <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Saiz (cth: A3, 3ft x 6ft)" value={it.size || ''} onChange={e => setItem(i, 'size', e.target.value)} />}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 24px', gap: 4 }}>
+                  <input type="number" style={inputSt} placeholder="Qty" value={it.qty} onChange={e => setItem(i, 'qty', e.target.value)} min="1" />
+                  <input type="number" style={inputSt} placeholder="Harga" value={it.price} onChange={e => setItem(i, 'price', e.target.value)} />
+                  <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 14 }}>×</button>
+                </div>
+              </div>
+            ))}
+
+            {!isReceipt && <>
+              <label style={labelSt}>Delivery (RM)</label>
+              <input type="number" style={inputSt} value={form.delivery} onChange={e => set('delivery', e.target.value)} />
+              <label style={labelSt}>Discount (RM)</label>
+              <input type="number" style={inputSt} value={form.discount} onChange={e => set('discount', e.target.value)} />
+            </>}
+            {isReceipt && <>
+              <label style={labelSt}>Payment Method</label>
+              <select style={inputSt} value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)}>
+                <option>Bank Transfer</option><option>Cash</option><option>Online Banking</option>
+              </select>
+              <label style={labelSt}>Amount Paid (RM)</label>
+              <input type="number" style={inputSt} value={form.amountPaid} onChange={e => set('amountPaid', e.target.value)} />
+              <label style={labelSt}>Balance Due (RM)</label>
+              <input type="number" style={inputSt} value={form.balanceDue} onChange={e => set('balanceDue', e.target.value)} />
+            </>}
+          </div>
+
+          {/* Live preview — font/spacing sizes mirror the actual PDF's point
+              sizes 1:1 (px≈pt on screen) so this isn't a miniaturized mockup */}
+          <div style={{ flex: 1, padding: 20, overflowY: 'auto', background: '#F5F3F7' }}>
+            <div style={{ background: '#fff', borderRadius: 4, padding: '32px 40px', fontSize: 10, lineHeight: 1.5, color: '#141414', boxShadow: '0 1px 4px rgba(0,0,0,.08)', minHeight: '100%', width: 595, margin: '0 auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 13, alignItems: 'flex-start' }}>
+                  <img src="/kretivco-logo.png" alt="Kretivco" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 12 }}>Kretivco Mediaworks</div>
+                    <div style={{ color: '#555', marginTop: 4 }}>(SA0463354-A)</div>
+                    <div style={{ color: '#555' }}>No.15A, Jalan USJ1/19</div>
+                    <div style={{ color: '#555' }}>47600, Subang Jaya, Selangor</div>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{cfg.title}</div>
+                  <div style={{ marginTop: 8 }}><b>{cfg.noLabel}:</b> {docNumber}</div>
+                  <div><b>Date:</b> {new Date().toLocaleDateString('en-GB')}</div>
+                  <div><b>By:</b> {form.staffName || '—'}</div>
+                </div>
+              </div>
+              <div style={{ borderTop: '0.75px solid #999', margin: '14px 0' }} />
+              <div style={{ fontWeight: 700 }}>Customer:</div>
+              <div>{form.customerCompany ? `${form.customerName} (${form.customerCompany})` : (form.customerName || '—')}</div>
+              {form.addressLine1 && <div>{form.addressLine1}</div>}
+              {form.addressLine2 && <div>{form.addressLine2}</div>}
+              <div style={{ marginTop: 15 }}><b>Title:</b> {form.jobTitle || '—'}</div>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 10 }}>
+                <thead>
+                  <tr style={{ background: '#F2F2F2' }}>
+                    <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>No</th>
+                    <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Description</th>
+                    {isReceipt ? <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Payment Method</th> : <>
+                      {showSize && <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Size</th>}
+                      <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Unit</th>
+                      <th style={{ padding: 8, textAlign: 'right', border: '0.5px solid #000' }}>Price</th>
+                    </>}
+                    <th style={{ padding: 8, textAlign: 'right', border: '0.5px solid #000' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.items.map((it, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: 8, border: '0.5px solid #000' }}>{i + 1}</td>
+                      <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.item || '—'}{it.desc ? <div style={{ color: '#777', fontSize: 9 }}>{it.desc}</div> : null}</td>
+                      {isReceipt ? <td style={{ padding: 8, border: '0.5px solid #000' }}>{form.paymentMethod}</td> : <>
+                        {showSize && <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.size || '—'}</td>}
+                        <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.qty || 1}</td>
+                        <td style={{ padding: 8, border: '0.5px solid #000', textAlign: 'right' }}>{formatRM(it.price)}</td>
+                      </>}
+                      <td style={{ padding: 8, border: '0.5px solid #000', textAlign: 'right' }}>{formatRM((Number(it.qty) || 1) * (Number(it.price) || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ marginTop: 24, textAlign: 'right' }}>
+                {isReceipt ? <>
+                  <div><b>Amount Paid (MYR):</b> {formatRM(form.amountPaid)}</div>
+                  <div style={{ marginTop: 6 }}><b>Balance Due (MYR):</b> {formatRM(form.balanceDue)}</div>
+                </> : <>
+                  <div><b>Subtotal:</b> {formatRM(subtotal)}</div>
+                  <div style={{ marginTop: 6 }}><b>Delivery:</b> {formatRM(form.delivery)}</div>
+                  <div style={{ marginTop: 6 }}><b>Discount:</b> ({formatRM(form.discount)})</div>
+                  <div style={{ marginTop: 6 }}><b>Total (MYR):</b> {formatRM(total)}</div>
+                </>}
+              </div>
+
+              <div style={{ marginTop: 25, fontWeight: 700 }}>Note:</div>
+              <div style={{ color: '#3c3c3c', marginTop: 4 }}>
+                {notes.map((n, i) => <div key={i} style={{ marginTop: i ? 4 : 0 }}>{i + 1}. {n}</div>)}
+              </div>
+              <div style={{ marginTop: 14 }}>Thank you for your business!</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 19 }}>
+                <div style={{ fontWeight: 700 }}>Issued by:<div style={{ borderTop: '0.5px solid #141414', width: 150, marginTop: 26 }} /></div>
+                <div style={{ fontWeight: 700 }}>Accepted by:<div style={{ borderTop: '0.5px solid #141414', width: 150, marginTop: 26 }} /></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: '14px 22px', borderTop: '1px solid #F0ECF4', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Batal</button>
+          <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Menjana...' : 'Muat Turun PDF'}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, userName }) {
+  const [generating, setGenerating] = useState(null);
+  const [showCombine, setShowCombine] = useState(false);
+  const [combineIds, setCombineIds] = useState(new Set());
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const cust = customers.find(c => c.id === job.customer_id) || null;
 
   const btnStyle = (color) => ({
     fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600,
@@ -316,9 +515,9 @@ function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
       <div className="section-label" style={{ marginBottom: 6 }}>Dokumen</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {docs.map(d => (
-          <button key={d.type} onClick={() => handleGen(d.type, d.label)} disabled={generating === d.type} style={btnStyle(d.color)}>
+          <button key={d.type} onClick={() => setPreviewDoc({ type: d.type, label: d.label })} style={btnStyle(d.color)}>
             <span>{d.icon}</span>
-            {generating === d.type ? 'Menjana...' : d.label}
+            {d.label}
           </button>
         ))}
       </div>
@@ -364,6 +563,13 @@ function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
             </div>
           )}
         </div>
+      )}
+      {previewDoc && (
+        <DocPreviewModal
+          type={previewDoc.type} label={previewDoc.label} job={job} cust={cust} userName={userName}
+          onClose={() => setPreviewDoc(null)}
+          onGenerated={(payload) => { onDocGenerated && onDocGenerated(payload); }}
+        />
       )}
     </div>
   );
@@ -539,7 +745,7 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
 
           {/* Document Generation */}
           <div style={{ marginTop: 16 }}>
-            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} />
+            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} userName={userName} />
           </div>
         </div>
         <div>
@@ -845,12 +1051,16 @@ export default function JobMonitor() {
     addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text });
   }, [addLog, profile]);
 
-  const handleDocGenerated = useCallback(({ jobs: involvedJobs, type, label, docNumber }) => {
+  const handleDocGenerated = useCallback(({ jobs: involvedJobs, type, label, docNumber, total }) => {
     involvedJobs.forEach(j => {
       addLog(j.job_id, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` });
     });
-    if (type === 'invoice') involvedJobs.forEach(j => postInvoiceEntry(j, docNumber, profile?.name));
-    if (type === 'receipt') involvedJobs.forEach(j => postReceiptEntry(j, docNumber, profile?.name));
+    // A single-job doc may have been fine-tuned in the live preview (delivery/
+    // discount, edited item prices) — post that exact total. Combined docs
+    // still let each job compute its own amount from its own line items.
+    const override = involvedJobs.length === 1 ? total : undefined;
+    if (type === 'invoice') involvedJobs.forEach(j => postInvoiceEntry(j, docNumber, profile?.name, override));
+    if (type === 'receipt') involvedJobs.forEach(j => postReceiptEntry(j, docNumber, profile?.name, override));
   }, [addLog, postInvoiceEntry, postReceiptEntry, profile]);
 
   const handleJumpToJob = useCallback((jobId) => {
