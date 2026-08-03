@@ -386,11 +386,14 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
           <div style={{ flex: 1, padding: 20, overflowY: 'auto', background: '#F5F3F7' }}>
             <div style={{ background: '#fff', borderRadius: 4, padding: '18px 22px', fontSize: 11, color: '#141414', boxShadow: '0 1px 4px rgba(0,0,0,.08)', minHeight: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ paddingLeft: 26 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>Kretivco Mediaworks</div>
-                  <div style={{ color: '#555', marginTop: 2 }}>(SA0463354-A)</div>
-                  <div style={{ color: '#555' }}>No.15A, Jalan USJ1/19</div>
-                  <div style={{ color: '#555' }}>47600, Subang Jaya, Selangor</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <img src="/kretivco-logo.png" alt="Kretivco" style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>Kretivco Mediaworks</div>
+                    <div style={{ color: '#555', marginTop: 2 }}>(SA0463354-A)</div>
+                    <div style={{ color: '#555' }}>No.15A, Jalan USJ1/19</div>
+                    <div style={{ color: '#555' }}>47600, Subang Jaya, Selangor</div>
+                  </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontWeight: 700, fontSize: 20 }}>{cfg.title}</div>
