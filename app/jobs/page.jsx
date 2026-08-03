@@ -370,12 +370,21 @@ function DocButtons({ job, jobs, customers, visDepts, onDocGenerated }) {
 }
 
 // ─── Progress Stepper — full-width pipeline view at top of job detail ──
+// Doubles as the status control: click an upcoming stage to advance, click
+// a past stage to roll back to it. Cancel/Archive stay as small secondary
+// actions here since they're not part of the forward/back flow itself.
 const PIPELINE_STAGES = ['potential', 'active', 'in_progress', 'completed'];
-function ProgressStepper({ status }) {
+function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive }) {
+  const { status } = job;
   if (status === 'cancelled') {
     return <div className="stepper-cancelled">✕ Job Dibatalkan</div>;
   }
   const idx = PIPELINE_STAGES.indexOf(status);
+  const forwardSet = new Set(STATUS_FLOW[status] || []);
+  const rollbackSet = new Set(STATUS_ROLLBACK[status] || []);
+  const canCancel = !["completed", "cancelled"].includes(status);
+  const canArchive = !job.archived && status !== "cancelled";
+
   return (
     <div className="stepper-wrap">
       <div className="stepper-top">
@@ -385,12 +394,20 @@ function ProgressStepper({ status }) {
       <div className="stepper">
         {PIPELINE_STAGES.map((s, i) => {
           const state = i < idx ? 'done' : i === idx ? 'current' : '';
+          const canForward = i > idx && forwardSet.has(s);
+          const canBack = i < idx && rollbackSet.has(s);
+          const clickable = canForward || canBack;
           const dotStyle = state === 'done' ? { background: '#10B981', borderColor: '#10B981', color: '#fff' }
             : state === 'current' ? { borderColor: STATUS[s].color, color: STATUS[s].color, background: STATUS[s].color + '15' }
             : {};
           const lblStyle = state === 'done' ? { color: '#10B981' } : state === 'current' ? { color: STATUS[s].color } : {};
           return (
-            <div key={s} className={`step ${state}`}>
+            <div
+              key={s}
+              className={`step ${state} ${clickable ? 'clickable' : ''}`}
+              onClick={clickable ? () => (canForward ? onStatus(job, s) : onRollback(job, s)) : undefined}
+              title={canForward ? `Gerak ke ${STATUS[s].label}` : canBack ? `Rollback ke ${STATUS[s].label}` : undefined}
+            >
               <div className="line" />
               <div className="dot" style={dotStyle}>{state === 'done' ? '✓' : i + 1}</div>
               <div className="lbl" style={lblStyle}>{STATUS[s].label}</div>
@@ -398,6 +415,12 @@ function ProgressStepper({ status }) {
           );
         })}
       </div>
+      {(canCancel || canArchive) && (
+        <div className="stepper-actions">
+          {canCancel && <button className="stepper-mini-btn cancel" onClick={() => onCancel(job)}>✕ Cancel</button>}
+          {canArchive && <button className="stepper-mini-btn" onClick={() => onArchive(job)}>Arkib</button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -409,9 +432,6 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
     onAddNote(job.job_id, noteText.trim());
     setNoteText('');
   };
-  const forward = STATUS_FLOW[job.status] || [];
-  const rollback = STATUS_ROLLBACK[job.status] || [];
-  const canCancel = !["completed", "cancelled"].includes(job.status);
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState([]);
   const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
@@ -430,7 +450,7 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
 
   return (
     <div className="detail-panel">
-      <ProgressStepper status={job.status} />
+      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} />
       <div className="detail-grid">
         <div>
           <div className="card-title mb-4">Maklumat Job</div>
@@ -522,21 +542,6 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           <CustMini job={job} customers={customers} />
           <div className="card-title mt-6 mb-3">Activity Log</div>
           <Timeline jobId={job.job_id} getActivity={getActivity} />
-
-          {/* Status movement — moved here so staff reads history first, then
-              acts (change stage, generate a doc) right below it. */}
-          {(forward.length > 0 || rollback.length > 0 || canCancel) && (
-            <div className="action-row" style={{ marginTop: 12 }}>
-              {/* Forward buttons */}
-              {forward.map(s => <button key={s} className="btn-status" style={{ color: STATUS[s].color, background: STATUS[s].color + "15" }} onClick={() => onStatus(job, s)}>→ {STATUS[s].label}</button>)}
-              {/* Rollback buttons */}
-              {rollback.map(s => <button key={'rb-'+s} className="btn-status" style={{ color: STATUS[s].color, background: '#fff', border: `1px solid ${STATUS[s].color}` }} onClick={() => onRollback(job, s)}>← {STATUS[s].label}</button>)}
-              {/* Cancel button */}
-              {canCancel && <button className="btn-status" style={{ color: '#EF4444', background: '#EF444415' }} onClick={() => onCancel(job)}>✕ Cancel</button>}
-              {/* Archive button */}
-              {!job.archived && job.status !== "cancelled" && <button className="btn-archive" onClick={() => onArchive(job)}>Arkib</button>}
-            </div>
-          )}
 
           {/* Document Generation */}
           <div style={{ marginTop: 12 }}>
@@ -914,12 +919,19 @@ export default function JobMonitor() {
         .stepper-current{font-size:12.5px;font-weight:600}
         .stepper{display:flex;align-items:center}
         .step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative}
-        .step .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;z-index:2;border:2px solid #E8E4ED;background:#fff;color:#9B93A8}
+        .step .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;z-index:2;border:2px solid #E8E4ED;background:#fff;color:#9B93A8;transition:transform .12s}
         .step .lbl{font-size:11.5px;font-weight:600;color:#9B93A8;margin-top:7px}
         .step .line{position:absolute;top:13px;right:50%;width:100%;height:2px;background:#E8E4ED;z-index:1}
         .step:first-child .line{display:none}
         .step.done .line,.step.current .line{background:#10B981}
+        .step.clickable{cursor:pointer}
+        .step.clickable .dot{border-style:dashed;border-color:#B0A8BC}
+        .step.clickable:hover .dot{transform:scale(1.12);border-color:#E91E63;color:#E91E63;background:#E91E6312}
+        .step.clickable:hover .lbl{color:#E91E63}
         .stepper-cancelled{padding:12px 16px;border-radius:10px;background:#EF444412;border:1px solid #EF444430;color:#EF4444;font-weight:700;font-size:13px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
+        .stepper-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+        .stepper-mini-btn{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid #E8E4ED;background:#fff;color:#9B93A8;cursor:pointer}
+        .stepper-mini-btn.cancel{color:#EF4444;border-color:#EF444440;background:#EF444410}
         .project-line{margin-top:10px;padding:9px 12px;border-radius:8px;background:rgba(233,30,99,.08);font-size:12px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
         .project-line a{color:#E91E63;font-weight:600;text-decoration:none;cursor:pointer}
         .project-line a:hover{text-decoration:underline}
