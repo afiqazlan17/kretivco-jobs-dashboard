@@ -945,7 +945,8 @@ export default function JobMonitor() {
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newJob, setNewJob] = useState({depts:[],cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',picByDept:{},start:'',deadline:'',notes:''});
+  const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'' });
+  const [newJob, setNewJob] = useState({depts:[],cid:'',perDept:{}});
   const [createAttempted, setCreateAttempted] = useState(false);
 
   // Inline customer creation state
@@ -975,14 +976,14 @@ export default function JobMonitor() {
   const toggleDept = (key) => setNewJob(p => {
     const has = p.depts.includes(key);
     const depts = has ? p.depts.filter(d=>d!==key) : [...p.depts, key];
-    const picByDept = { ...p.picByDept };
-    if (has) delete picByDept[key];
-    return { ...p, depts, picByDept };
+    const perDept = { ...p.perDept };
+    if (has) delete perDept[key]; else perDept[key] = emptyDeptFields();
+    return { ...p, depts, perDept };
   });
-  const setPicForDept = (key, pic) => setNewJob(p => ({ ...p, picByDept: { ...p.picByDept, [key]: pic } }));
+  const setDeptField = (dept, key, val) => setNewJob(p => ({ ...p, perDept: { ...p.perDept, [dept]: { ...p.perDept[dept], [key]: val } } }));
 
   const resetCreateForm = () => {
-    setNewJob({depts:[],cid:'',type:'',jobType:'client_project',bank:'',status:'potential',pic:'',picByDept:{},start:'',deadline:'',notes:''});
+    setNewJob({depts:[],cid:'',perDept:{}});
     setShowInlineCust(false);
     setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
     setCreateAttempted(false);
@@ -1008,9 +1009,13 @@ export default function JobMonitor() {
     setToast(`Customer ${custId} berjaya ditambah.`);
   };
 
-  const canSaveJob = !!newJob.cid && newJob.depts.length > 0 && newJob.type.trim() && !!newJob.jobType && !!newJob.bank && !!newJob.start && !!newJob.deadline && (
-    newJob.depts.length === 1 ? !!newJob.pic : newJob.depts.every(d => newJob.picByDept[d])
-  );
+  // Each selected department gets its own full set of job fields — a print
+  // job and a tech job created together can have completely different job
+  // types, names, PICs, and deadlines. Only Customer is shared across them.
+  const canSaveJob = !!newJob.cid && newJob.depts.length > 0 && newJob.depts.every(d => {
+    const f = newJob.perDept[d] || {};
+    return !!f.type?.trim() && !!f.jobType && !!f.bank && !!f.pic && !!f.start && !!f.deadline;
+  });
 
   // Field-level validation for inline error display (fix: all fields mandatory except Notes)
   const fieldErr = (name) => {
@@ -1018,16 +1023,22 @@ export default function JobMonitor() {
     switch (name) {
       case 'cid': return !newJob.cid;
       case 'depts': return newJob.depts.length === 0;
-      case 'jobType': return !newJob.jobType;
-      case 'bank': return !newJob.bank;
-      case 'type': return !newJob.type.trim();
-      case 'pic': return newJob.depts.length <= 1 && !newJob.pic;
-      case 'start': return !newJob.start;
-      case 'deadline': return !newJob.deadline;
       default: return false;
     }
   };
-  const picByDeptErr = (d) => createAttempted && newJob.depts.length > 1 && !newJob.picByDept[d];
+  const deptFieldErr = (dept, name) => {
+    if (!createAttempted) return false;
+    const f = newJob.perDept[dept] || {};
+    switch (name) {
+      case 'jobType': return !f.jobType;
+      case 'bank': return !f.bank;
+      case 'type': return !f.type?.trim();
+      case 'pic': return !f.pic;
+      case 'start': return !f.start;
+      case 'deadline': return !f.deadline;
+      default: return false;
+    }
+  };
 
   const handleCreateSave = () => {
     setCreateAttempted(true);
@@ -1037,6 +1048,7 @@ export default function JobMonitor() {
     const projectId = isMulti ? genProjectId() : null;
 
     const createdIds = newJob.depts.map(dept => {
+      const f = newJob.perDept[dept];
       const jobId = genJobId(dept);
       const jobObj = {
         id: crypto.randomUUID(),
@@ -1044,17 +1056,17 @@ export default function JobMonitor() {
         customer_id: cid || null,
         department: dept,
         project_id: projectId,
-        job_type: newJob.type,
-        job_type_category: newJob.jobType || 'client_project',
-        bank: newJob.bank || null,
+        job_type: f.type,
+        job_type_category: f.jobType || 'client_project',
+        bank: f.bank || null,
         status: 'potential', // Fix: new jobs always start as Potential — not user-selectable at creation
         estimation_value: null,
         line_items: [],
         final_value: null,
-        pic: isMulti ? newJob.picByDept[dept] : newJob.pic,
-        start_date: newJob.start || null,
-        deadline: newJob.deadline || null,
-        notes: newJob.notes || null,
+        pic: f.pic,
+        start_date: f.start || null,
+        deadline: f.deadline || null,
+        notes: f.notes || null,
         created_at: new Date().toISOString(),
         archived: false,
       };
@@ -1404,43 +1416,52 @@ export default function JobMonitor() {
               {fieldErr('depts') && <div className="field-error">Wajib pilih sekurang-kurangnya satu department.</div>}
             </div>
 
-            {/* Job Type & Bank */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-              <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${newJob.jobType===k?v.color:(fieldErr('jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:newJob.jobType===k?v.color+'15':'#fff',color:newJob.jobType===k?v.color:'#6B6080'}} onClick={()=>nj('jobType',k)}>{v.label}</button>)}</div>{fieldErr('jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
-              <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i,arr)=><button key={k} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${newJob.bank===k?v.color:(fieldErr('bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:newJob.bank===k?v.color+'15':'#fff',color:newJob.bank===k?v.color:'#6B6080'}} onClick={()=>nj('bank',k)}>{v.label}</button>)}</div>{fieldErr('bank')&&<div className="field-error">Wajib pilih bank.</div>}</div>
-            </div>
+            {/* Each department gets its own full section — a job's Job Type,
+                Bank, Nama Job, PIC, dates, and notes can differ entirely per
+                department even when created together under one customer. */}
+            {newJob.depts.map(d=>{
+              const meta = DEPT[d];
+              const f = newJob.perDept[d] || emptyDeptFields();
+              const set = (k,v) => setDeptField(d,k,v);
+              return (
+                <div key={d} style={{border:`1.5px solid ${meta.color}30`,borderRadius:10,padding:14,background:meta.color+'08',marginBottom:14}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+                    <span style={{fontSize:10.5,fontWeight:700,padding:'4px 9px',borderRadius:6,color:meta.color,background:meta.color+'18'}}>{meta.code}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:'#1A1025'}}>{meta.label}</span>
+                  </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-              <div><label className="field-label">Nama Job *</label><input className={`field-input${fieldErr('type')?' field-input-err':''}`} value={newJob.type} onChange={e=>nj('type',e.target.value)} placeholder="cth: Design & Print Roti Bakar" />{fieldErr('type')&&<div className="field-error">Wajib diisi.</div>}</div>
-            </div>
-            {newJob.depts.length <= 1 ? (
-              <div style={{marginBottom:16}}>
-                <label className="field-label">PIC *</label>
-                <select className={`field-select${fieldErr('pic')?' field-select-err':''}`} style={{width:'100%'}} value={newJob.pic} onChange={e=>nj('pic',e.target.value)}><option value="">— Pilih —</option>{(newJob.depts[0] && PIC_BY_DEPT[newJob.depts[0]] ? PIC_BY_DEPT[newJob.depts[0]] : PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}</select>
-                {fieldErr('pic') && <div className="field-error">Wajib pilih PIC.</div>}
-              </div>
-            ) : (
-              <div style={{marginBottom:16}}>
-                <label className="field-label">PIC setiap department *</label>
-                <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                  {newJob.depts.map(d=>{
-                    const meta = DEPT[d];
-                    return (
-                      <div key={d} style={{display:'grid',gridTemplateColumns:'110px 1fr',gap:10,alignItems:'center'}}>
-                        <span style={{fontSize:10.5,fontWeight:700,padding:'4px 9px',borderRadius:6,textAlign:'center',color:meta.color,background:meta.color+'15'}}>{meta.code}</span>
-                        <select className={`field-select${picByDeptErr(d)?' field-select-err':''}`} style={{width:'100%'}} value={newJob.picByDept[d]||''} onChange={e=>setPicForDept(d,e.target.value)}>
-                          <option value="">— Pilih PIC {meta.label} —</option>
-                          {(PIC_BY_DEPT[d]||PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}
-                        </select>
-                      </div>
-                    );
-                  })}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
+                    <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>set('jobType',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
+                    <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i)=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.bank===k?v.color:(deptFieldErr(d,'bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:f.bank===k?v.color+'15':'#fff',color:f.bank===k?v.color:'#6B6080'}} onClick={()=>set('bank',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'bank')&&<div className="field-error">Wajib pilih bank.</div>}</div>
+                  </div>
+
+                  <div style={{marginBottom:14}}>
+                    <label className="field-label">Nama Job *</label>
+                    <input className={`field-input${deptFieldErr(d,'type')?' field-input-err':''}`} value={f.type} onChange={e=>set('type',e.target.value)} placeholder="cth: Design & Print Roti Bakar" />
+                    {deptFieldErr(d,'type') && <div className="field-error">Wajib diisi.</div>}
+                  </div>
+
+                  <div style={{marginBottom:14}}>
+                    <label className="field-label">PIC *</label>
+                    <select className={`field-select${deptFieldErr(d,'pic')?' field-select-err':''}`} style={{width:'100%'}} value={f.pic} onChange={e=>set('pic',e.target.value)}>
+                      <option value="">— Pilih PIC {meta.label} —</option>
+                      {(PIC_BY_DEPT[d]||PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                    {deptFieldErr(d,'pic') && <div className="field-error">Wajib pilih PIC.</div>}
+                  </div>
+
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
+                    <div><label className="field-label">Tarikh Mula *</label><input type="date" className={`field-input${deptFieldErr(d,'start')?' field-input-err':''}`} value={f.start} onChange={e=>set('start',e.target.value)} />{deptFieldErr(d,'start')&&<div className="field-error">Wajib diisi.</div>}</div>
+                    <div><label className="field-label">Deadline *</label><input type="date" className={`field-input${deptFieldErr(d,'deadline')?' field-input-err':''}`} value={f.deadline} onChange={e=>set('deadline',e.target.value)} />{deptFieldErr(d,'deadline')&&<div className="field-error">Wajib diisi.</div>}</div>
+                  </div>
+
+                  <div>
+                    <label className="field-label">Nota</label>
+                    <textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:60,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>set('notes',e.target.value)} placeholder="Maklumat tambahan..." />
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}><div><label className="field-label">Tarikh Mula *</label><input type="date" required className={`field-input${fieldErr('start')?' field-input-err':''}`} value={newJob.start} onChange={e=>nj('start',e.target.value)} />{fieldErr('start')&&<div className="field-error">Wajib diisi.</div>}</div><div><label className="field-label">Deadline *</label><input type="date" required className={`field-input${fieldErr('deadline')?' field-input-err':''}`} value={newJob.deadline} onChange={e=>nj('deadline',e.target.value)} />{fieldErr('deadline')&&<div className="field-error">Wajib diisi.</div>}</div></div>
-            <div style={{marginBottom:16}}><label className="field-label">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:72,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={newJob.notes} onChange={e=>nj('notes',e.target.value)} placeholder="Maklumat tambahan..." /></div>
+              );
+            })}
           </div>
           <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={()=>{setShowCreate(false);resetCreateForm();}}>Batal</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
         </Modal>}
