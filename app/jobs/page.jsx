@@ -913,6 +913,14 @@ export default function JobMonitor() {
         setShowCreate(true);
         window.history.replaceState(null,'','/jobs');
       }
+      const jobId = params.get('job');
+      if(jobId) {
+        const target = jobs.find(j => j.job_id === jobId);
+        if(target) {
+          setExpandedId(target.id);
+          window.history.replaceState(null,'','/jobs');
+        }
+      }
     };
     checkAndOpen();
     const timer = setTimeout(checkAndOpen, 200);
@@ -920,7 +928,7 @@ export default function JobMonitor() {
     const handler = ()=> setShowCreate(true);
     window.addEventListener('open-create-job', handler);
     return ()=> { clearTimeout(timer); window.removeEventListener('open-create-job', handler); };
-  }, []);
+  }, [jobs]);
 
   const nj = (k,v) => setNewJob(p=>({...p,[k]:v}));
   const toggleDept = (key) => setNewJob(p => {

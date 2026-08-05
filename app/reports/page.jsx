@@ -9,7 +9,10 @@ export default function Reports(){
   const { jobs = [], customers = [] } = useData() || {};
   const visDepts = useVisibleDepts();
 
-  const[df,setDf]=useState("2026-01-01");const[dt,setDt]=useState("2026-07-31");const[fD,setFD]=useState("all");
+  const today=new Date();
+  const yearStart=`${today.getFullYear()}-01-01`;
+  const todayStr=today.toISOString().slice(0,10);
+  const[df,setDf]=useState(yearStart);const[dt,setDt]=useState(todayStr);const[fD,setFD]=useState("all");
 
   const filtered=useMemo(()=>(jobs || []).filter(j=>{
     if(visDepts && !visDepts.includes(j.department))return false;
