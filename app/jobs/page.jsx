@@ -1,5 +1,6 @@
 "use client"
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
@@ -169,10 +170,12 @@ function Timeline({ jobId, getActivity }) {
 
 // ─── Customer Mini Profile ────────────────────────────────────
 function CustMini({ job, customers }) {
+  const router = useRouter();
   const cust = customers.find(c => c.id === job.customer_id);
   const name = job.customer_name || job.customer_id || "—";
+  const goToCustomer = () => { if (cust) router.push(`/customers?customer=${cust.id}`); };
   return (
-    <div className="cust-mini">
+    <div className="cust-mini" onClick={goToCustomer} style={cust ? { cursor: 'pointer' } : undefined} title={cust ? 'Lihat profil customer' : undefined}>
       <div className="cust-mini-head"><div className="avatar-sm">{name.charAt(0)}</div><div><div className="text-body font-semibold">{name}</div><div className="jid text-muted">{cust?.customer_id || job.customer_id}</div></div></div>
       <div className="cust-mini-grid">
         <div><span className="text-muted">Company:</span> {cust?.company || "—"}</div>
@@ -690,7 +693,7 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           <div style={{marginTop:16}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div className="section-label" style={{margin:0}}>Item</div>
-              {!editingItems ? <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>
+              {!editingItems ? (job.status==='completed'||job.status==='cancelled' ? null : <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>)
               : <div style={{display:'flex',gap:6}}><button onClick={saveItems} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button><button onClick={()=>setEditingItems(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button></div>}
             </div>
             {!editingItems && job.line_items?.length > 0 && (

@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, BANK, EXPENSE_CATEGORIES, formatRM, formatDate } from '@/lib/constants';
+import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate } from '@/lib/constants';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -26,8 +26,8 @@ function balanceFor(entries, accountKey) {
 }
 
 const TYPE_META = {
-  invoice: { label: 'Invois', color: '#3A86FF', sign: '' },
-  receipt: { label: 'Resit', color: '#10B981', sign: '+' },
+  invoice: { label: 'Invois', color: DOC_TYPE_META.invoice.color, sign: '' },
+  receipt: { label: 'Resit', color: DOC_TYPE_META.receipt.color, sign: '+' },
   job_expense: { label: 'Kos Job', color: '#E85D04', sign: '-' },
   operating_expense: { label: 'Expense', color: '#EF4444', sign: '-' },
   opening_balance: { label: 'Baki Permulaan', color: '#6B7280', sign: '' },
@@ -84,6 +84,7 @@ export default function Finance() {
 
   const handleAddExpense = () => {
     if (!expForm.amount || !expForm.bank) return;
+    if (!expForm.department && !window.confirm('Department dikosongkan — expense ini akan direkod sebagai kos company-wide (bukan kos department tertentu). Teruskan?')) return;
     postExpenseEntry({
       category: expForm.category,
       department: expForm.department || null,
@@ -171,7 +172,10 @@ export default function Finance() {
 
           {isBod && bankBalances.length > 0 && (
             <div className="card">
-              <div className="card-title" style={{marginBottom:14}}>Baki Bank</div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+                <div className="card-title">Baki Bank <span className="text-xs text-muted" style={{fontWeight:400}}>(klik untuk tapis Ledger)</span></div>
+                {fBank!=='all' && <button className="btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setFBank('all')}>× Clear filter</button>}
+              </div>
               <div className="bank-grid">
                 {bankBalances.map(b => (
                   <div key={b.key} className="bank-chip" style={{cursor:'pointer', outline: fBank===b.key ? '2px solid #E91E63' : 'none'}} onClick={()=>setFBank(p=>p===b.key?'all':b.key)} title="Klik untuk tapis Ledger ikut bank ini">
