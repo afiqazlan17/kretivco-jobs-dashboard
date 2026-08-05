@@ -141,6 +141,15 @@ export default function CustomerDirectory(){
   const [newForm,setNewForm]=useState({name:'',company:'',phone:'',email:'',source:'referral',address_line_1:'',address_line_2:''});
   const handleNewSave=()=>{if(!newForm.name.trim())return;const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,name:newForm.name,company:newForm.company,phone:newForm.phone,email:newForm.email,source:newForm.source,address_line_1:newForm.address_line_1,address_line_2:newForm.address_line_2,created_at:new Date().toISOString()});setShowNew(false);setNewForm({name:'',company:'',phone:'',email:'',source:'referral',address_line_1:'',address_line_2:''});setToast(`${custId} (${newForm.name}) ditambah.`)};
 
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const cid=params.get('customer');
+    if(cid){
+      const target=customers.find(c=>c.id===cid);
+      if(target){setProfile(target);window.history.replaceState(null,'','/customers');}
+    }
+  },[customers]);
+
   const stats=useMemo(()=>{const m={};customers.forEach(c=>{const cj=visJobs.filter(j=>j.customer_id===c.id&&j.status!=="cancelled");m[c.id]={jobs:cj.length,est:cj.reduce((s,j)=>s+(j.estimation_value||0),0),rev:cj.filter(j=>j.status==="completed").reduce((s,j)=>s+(j.final_value||0),0)};});return m},[customers,visJobs]);
   const visCustomerIds=useMemo(()=>visDepts?new Set(visJobs.map(j=>j.customer_id)):null,[visDepts,visJobs]);
   const filtered=useMemo(()=>{let l=[...customers];if(visCustomerIds)l=l.filter(c=>visCustomerIds.has(c.id));if(fSrc!=="all")l=l.filter(c=>c.source===fSrc);if(search.trim()){const q=search.toLowerCase();l=l.filter(c=>c.name.toLowerCase().includes(q)||(c.customer_id||"").toLowerCase().includes(q));}return l},[customers,fSrc,search,visCustomerIds]);

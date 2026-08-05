@@ -1,4 +1,5 @@
 'use client'
+import { useRouter } from 'next/navigation'
 import { useDashboard, useData, useVisibleDepts } from '@/lib/hooks'
 import { DEPT, STATUS, formatRM, formatDate, daysUntil } from '@/lib/constants'
 import { PageHeader, Card, StatusBadge, DeptTag, JobId, DeadlineBadge } from '@/components/ui/kretivco'
@@ -12,6 +13,8 @@ function StatCard({ icon, label, value, sub, color }) {
 }
 
 export default function Dashboard() {
+  const router = useRouter()
+  const goToJob = (jobId) => router.push(`/jobs?job=${jobId}`)
   const { stats, deptBreakdown, alerts, recent } = useDashboard()
   const { jobs: allJobs } = useData()
   const visDepts = useVisibleDepts()
@@ -109,7 +112,7 @@ export default function Dashboard() {
         <div style={{fontSize:16,fontWeight:700,marginBottom:16}}>Job Terbaru</div>
         {recent.length === 0 ? <div>Tiada job.</div> : (
           <div>{recent.map(j => (
-            <div key={j.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid #F3F1F6'}}>
+            <div key={j.id} onClick={()=>goToJob(j.job_id)} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'1px solid #F3F1F6',cursor:'pointer'}}>
               <JobId>{j.job_id}</JobId>
               <span style={{flex:1}}>{j.customer_name || '—'}</span>
               <DeptTag dept={j.department}/>
@@ -129,7 +132,7 @@ export default function Dashboard() {
         {alerts.length===0 ? <div style={{padding:'32px 16px',textAlign:'center',color:'#9B93A8',fontSize:13}}>Tiada job hampir deadline. Syabas!</div> :
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {alerts.slice(0,5).map(j => { const d=daysUntil(j.deadline); const over=d<0; return (
-              <div key={j.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderLeft:`4px solid ${over?'#EF4444':'#F59E0B'}`, background:over?'#EF444408':'#F59E0B08', borderRadius:8 }}>
+              <div key={j.id} onClick={()=>goToJob(j.job_id)} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderLeft:`4px solid ${over?'#EF4444':'#F59E0B'}`, background:over?'#EF444408':'#F59E0B08', borderRadius:8, cursor:'pointer' }}>
                 <div style={{ flex:1 }}><div style={{display:'flex',alignItems:'center',gap:8}}><JobId>{j.job_id}</JobId><DeptTag dept={j.department}/></div><div style={{fontSize:13,marginTop:2}}>{j.customer_name}</div></div>
                 <div style={{ textAlign:'right', fontSize:13, fontWeight:600, color:over?'#EF4444':'#F59E0B' }}>{over?`${Math.abs(d)} hari overdue`:`${d} hari lagi`}</div>
               </div>

@@ -1,12 +1,11 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
-const DEPT={print:{code:"KP",label:"KretivPrint",color:"#E85D04"},work:{code:"KW",label:"KretivWork",color:"#7209B7"},tech:{code:"KT",label:"KretivTech",color:"#3A86FF"},event:{code:"KE",label:"KretivEvent",color:"#E91E63"},wisb:{code:"WISB",label:"Wafiy Industries",color:"#6B7280"}};
-const ROLE={bod:{l:"BOD",c:"#E91E63",d:"Full access — semua department, reports, settings"},dept_head:{l:"Dept Head",c:"#3A86FF",d:"Department sendiri — jobs, reports"},staff:{l:"Staff",c:"#6B7280",d:"Department sendiri — limited actions"}};
+import { DEPT, ROLE } from '@/lib/constants';
 const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"short",year:"numeric"}):"—";
 
-function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.c,background:m.c+"15"}}>{m.l}</span>:null}
-function DTag({d}){if(!d)return<span className="text-sm text-muted">Semua</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.c,background:m.c+"15"}}>{m.label}</span>:null}
+function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
+function DTag({d}){if(!d)return<span className="text-sm text-muted">Semua</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
 function Av({name,sz=32}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04","#10B981","#F59E0B","#6366F1"];const i=(name?.charCodeAt(0)||0)%colors.length;return<div className="avatar" style={{width:sz,height:sz,fontSize:sz*.38,background:colors[i]+"18",color:colors[i]}}>{name?.charAt(0)||"?"}</div>}
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);const c=type==="danger"?"#EF4444":"#10B981";return<div className="toast" style={{borderLeftColor:c}}>{type==="danger"?"✕":"✓"} {msg}</div>}
@@ -29,9 +28,9 @@ function UserModal({user,onSave,onClose}){
         <div className="fg"><label className="fl">Email *</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)} placeholder="email@kretiv.co"/></div>
         <div className="fg"><label className="fl">Role *</label>
           <div className="role-cards">{Object.entries(ROLE).map(([k,v])=>(
-            <label key={k} className="role-card" style={{border:f.role===k?`2px solid ${v.c}`:"1px solid #E8E4ED",background:f.role===k?v.c+"06":"#fff"}}>
-              <input type="radio" name="role" value={k} checked={f.role===k} onChange={()=>s("role",k)} style={{accentColor:v.c,width:16,height:16}}/>
-              <div style={{flex:1}}><div className="text-body fw600" style={{color:f.role===k?v.c:"#1A1025"}}>{v.l}</div><div className="text-xs text-muted">{v.d}</div></div>
+            <label key={k} className="role-card" style={{border:f.role===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.role===k?v.color+"06":"#fff"}}>
+              <input type="radio" name="role" value={k} checked={f.role===k} onChange={()=>s("role",k)} style={{accentColor:v.color,width:16,height:16}}/>
+              <div style={{flex:1}}><div className="text-body fw600" style={{color:f.role===k?v.color:"#1A1025"}}>{v.label}</div><div className="text-xs text-muted">{v.desc}</div></div>
             </label>
           ))}</div>
         </div>
@@ -120,11 +119,11 @@ export default function Settings(){
         <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Settings</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>User Management</div></div><button className="btn-header" onClick={()=>setAddModal(true)}><span style={{fontSize:16}}>+</span> Tambah User</button></div></div>
         <div className="content">
           <div className="sum-grid">
-            {[{l:"Jumlah Aktif",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.c},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.c},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.c}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
+            {[{l:"Jumlah Aktif",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.color},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.color},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.color}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
           </div>
           <div className="card filter-bar">
             <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari nama atau email..."/></div>
-            <select className="fs" style={{width:140}} value={fRole} onChange={e=>setFRole(e.target.value)}><option value="all">Semua Role</option>{Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.l}</option>)}</select>
+            <select className="fs" style={{width:140}} value={fRole} onChange={e=>setFRole(e.target.value)}><option value="all">Semua Role</option>{Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
             <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B6080",cursor:"pointer"}}><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)} style={{accentColor:"#E91E63"}}/>Tunjuk tidak aktif</label>
           </div>
           <div className="card" style={{overflow:"hidden"}}>
@@ -147,7 +146,7 @@ export default function Settings(){
           <div className="text-sm text-muted" style={{marginTop:12}}>{filtered.length} user</div>
 
           <div className="card" style={{marginTop:24,padding:"20px 24px"}}><div style={{fontSize:14,fontWeight:700,marginBottom:16}}>Rujukan Akses</div>
-            <table className="ref"><thead><tr><th>Keupayaan</th>{Object.entries(ROLE).map(([k,v])=><th key={k} style={{textAlign:"center",color:v.c,fontWeight:600}}>{v.l}</th>)}</tr></thead><tbody>
+            <table className="ref"><thead><tr><th>Keupayaan</th>{Object.entries(ROLE).map(([k,v])=><th key={k} style={{textAlign:"center",color:v.color,fontWeight:600}}>{v.label}</th>)}</tr></thead><tbody>
               {caps.map(([cap,b,d,s],i)=><tr key={i}><td>{cap}</td><td style={{textAlign:"center"}}>{b?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{d?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{s?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td></tr>)}
             </tbody></table>
           </div>
@@ -164,7 +163,7 @@ export default function Settings(){
           </div>
         </div>
 
-        {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.l}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
+        {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.label}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
         {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
         {resetModal&&<Modal w={420} onClose={()=>{setResetModal(false);setResetInput('')}}>
