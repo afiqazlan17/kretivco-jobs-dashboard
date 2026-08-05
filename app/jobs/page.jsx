@@ -1421,7 +1421,7 @@ export default function JobMonitor() {
               </div>
               {newJob.depts.length>1 && (
                 <div style={{marginTop:10,padding:'9px 12px',borderRadius:8,background:'rgba(233,30,99,.08)',border:'1px dashed #E91E63',fontSize:11.5,color:'#1A1025',lineHeight:1.5}}>
-                  {newJob.depts.length} department dipilih — satu <strong>Project ID</strong> akan dijana untuk kumpulkan job-job ni. Setiap department tetap dapat Job ID &amp; status sendiri.
+                  {newJob.depts.length} department dipilih — satu <strong>Project ID: <span className="jid">{genProjectId()}</span></strong> akan dijana untuk kumpulkan job-job ni. Setiap department tetap dapat Job ID &amp; status sendiri.
                 </div>
               )}
               {fieldErr('depts') && <div className="field-error">Wajib pilih sekurang-kurangnya satu department.</div>}
