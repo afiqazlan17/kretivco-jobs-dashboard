@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, MONTHS, formatRM, formatRMShort, formatDate } from '@/lib/constants';
+import { DEPT, STATUS, MONTHS, customerDisplayName, formatRM, formatRMShort, formatDate } from '@/lib/constants';
 
 export default function Reports(){
   const { profile } = useAuth() || {};
@@ -30,14 +30,14 @@ export default function Reports(){
   const deptBr=useMemo(()=>{const m={};deptKeys.forEach(d=>m[d]={count:0,est:0});nc.forEach(j=>{if(m[j.department]){m[j.department].count++;m[j.department].est+=j.estimation_value||0}});return m},[nc,deptKeys]);
   const maxDE=Math.max(...Object.values(deptBr).map(d=>d.est),1);
 
-  const topCust=useMemo(()=>{const m={};nc.forEach(j=>{const custName=j.customer_name||customers.find(c=>c.id===j.customer_id)?.name||j.customer_id;if(!m[j.customer_id])m[j.customer_id]={name:custName,count:0,est:0,final:0};m[j.customer_id].count++;m[j.customer_id].est+=j.estimation_value||0;m[j.customer_id].final+=j.final_value||0});return Object.entries(m).sort((a,b)=>b[1].est-a[1].est).slice(0,5)},[nc,customers]);
+  const topCust=useMemo(()=>{const m={};nc.forEach(j=>{const custName=j.customer_name||customerDisplayName(customers.find(c=>c.id===j.customer_id))||j.customer_id;if(!m[j.customer_id])m[j.customer_id]={name:custName,count:0,est:0,final:0};m[j.customer_id].count++;m[j.customer_id].est+=j.estimation_value||0;m[j.customer_id].final+=j.final_value||0});return Object.entries(m).sort((a,b)=>b[1].est-a[1].est).slice(0,5)},[nc,customers]);
   const picBr=useMemo(()=>{const m={};nc.forEach(j=>{if(!m[j.pic])m[j.pic]={count:0,est:0,comp:0,final:0};m[j.pic].count++;m[j.pic].est+=j.estimation_value||0;if(j.status==="completed"){m[j.pic].comp++;m[j.pic].final+=j.final_value||0}});return Object.entries(m).sort((a,b)=>b[1].count-a[1].count)},[nc]);
 
   const funnel={pot:filtered.filter(j=>j.status==="potential").length,act:filtered.filter(j=>j.status==="active").length,ong:filtered.filter(j=>j.status==="in_progress").length,comp:comp.length};
   const fTotal=funnel.pot+funnel.act+funnel.ong+funnel.comp;
   const convPct=fTotal>0?Math.round(funnel.comp/fTotal*100):0;
 
-  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metrik","Nilai"],["Jumlah Job",totalJobs],["Anggaran",totalEst],["Final",totalFinal],["Varian",variance]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Bulan","Jobs","Est","Final",...deptKeys.map(d=>DEPT[d].code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...deptKeys.map(d=>m.byD[d]?.count||0)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.job_id,j.customer_name||customers.find(c=>c.id===j.customer_id)?.name||j.customer_id,DEPT[j.department]?.label,j.job_type,STATUS[j.status]?.label,j.estimation_value,j.final_value,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
+  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metrik","Nilai"],["Jumlah Job",totalJobs],["Anggaran",totalEst],["Final",totalFinal],["Varian",variance]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Bulan","Jobs","Est","Final",...deptKeys.map(d=>DEPT[d].code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...deptKeys.map(d=>m.byD[d]?.count||0)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.job_id,j.customer_name||customerDisplayName(customers.find(c=>c.id===j.customer_id))||j.customer_id,DEPT[j.department]?.label,j.job_type,STATUS[j.status]?.label,j.estimation_value,j.final_value,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
 
   return(
     <>

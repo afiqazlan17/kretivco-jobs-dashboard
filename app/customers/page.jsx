@@ -2,7 +2,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useData, useVisibleDepts } from "@/lib/hooks";
-import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, availableDocTypes, formatRM, formatDate } from "@/lib/constants";
+import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, CUSTOMER_TYPE, availableDocTypes, formatRM, formatDate } from "@/lib/constants";
+import { lookupPostcode } from "@/lib/postcode";
 import { generateCombinedDocument } from "@/lib/pdf-generator";
 
 function SrcBadge({s}){const m=SOURCE[s];return m?<span className="src-badge" style={{color:m.color,background:m.color+"12"}}>{m.label}</span>:<span className="text-xs text-muted">—</span>}
@@ -11,6 +12,8 @@ function DTag({d}){const m=DEPT[d];return m?<span className="badge-d" style={{co
 function Av({name,sz=36}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04","#10B981"];const i=(name?.charCodeAt(0)||0)%colors.length;return<div className="avatar" style={{width:sz,height:sz,fontSize:sz*.38,background:colors[i]+"18",color:colors[i]}}>{name?.charAt(0)||"?"}</div>}
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);return<div className="toast">✓ {msg}</div>}
+function CTypeBadge({t}){const m=CUSTOMER_TYPE[t||'individual'];return m?<span className="src-badge" style={{color:m.color,background:m.color+"12"}}>{m.label}</span>:null}
+function waLink(phone){if(!phone)return null;let d=phone.replace(/\D/g,"");if(!d)return null;if(d.startsWith("0"))d="60"+d.slice(1);else if(!d.startsWith("60"))d="60"+d;return`https://wa.me/${d}`}
 
 // ─── Profile Modal (720px) ────────────────────────────────────
 function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
@@ -52,10 +55,16 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
 
   return(
     <Modal w={720} onClose={onClose}>
-      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={()=>router.push(`/jobs?new=1&cid=${cust.id}`)}>+ Job Baru</button><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
+      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><CTypeBadge t={cust.customer_type}/><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={()=>router.push(`/jobs?new=1&cid=${cust.id}`)}>+ Job Baru</button><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
       <div className="mbody">
         {/* Contact */}
-        <div className="info-cards">{[{icon:"🏢",l:"Syarikat",v:cust.company||"—"},{icon:"📞",l:"Telefon",v:cust.phone||"—"},{icon:"✉️",l:"Email",v:cust.email||"—"}].map((c,i)=>(<div key={i} className="info-card"><div className="section-label">{c.icon} {c.l}</div><div className="text-body fw500">{c.v}</div></div>))}</div>
+        <div className="info-cards">
+          {(cust.customer_type==='company'?[{icon:"🏢",l:"Syarikat",v:cust.company||"—"},{icon:"📋",l:"No. SSM",v:cust.ssm_number||"—"}]:[]).map((c,i)=>(<div key={"co"+i} className="info-card"><div className="section-label">{c.icon} {c.l}</div><div className="text-body fw500">{c.v}</div></div>))}
+          <div className="info-card"><div className="section-label">📞 Telefon</div><div className="text-body fw500">{cust.phone?<a href={waLink(cust.phone)} target="_blank" rel="noopener noreferrer" style={{color:"#10B981",textDecoration:"none"}}>{cust.phone} · WhatsApp ↗</a>:"—"}</div></div>
+          <div className="info-card"><div className="section-label">✉️ Email</div><div className="text-body fw500">{cust.email||"—"}</div></div>
+          <div className="info-card"><div className="section-label">📍 Alamat</div><div className="text-body fw500">{[cust.address_line_1,cust.address_line_2,[cust.postcode,cust.city].filter(Boolean).join(" "),cust.state].filter(Boolean).join(", ")||"—"}</div></div>
+        </div>
+        {cust.notes&&<div className="info-card mb-6"><div className="section-label">📝 Nota</div><div className="text-body">{cust.notes}</div></div>}
         {/* Financial */}
         <div className="fin-cards">
           <div className="fin-card" style={{borderLeftColor:"#E91E63"}}><div className="section-label">Total Value</div><div className="fin-val">{formatRM(totalEst)}</div><div className="text-xs text-secondary">{cj.filter(j=>j.status!=="cancelled").length} job</div></div>
@@ -106,23 +115,71 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
   );
 }
 
-// ─── Edit Customer Modal ──────────────────────────────────────
-function EditModal({cust,onSave,onClose}){
-  const [f,setF]=useState({name:cust.name,company:cust.company||"",phone:cust.phone||"",email:cust.email||"",source:cust.source||"other",address_line_1:cust.address_line_1||"",address_line_2:cust.address_line_2||""});
+// ─── Customer Form Modal (shared by Create + Edit) ─────────────
+function blankCustomerForm(cust){
+  return {
+    customer_type: cust?.customer_type||"individual",
+    name: cust?.name||"", company: cust?.company||"", ssm_number: cust?.ssm_number||"",
+    phone: cust?.phone||"", email: cust?.email||"",
+    address_line_1: cust?.address_line_1||"", address_line_2: cust?.address_line_2||"",
+    postcode: cust?.postcode||"", city: cust?.city||"", state: cust?.state||"",
+    source: cust?.source||"referral", notes: cust?.notes||"",
+  };
+}
+function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
+  const isEdit=!!cust;
+  const [initial]=useState(()=>blankCustomerForm(cust));
+  const [f,setF]=useState(initial);
   const s=(k,v)=>setF(p=>({...p,[k]:v}));
-  const changed=f.name!==cust.name||f.company!==(cust.company||"")||f.phone!==(cust.phone||"")||f.email!==(cust.email||"")||f.source!==(cust.source||"other")||f.address_line_1!==(cust.address_line_1||"")||f.address_line_2!==(cust.address_line_2||"");
+  const setPostcode=(v)=>setF(p=>{
+    const next={...p,postcode:v};
+    const loc=lookupPostcode(v);
+    if(loc){next.city=loc.city;next.state=loc.state}
+    return next;
+  });
+  const isCompany=f.customer_type==="company";
+  const changed=!isEdit||JSON.stringify(f)!==JSON.stringify(initial);
+  const valid=f.name.trim()&&(!isCompany||(f.company.trim()&&f.ssm_number.trim()));
+
+  const duplicateMatch=useMemo(()=>{
+    if(!f.phone&&!f.email&&!f.ssm_number)return null;
+    return customers.find(c=>{
+      if(isEdit&&c.id===cust.id)return false;
+      return (f.phone&&c.phone&&c.phone.trim()===f.phone.trim())
+        ||(f.email&&c.email&&c.email.trim().toLowerCase()===f.email.trim().toLowerCase())
+        ||(f.ssm_number&&c.ssm_number&&c.ssm_number.trim()===f.ssm_number.trim());
+    })||null;
+  },[f.phone,f.email,f.ssm_number,customers,isEdit,cust]);
+
   return(
-    <Modal w={480} onClose={onClose}>
-      <div className="mheader"><div><div className="mtitle">Edit Customer</div><div className="jid text-muted mt-1">{cust.customer_id}</div></div><button className="mclose" onClick={onClose}>×</button></div>
+    <Modal w={520} onClose={onClose}>
+      <div className="mheader"><div><div className="mtitle">{isEdit?"Edit Customer":"Customer Baru"}</div><div className="jid text-muted mt-1">{isEdit?cust.customer_id:`ID: ${genCustId()}`}</div></div><button className="mclose" onClick={onClose}>×</button></div>
       <div className="mbody">
-        <div className="fg"><label className="fl">Nama *</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)}/></div>
-        <div className="fg"><label className="fl">Syarikat</label><input className="fi" value={f.company} onChange={e=>s("company",e.target.value)}/></div>
+        <div className="fg"><label className="fl">Jenis Customer *</label>
+          <div style={{display:"flex",gap:8}}>
+            {Object.entries(CUSTOMER_TYPE).map(([k,v])=>(
+              <button key={k} type="button" onClick={()=>s("customer_type",k)} style={{flex:1,fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:"10px 12px",borderRadius:8,cursor:"pointer",border:f.customer_type===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.customer_type===k?v.color+"0C":"#fff",color:f.customer_type===k?v.color:"#6B6080",textAlign:"left"}}>
+                <div>{v.label}</div><div className="text-xs text-muted" style={{fontWeight:400,marginTop:2}}>{v.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        {isCompany&&<div className="fg"><label className="fl">Nama Syarikat *</label><input className="fi" value={f.company} onChange={e=>s("company",e.target.value)} placeholder="Nama syarikat berdaftar"/></div>}
+        {isCompany&&<div className="fg"><label className="fl">No. SSM *</label><input className="fi" value={f.ssm_number} onChange={e=>s("ssm_number",e.target.value)} placeholder="cth: 202301012345"/></div>}
+        <div className="fg"><label className="fl">{isCompany?"Nama PIC *":"Nama Customer *"}</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} placeholder={isCompany?"Nama contact person":"Nama penuh"}/></div>
         <div className="frow"><div><label className="fl">Telefon</label><input className="fi" value={f.phone} onChange={e=>s("phone",e.target.value)}/></div><div><label className="fl">Email</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)}/></div></div>
+        {duplicateMatch&&<div style={{marginBottom:16,padding:"9px 12px",borderRadius:8,background:"rgba(245,158,11,.08)",border:"1px dashed #F59E0B",fontSize:11.5,color:"#1A1025",lineHeight:1.5}}>⚠ Customer ni mungkin dah wujud: <strong>{duplicateMatch.customer_id} ({duplicateMatch.name})</strong> — semak dulu sebelum simpan supaya tak duplicate.</div>}
         <div className="fg"><label className="fl">Alamat Baris 1</label><input className="fi" value={f.address_line_1} onChange={e=>s("address_line_1",e.target.value)}/></div>
         <div className="fg"><label className="fl">Alamat Baris 2</label><input className="fi" value={f.address_line_2} onChange={e=>s("address_line_2",e.target.value)}/></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1.4fr 1fr",gap:16,marginBottom:16}}>
+          <div><label className="fl">Poskod</label><input className="fi" maxLength={5} value={f.postcode} onChange={e=>setPostcode(e.target.value.replace(/\D/g,""))} placeholder="40170"/></div>
+          <div><label className="fl">Bandar</label><input className="fi" value={f.city} onChange={e=>s("city",e.target.value)} placeholder="Auto-detect"/></div>
+          <div><label className="fl">Negeri</label><input className="fi" value={f.state} onChange={e=>s("state",e.target.value)} placeholder="Auto-detect"/></div>
+        </div>
         <div className="fg"><label className="fl">Sumber</label><select className="fs" value={f.source} onChange={e=>s("source",e.target.value)}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+        <div className="fg"><label className="fl">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:56,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>s("notes",e.target.value)} placeholder="cth: prefer WhatsApp, bayar cash"/></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&f.name.trim())onSave(f)}}>Simpan</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed&&valid?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&valid)onSave(f)}}>{isEdit?"Simpan":"Simpan Customer"}</button></div>
     </Modal>
   );
 }
@@ -138,8 +195,7 @@ export default function CustomerDirectory(){
   const [editCust,setEditCust]=useState(null);
   const [toast,setToast]=useState(null);
   const [showNew,setShowNew]=useState(false);
-  const [newForm,setNewForm]=useState({name:'',company:'',phone:'',email:'',source:'referral',address_line_1:'',address_line_2:''});
-  const handleNewSave=()=>{if(!newForm.name.trim())return;const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,name:newForm.name,company:newForm.company,phone:newForm.phone,email:newForm.email,source:newForm.source,address_line_1:newForm.address_line_1,address_line_2:newForm.address_line_2,created_at:new Date().toISOString()});setShowNew(false);setNewForm({name:'',company:'',phone:'',email:'',source:'referral',address_line_1:'',address_line_2:''});setToast(`${custId} (${newForm.name}) ditambah.`)};
+  const handleNewSave=(f)=>{const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,...f,created_at:new Date().toISOString()});setShowNew(false);setToast(`${custId} (${f.name}) ditambah.`)};
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -243,8 +299,8 @@ export default function CustomerDirectory(){
           <div className="text-sm text-muted mt-4">{filtered.length} customer</div>
         </div>
         {currentProfile&&<ProfileModal cust={currentProfile} jobs={jobs} visDepts={visDepts} onEdit={()=>setEditCust(currentProfile)} onClose={()=>setProfile(null)}/>}
-        {currentEditCust&&<EditModal cust={currentEditCust} onSave={u=>{updateCustomer(currentEditCust.id,u);setEditCust(null);if(profile?.id===currentEditCust.id)setProfile({...currentEditCust,...u});setToast(`${currentEditCust.customer_id} dikemaskini.`);}} onClose={()=>setEditCust(null)}/>}
-        {showNew&&<Modal w={480} onClose={()=>setShowNew(false)}><div className="mheader"><div><div className="mtitle">Customer Baru</div><div className="jid text-muted" style={{marginTop:4}}>ID: {genCustId()}</div></div><button className="mclose" onClick={()=>setShowNew(false)}>×</button></div><div className="mbody"><div className="fg"><label className="fl">Nama Customer *</label><input className="fi" value={newForm.name} onChange={e=>setNewForm(p=>({...p,name:e.target.value}))} placeholder="Nama penuh"/></div><div className="fg"><label className="fl">Nama Syarikat</label><input className="fi" value={newForm.company} onChange={e=>setNewForm(p=>({...p,company:e.target.value}))} placeholder="Optional"/></div><div className="frow"><div><label className="fl">Telefon</label><input className="fi" value={newForm.phone} onChange={e=>setNewForm(p=>({...p,phone:e.target.value}))}/></div><div><label className="fl">Email</label><input className="fi" value={newForm.email} onChange={e=>setNewForm(p=>({...p,email:e.target.value}))}/></div></div><div className="fg"><label className="fl">Alamat Baris 1</label><input className="fi" value={newForm.address_line_1} onChange={e=>setNewForm(p=>({...p,address_line_1:e.target.value}))}/></div><div className="fg"><label className="fl">Alamat Baris 2</label><input className="fi" value={newForm.address_line_2} onChange={e=>setNewForm(p=>({...p,address_line_2:e.target.value}))}/></div><div className="fg"><label className="fl">Sumber</label><select className="fs" value={newForm.source} onChange={e=>setNewForm(p=>({...p,source:e.target.value}))}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div></div><div className="mfooter"><button className="btn-secondary" onClick={()=>setShowNew(false)}>Batal</button><button className={newForm.name.trim()?"btn-primary":"btn-disabled"} onClick={handleNewSave}>Simpan Customer</button></div></Modal>}
+        {currentEditCust&&<CustomerFormModal cust={currentEditCust} customers={customers} genCustId={genCustId} onSave={u=>{updateCustomer(currentEditCust.id,u);setEditCust(null);if(profile?.id===currentEditCust.id)setProfile({...currentEditCust,...u});setToast(`${currentEditCust.customer_id} dikemaskini.`);}} onClose={()=>setEditCust(null)}/>}
+        {showNew&&<CustomerFormModal cust={null} customers={customers} genCustId={genCustId} onSave={handleNewSave} onClose={()=>setShowNew(false)}/>}
         {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
       </div>
     </>

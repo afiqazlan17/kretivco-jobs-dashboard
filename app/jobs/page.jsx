@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
@@ -284,7 +284,8 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
       staffName: userName || '',
       customerName: cust?.name || job.customer_name || '',
       customerCompany: cust?.company || job.customer_company || '',
-      addressLine1: cust?.address_line_1 || '', addressLine2: cust?.address_line_2 || '',
+      addressLine1: cust?.address_line_1 || '',
+      addressLine2: [cust?.address_line_2, [cust?.postcode, cust?.city].filter(Boolean).join(' '), cust?.state].filter(Boolean).join(', '),
       jobTitle: job.job_type || '',
       items: initItems.length ? initItems : [{ item: '', desc: '', size: '', qty: 1, price: 0 }],
       delivery: 0, discount: 0,
@@ -1356,7 +1357,7 @@ export default function JobMonitor() {
               <label className="field-label">Customer *</label>
               <select className={`field-select${fieldErr('cid')?' field-select-err':''}`} style={{width:'100%'}} value={newJob.cid} onChange={e=>nj('cid',e.target.value)}>
                 <option value="">— Pilih Customer —</option>
-                {customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {c.name}</option>)}
+                {customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {customerDisplayName(c)}</option>)}
               </select>
               {fieldErr('cid') && <div className="field-error">Wajib pilih customer.</div>}
               {!showInlineCust && (
