@@ -232,9 +232,9 @@ export default function CustomerDirectory(){
         .src-badge{display:inline-block;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600}
         .jid{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600}
         .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-        .tbl-h{display:grid;grid-template-columns:48px 88px 1fr 140px 70px 90px 90px 60px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6}
+        .tbl-h{display:grid;grid-template-columns:48px 88px 1fr 1.3fr 70px 90px 90px 60px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6}
         .tbl-hc{font-size:11px;font-weight:500;color:#9B93A8;text-transform:uppercase;letter-spacing:.02em;padding:12px 4px}
-        .tbl-r{display:grid;grid-template-columns:48px 88px 1fr 140px 70px 90px 90px 60px;padding:0 20px;align-items:center;height:52px;border-bottom:1px solid #F3F1F6;cursor:pointer}
+        .tbl-r{display:grid;grid-template-columns:48px 88px 1fr 1.3fr 70px 90px 90px 60px;padding:0 20px;align-items:center;height:52px;border-bottom:1px solid #F3F1F6;cursor:pointer}
         .tbl-r:hover{background:#F9F8FB}.tbl-c{padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);animation:fadeIn .2s}
         .mbox{position:relative;background:#fff;border-radius:16px;max-width:94vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.18);animation:slideUp .25s}
