@@ -4,29 +4,37 @@ import { useRouter } from 'next/navigation'
 import { signIn } from '@/lib/auth'
 import { useAuth } from '@/lib/hooks'
 import { isMockMode } from '@/lib/supabase'
-import { MOCK_USERS } from '@/lib/mock-data'
 import { ROLE } from '@/lib/constants'
 
-// One representative mock user per access level — clicking logs in
-// as that level immediately, no separate submit step.
+// One representative account per access level — clicking logs in
+// immediately, no separate submit step. Same 3 accounts exist in both
+// Demo Mode (mock-data.js) and live Supabase (seeded via SQL), so this
+// list works unchanged in either mode.
 const QUICK_LOGIN = [
-  { role: 'bod', user: MOCK_USERS.find(u => u.email === 'afiq@kretiv.co') },
-  { role: 'dept_head', user: MOCK_USERS.find(u => u.email === 'amnan@kretiv.co') },
-  { role: 'staff', user: MOCK_USERS.find(u => u.email === 'siti@kretiv.co') },
-].filter(q => q.user)
+  { role: 'bod', email: 'afiq@kretiv.co', name: 'Afiq Azlan' },
+  { role: 'dept_head', email: 'amnan@kretiv.co', name: 'Amnan Syahmi' },
+  { role: 'staff', email: 'staff@kretiv.co', name: 'Staff Demo' },
+]
+
+// Live mode still needs a real Supabase Auth password under the hood —
+// this fixed one is baked in so users never have to type it. That trades
+// away per-account security (anyone reading the client bundle can extract
+// it and sign in as BOD) for zero-friction access on this internal tool.
+const LIVE_DEMO_PASSWORD = 'Kretivco2026!'
 
 export default function Login() {
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState(isMockMode ? 'demo' : '')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showManual, setShowManual] = useState(false)
   const router = useRouter()
   const { refresh } = useAuth() || {}
 
-  const doSignIn = async (loginEmail) => {
+  const doSignIn = async (loginEmail, loginPassword) => {
     setError(''); setLoading(true)
     try {
-      await signIn(loginEmail, 'demo')
+      await signIn(loginEmail, loginPassword)
       if (refresh) await refresh()
       setTimeout(() => router.push('/'), 300)
     }
@@ -34,7 +42,8 @@ export default function Login() {
     finally { setLoading(false) }
   }
 
-  const handleSubmit = async (e) => { e.preventDefault(); doSignIn(email) }
+  const handleQuickLogin = (loginEmail) => doSignIn(loginEmail, isMockMode ? 'demo' : LIVE_DEMO_PASSWORD)
+  const handleSubmit = async (e) => { e.preventDefault(); doSignIn(email, password) }
 
   return (
     <div style={{ minHeight:'100vh', background:'#F5F3F7', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Poppins',sans-serif" }}>
@@ -46,18 +55,18 @@ export default function Login() {
         <div style={{ background:'#fff', borderRadius:16, padding:32, boxShadow:'0 4px 20px rgba(0,0,0,.06)' }}>
           <div style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>Log Masuk</div>
           <div style={{ fontSize:13, color:'#6B6080', marginBottom:24 }}>
-            {isMockMode ? '🟢 Demo Mode — klik untuk terus masuk ikut access level' : 'Masukkan email dan password anda'}
+            🟢 Klik untuk terus masuk ikut access level
           </div>
-          {isMockMode ? (
+          {!showManual ? (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              {QUICK_LOGIN.map(({ role, user }) => {
+              {QUICK_LOGIN.map(({ role, email: loginEmail, name }) => {
                 const meta = ROLE[role]
                 return (
-                  <button type="button" key={role} disabled={loading} onClick={() => doSignIn(user.email)}
+                  <button type="button" key={role} disabled={loading} onClick={() => handleQuickLogin(loginEmail)}
                     style={{ fontFamily:'inherit', display:'flex', alignItems:'center', gap:12, padding:'14px 16px', borderRadius:10,
                       border:`1.5px solid ${meta.color}30`, background:`${meta.color}08`, cursor:loading?'not-allowed':'pointer', textAlign:'left' }}>
                     <div style={{ width:40, height:40, borderRadius:'50%', background:`${meta.color}18`,
-                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:meta.color }}>{user.name.charAt(0)}</div>
+                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:meta.color }}>{name.charAt(0)}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:700, color:meta.color }}>{meta.label}</div>
                       <div style={{ fontSize:11, color:'#6B6080', marginTop:1 }}>{meta.desc}</div>
@@ -67,6 +76,12 @@ export default function Login() {
                 )
               })}
               {error && <div style={{ fontSize:12, color:'#EF4444', background:'#EF444410', padding:'10px 14px', borderRadius:8 }}>{error}</div>}
+              {!isMockMode && (
+                <button type="button" onClick={() => setShowManual(true)}
+                  style={{ fontFamily:'inherit', fontSize:11, color:'#9B93A8', background:'none', border:'none', cursor:'pointer', textAlign:'center', marginTop:4 }}>
+                  Guna akaun lain
+                </button>
+              )}
             </div>
           ) : (
           <form onSubmit={handleSubmit}>
@@ -84,6 +99,10 @@ export default function Login() {
             <button type="submit" disabled={loading}
               style={{ fontFamily:'inherit', fontSize:14, fontWeight:600, width:'100%', height:46, border:'none', borderRadius:8, background:loading?'#E8E4ED':'linear-gradient(135deg,#E91E63,#AD1457)', color:'#fff', cursor:loading?'not-allowed':'pointer' }}>
               {loading ? 'Sedang log masuk...' : 'Log Masuk'}
+            </button>
+            <button type="button" onClick={() => setShowManual(false)}
+              style={{ fontFamily:'inherit', fontSize:11, color:'#9B93A8', background:'none', border:'none', cursor:'pointer', textAlign:'center', width:'100%', marginTop:12 }}>
+              ← Balik ke quick login
             </button>
           </form>
           )}
