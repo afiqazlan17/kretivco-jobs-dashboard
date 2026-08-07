@@ -46,8 +46,13 @@ export default function Finance() {
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
 
-  const [expForm, setExpForm] = useState({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
-  const [openForm, setOpenForm] = useState({ bank: 'mbb', amount: '', notes: '' });
+  const blankExpForm = () => ({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
+  const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
+  const [expForm, setExpForm] = useState(blankExpForm);
+  const [openForm, setOpenForm] = useState(blankOpenForm);
+  const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; closeFn(); };
+  const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()), () => setShowExpense(false));
+  const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
 
   const deptKeys = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k));
 
@@ -95,7 +100,7 @@ export default function Finance() {
       notes: expForm.notes,
     }, profile?.name);
     setShowExpense(false);
-    setExpForm({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
+    setExpForm(blankExpForm());
     setToast('Expense direkodkan.');
   };
 
@@ -103,7 +108,7 @@ export default function Finance() {
     if (!openForm.amount) return;
     postOpeningBalanceAdjustment(openForm.bank, openForm.amount, profile?.name);
     setShowOpening(false);
-    setOpenForm({ bank: 'mbb', amount: '', notes: '' });
+    setOpenForm(blankOpenForm());
     setToast('Baki permulaan diselaraskan.');
   };
 
@@ -243,8 +248,8 @@ export default function Finance() {
         </div>
 
         {showExpense && (
-          <Modal width={440} onClose={()=>setShowExpense(false)}>
-            <div className="fmodal-head">Tambah Expense<button className="fmodal-close" onClick={()=>setShowExpense(false)}>×</button></div>
+          <Modal width={440} onClose={closeExpense}>
+            <div className="fmodal-head">Tambah Expense<button className="fmodal-close" onClick={closeExpense}>×</button></div>
             <div className="fmodal-body">
               <div className="fg"><label className="fl">Kategori *</label>
                 <select className="fs" value={expForm.category} onChange={e=>setExpForm(p=>({...p,category:e.target.value}))}>
@@ -274,13 +279,13 @@ export default function Finance() {
               <div className="fg"><label className="fl">Tarikh</label><input type="date" className="fi" value={expForm.date} onChange={e=>setExpForm(p=>({...p,date:e.target.value}))} /></div>
               <div className="fg"><label className="fl">Nota</label><input className="fi" value={expForm.notes} onChange={e=>setExpForm(p=>({...p,notes:e.target.value}))} placeholder="cth: Bayaran designer freelance" /></div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={()=>setShowExpense(false)}>Batal</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Simpan</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Batal</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Simpan</button></div>
           </Modal>
         )}
 
         {showOpening && (
-          <Modal width={400} onClose={()=>setShowOpening(false)}>
-            <div className="fmodal-head">Selaraskan Baki Bank<button className="fmodal-close" onClick={()=>setShowOpening(false)}>×</button></div>
+          <Modal width={400} onClose={closeOpening}>
+            <div className="fmodal-head">Selaraskan Baki Bank<button className="fmodal-close" onClick={closeOpening}>×</button></div>
             <div className="fmodal-body">
               <div className="fg"><label className="fl">Bank *</label>
                 <select className="fs" value={openForm.bank} onChange={e=>setOpenForm(p=>({...p,bank:e.target.value}))}>
@@ -289,7 +294,7 @@ export default function Finance() {
               </div>
               <div className="fg"><label className="fl">Jumlah Pelarasan (RM) <span className="text-xs text-muted">— boleh negatif untuk kurangkan</span></label><input type="number" className="fi" value={openForm.amount} onChange={e=>setOpenForm(p=>({...p,amount:e.target.value}))} placeholder="cth: 15000" /></div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={()=>setShowOpening(false)}>Batal</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Simpan</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeOpening}>Batal</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Simpan</button></div>
           </Modal>
         )}
 

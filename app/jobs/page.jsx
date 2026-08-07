@@ -45,10 +45,12 @@ function Toast({ msg, action, onDone }) {
 
 // ─── Complete Job Modal ───────────────────────────────────────
 function CompleteModal({ job, onConfirm, onClose }) {
-  const [fv, setFv] = useState(job.estimation_value || "");
+  const initialFv = job.estimation_value || "";
+  const [fv, setFv] = useState(initialFv);
+  const guardedClose = () => { if (fv !== initialFv && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
   return (
-    <Modal width={480} onClose={onClose}>
-      <div className="modal-header"><span className="modal-title">Tandakan Job Selesai</span><button className="modal-close" onClick={onClose}>×</button></div>
+    <Modal width={480} onClose={guardedClose}>
+      <div className="modal-header"><span className="modal-title">Tandakan Job Selesai</span><button className="modal-close" onClick={guardedClose}>×</button></div>
       <div className="modal-body">
         <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}<br /><span className="text-muted">Est: {formatRM(job.estimation_value)}</span></div>
         <label className="field-label">Final Value (RM) *</label>
@@ -56,7 +58,7 @@ function CompleteModal({ job, onConfirm, onClose }) {
         {!fv && <div className="field-error">Wajib diisi.</div>}
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
         <button className="btn-success" disabled={!fv} onClick={() => onConfirm(Number(fv))}>Sahkan Selesai</button>
       </div>
     </Modal>
@@ -65,8 +67,9 @@ function CompleteModal({ job, onConfirm, onClose }) {
 
 function ConfirmModal({ title, msg, label, color, onConfirm, onClose, showReasonField }) {
   const [reasonText, setReasonText] = useState("");
+  const guardedClose = () => { if (reasonText.trim() && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
   return (
-    <Modal width={400} onClose={onClose}>
+    <Modal width={400} onClose={guardedClose}>
       <div style={{ padding: "24px 24px 16px" }}>
         <div className="modal-title">{title}</div>
         <p className="text-body text-secondary" style={{ marginTop: 8, lineHeight: 1.6 }}>{msg}</p>
@@ -78,7 +81,7 @@ function ConfirmModal({ title, msg, label, color, onConfirm, onClose, showReason
         )}
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
         <button className="btn-primary" style={{ background: color }} onClick={() => onConfirm(reasonText)}>{label}</button>
       </div>
     </Modal>
@@ -89,9 +92,10 @@ function ConfirmModal({ title, msg, label, color, onConfirm, onClose, showReason
 function CancelModal({ job, onConfirm, onClose }) {
   const [reason, setReason] = useState(CANCEL_REASONS[0].value);
   const [customText, setCustomText] = useState("");
+  const guardedClose = () => { if ((reason !== CANCEL_REASONS[0].value || customText.trim()) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
   return (
-    <Modal width={440} onClose={onClose}>
-      <div className="modal-header"><span className="modal-title">Batalkan Job</span><button className="modal-close" onClick={onClose}>×</button></div>
+    <Modal width={440} onClose={guardedClose}>
+      <div className="modal-header"><span className="modal-title">Batalkan Job</span><button className="modal-close" onClick={guardedClose}>×</button></div>
       <div className="modal-body">
         <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}</div>
         <label className="field-label">Sebab Pembatalan *</label>
@@ -106,7 +110,7 @@ function CancelModal({ job, onConfirm, onClose }) {
         )}
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
         <button className="btn-primary" style={{ background: '#EF4444' }} onClick={() => onConfirm(reason, customText)}>Ya, Batalkan</button>
       </div>
     </Modal>
@@ -294,12 +298,14 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
       balanceDue: 0,
     };
   });
+  const [initial, setInitial] = useState(form);
   const [generating, setGenerating] = useState(false);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
   const addItem = () => setForm(p => ({ ...p, items: [...p.items, { item: '', desc: '', size: '', qty: 1, price: 0 }] }));
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
+  const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
 
   const subtotal = form.items.reduce((s, it) => s + ((Number(it.qty) || 0) * (Number(it.price) || 0)), 0);
   const total = subtotal + (Number(form.delivery) || 0) - (Number(form.discount) || 0);
@@ -349,6 +355,7 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
     }
     setSaving(false);
     setSaved(true);
+    setInitial(form);
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -356,11 +363,11 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
   const labelSt = { fontSize: 11, fontWeight: 600, color: '#6B6080', display: 'block', marginBottom: 4, marginTop: 10 };
 
   return (
-    <Modal width={1040} onClose={onClose}>
+    <Modal width={1040} onClose={guardedClose}>
       <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '88vh' }}>
         <div style={{ padding: '16px 22px', borderBottom: '1px solid #F0ECF4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Preview {label} — {job.job_id}</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B93A8' }}>×</button>
+          <button onClick={guardedClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#9B93A8' }}>×</button>
         </div>
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* Edit form */}
@@ -507,7 +514,7 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
         </div>
         <div style={{ padding: '14px 22px', borderTop: '1px solid #F0ECF4', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
           {saved && <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600, marginRight: 'auto' }}>✓ Disimpan</span>}
-          <button onClick={onClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Batal</button>
+          <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Batal</button>
           <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Menyimpan...' : 'Simpan'}</button>
           <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Menjana...' : 'Muat Turun PDF'}</button>
         </div>
@@ -1000,6 +1007,15 @@ export default function JobMonitor() {
     setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
     setCreateAttempted(false);
   };
+  const isCreateFormDirty = () =>
+    JSON.stringify(newJob) !== JSON.stringify({depts:[],cid:'',perDept:{}}) ||
+    showInlineCust ||
+    JSON.stringify(newCust) !== JSON.stringify({name:'',company:'',phone:'',email:'',source:'referral'});
+  const closeCreate = () => {
+    if (isCreateFormDirty() && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return;
+    setShowCreate(false);
+    resetCreateForm();
+  };
 
   const handleSaveInlineCustomer = () => {
     if (!newCust.name.trim()) return;
@@ -1339,7 +1355,7 @@ export default function JobMonitor() {
           </div>
         </div>
 
-        {showCreate && <Modal width={640} onClose={()=>{setShowCreate(false);resetCreateForm();}}>
+        {showCreate && <Modal width={640} onClose={closeCreate}>
           <div className="modal-header">
             <div>
               <div className="modal-title">Job Baru</div>
@@ -1349,7 +1365,7 @@ export default function JobMonitor() {
                 {newJob.depts.length>1 && <>Job ID: <span className="jid" style={{color:'#1A1025'}}>{newJob.depts.map(d=>genJobId(d)).join(' + ')}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
               </div>
             </div>
-            <button className="modal-close" onClick={()=>{setShowCreate(false);resetCreateForm();}}>×</button>
+            <button className="modal-close" onClick={closeCreate}>×</button>
           </div>
           <div className="modal-body" style={{padding:24,overflowY:'auto',maxHeight:'60vh'}}>
             {/* Customer dropdown + inline create */}
@@ -1475,7 +1491,7 @@ export default function JobMonitor() {
               );
             })}
           </div>
-          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={()=>{setShowCreate(false);resetCreateForm();}}>Batal</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
+          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={closeCreate}>Batal</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
         </Modal>}
         {completeJob && <CompleteModal job={completeJob} onConfirm={fv=>{updateJob(completeJob.id, { status:"completed", final_value:fv }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(fv)}` });setCompleteJob(null);setExpandedId(null);setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`);}} onClose={()=>setCompleteJob(null)} />}
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={()=>setCancelJob(null)} />}
