@@ -138,8 +138,10 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
     return next;
   });
   const isCompany=f.customer_type==="company";
-  const changed=!isEdit||JSON.stringify(f)!==JSON.stringify(initial);
+  const dirty=JSON.stringify(f)!==JSON.stringify(initial);
+  const changed=!isEdit||dirty;
   const valid=f.name.trim()&&(!isCompany||(f.company.trim()&&f.ssm_number.trim()));
+  const guardedClose=()=>{if(dirty&&!window.confirm("Perubahan belum disimpan akan hilang. Tutup borang ini?"))return;onClose()};
 
   const duplicateMatch=useMemo(()=>{
     if(!f.phone&&!f.email&&!f.ssm_number)return null;
@@ -152,8 +154,8 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
   },[f.phone,f.email,f.ssm_number,customers,isEdit,cust]);
 
   return(
-    <Modal w={520} onClose={onClose}>
-      <div className="mheader"><div><div className="mtitle">{isEdit?"Edit Customer":"Customer Baru"}</div><div className="jid text-muted mt-1">{isEdit?cust.customer_id:`ID: ${genCustId()}`}</div></div><button className="mclose" onClick={onClose}>×</button></div>
+    <Modal w={520} onClose={guardedClose}>
+      <div className="mheader"><div><div className="mtitle">{isEdit?"Edit Customer":"Customer Baru"}</div><div className="jid text-muted mt-1">{isEdit?cust.customer_id:`ID: ${genCustId()}`}</div></div><button className="mclose" onClick={guardedClose}>×</button></div>
       <div className="mbody">
         <div className="fg"><label className="fl">Jenis Customer *</label>
           <div style={{display:"flex",gap:8}}>
@@ -179,7 +181,7 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
         <div className="fg"><label className="fl">Sumber</label><select className="fs" value={f.source} onChange={e=>s("source",e.target.value)}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
         <div className="fg"><label className="fl">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:56,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>s("notes",e.target.value)} placeholder="cth: prefer WhatsApp, bayar cash"/></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed&&valid?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&valid)onSave(f)}}>{isEdit?"Simpan":"Simpan Customer"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Batal</button><button className={changed&&valid?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&valid)onSave(f)}}>{isEdit?"Simpan":"Simpan Customer"}</button></div>
     </Modal>
   );
 }

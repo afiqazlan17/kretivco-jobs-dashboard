@@ -12,17 +12,20 @@ function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500)
 
 function UserModal({user,onSave,onClose}){
   const isEdit=!!user;
-  const[f,setF]=useState({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||"",visible_departments:user?.visible_departments||[]});
+  const [initial]=useState(()=>({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||"",visible_departments:user?.visible_departments||[]}));
+  const[f,setF]=useState(initial);
   const[err,setErr]=useState({});
   const s=(k,v)=>{setF(p=>{const n={...p,[k]:v};if(k==="role"&&v==="bod"){n.department="";n.visible_departments=[]}return n})};
   const toggleVisDept=(dept)=>{setF(p=>{const vd=[...(p.visible_departments||[])];const i=vd.indexOf(dept);if(i>=0)vd.splice(i,1);else vd.push(dept);return{...p,visible_departments:vd}})};
   const needsDept=f.role!=="bod";
-  const changed=isEdit?(f.name!==user.name||f.email!==user.email||f.role!==user.role||(f.department||null)!==(user.department||null)||JSON.stringify(f.visible_departments||[])!==JSON.stringify(user.visible_departments||[])):true;
+  const dirty=JSON.stringify(f)!==JSON.stringify(initial);
+  const changed=!isEdit||dirty;
+  const guardedClose=()=>{if(dirty&&!window.confirm("Perubahan belum disimpan akan hilang. Tutup borang ini?"))return;onClose()};
   const validate=()=>{const e={};if(!f.name.trim())e.name="Wajib.";if(!f.email.trim())e.email="Wajib.";if(needsDept&&!f.department)e.department="Pilih department.";setErr(e);return!Object.keys(e).length};
 
   return(
-    <Modal w={500} onClose={onClose}>
-      <div className="mheader"><div className="mtitle">{isEdit?"Edit User":"Tambah User"}</div><button className="mclose" onClick={onClose}>×</button></div>
+    <Modal w={500} onClose={guardedClose}>
+      <div className="mheader"><div className="mtitle">{isEdit?"Edit User":"Tambah User"}</div><button className="mclose" onClick={guardedClose}>×</button></div>
       <div className="mbody">
         <div className="fg"><label className="fl">Nama Penuh *</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} style={{borderColor:err.name?"#EF4444":"#E8E4ED"}}/>{err.name&&<div className="ferr">{err.name}</div>}</div>
         <div className="fg"><label className="fl">Email *</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)} placeholder="email@kretiv.co"/></div>
@@ -42,7 +45,7 @@ function UserModal({user,onSave,onClose}){
           <><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Boleh lihat: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`Job ${f.department?DEPT[f.department]?.label:"dept"} sahaja`}<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
         </div></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Simpan":"Tambah"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Simpan":"Tambah"}</button></div>
     </Modal>
   );
 }
