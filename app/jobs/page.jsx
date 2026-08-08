@@ -877,58 +877,62 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
 }
 
 // ─── Artwork & Customer Approval Attachments ──────────────────
-// One artwork slot per physical unit needing its own design, each paired
-// with its own approval slot — a customer approves each design individually,
-// not the job as a whole. Staff attach an actual file (screenshot, PDF,
-// forwarded email), not just a link, so the proof lives on the job itself.
-// Files sit in a private Supabase Storage bucket; live-mode viewing goes
-// through a short-lived signed URL rather than a public link. Mock mode has
-// no real storage, so it just keeps an in-browser blob URL for the session.
-
-// A package bundle's desc holds one item per line, e.g. "4x Arrow 2x2ft" —
-// a leading "Nx " is a genuine unit count (4 separate arrows, each may need
-// its own design), never a dimension: "Kad Kahwin 4x8in..." doesn't match
-// since the digit+x isn't followed by a space at the very start of the line.
-function expandDescLine(line) {
-  const m = line.match(/^(\d+)x\s+(.*)$/);
-  if (!m) return [line];
-  const qty = parseInt(m[1], 10);
-  const rest = m[2];
-  if (qty <= 1) return [rest];
-  return Array.from({ length: qty }, (_, i) => `${rest} #${i + 1}`);
+// One artwork slot per item type, each paired with its own approval slot —
+// a customer approves each design individually, not the job as a whole.
+// Doesn't auto-split by quantity ("4x Arrow" stays one slot): in practice
+// multiple units of the same item usually share one design. Staff can add
+// more design slots manually under an item for the real edge case (e.g. each
+// arrow pointing somewhere different needs its own design). Files are actual
+// uploads (screenshot, PDF, forwarded email), not just a link, so the proof
+// lives on the job itself — in a private Supabase Storage bucket, viewed via
+// a short-lived signed URL. Mock mode has no real storage, so it falls back
+// to an in-browser blob URL for the session.
+function baseSlotsFor(job) {
+  return (job.line_items || []).flatMap((li, i) => {
+    const lineItemId = li.id || `idx-${i}`;
+    if (li.noSize && li.desc) {
+      return li.desc.split('\n').filter(Boolean).map((line, di) => ({ key: `${lineItemId}::${di}`, label: line.replace(/^1x\s+/, '') }));
+    }
+    return [{ key: lineItemId, label: li.item || `Item ${i + 1}` }];
+  });
 }
 
 function AttachmentSlots({ job, onUpdateJob, userName }) {
   const [busyKey, setBusyKey] = useState(null);
+  const [extraDesigns, setExtraDesigns] = useState({});
   const attachments = job.attachments || [];
+  const baseSlots = baseSlotsFor(job);
 
-  const slots = (job.line_items || []).flatMap((li, i) => {
-    const lineItemId = li.id || `idx-${i}`;
-    if (li.noSize && li.desc) {
-      return li.desc.split('\n').filter(Boolean).flatMap((line, di) =>
-        expandDescLine(line).map((label, si) => ({ key: `${lineItemId}::${di}::${si}`, label }))
-      );
-    }
-    return [{ key: lineItemId, label: li.item || `Item ${i + 1}` }];
-  });
+  // How many design instances to render for a base item: at least 1, more if
+  // attachments already exist for a later instance, more still if staff just
+  // clicked "+ Tambah design lain" this session.
+  const instanceCount = (baseKey) => {
+    const usedMax = attachments.reduce((max, a) => {
+      if (typeof a.line_item_id === 'string' && a.line_item_id.startsWith(baseKey + '#')) {
+        const idx = parseInt(a.line_item_id.slice(baseKey.length + 1), 10);
+        if (!isNaN(idx)) return Math.max(max, idx + 1);
+      }
+      return max;
+    }, 0);
+    return Math.max(1, usedMax, 1 + (extraDesigns[baseKey] || 0));
+  };
 
-  const attsFor = (slot, kind) => attachments.filter(a => a.kind === kind && a.line_item_id === slot.key);
+  const attsFor = (slotKey, kind) => attachments.filter(a => a.kind === kind && a.line_item_id === slotKey);
 
-  const handleUpload = async (slot, kind, file) => {
+  const handleUpload = async (slotKey, label, kind, file) => {
     if (!file) return;
-    const busyKeyVal = `${slot.key}:${kind}`;
-    setBusyKey(busyKeyVal);
+    setBusyKey(`${slotKey}:${kind}`);
     try {
       let path = null, url = null;
       if (isMockMode) {
         url = URL.createObjectURL(file);
       } else {
-        path = `${job.job_id}/${kind}/${slot.key}/${Date.now()}_${file.name}`;
+        path = `${job.job_id}/${kind}/${slotKey}/${Date.now()}_${file.name}`;
         const { error } = await supabase.storage.from('job-attachments').upload(path, file);
         if (error) throw error;
       }
-      const entry = { id: crypto.randomUUID(), kind, line_item_id: slot.key, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
-      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} (${slot.label}) dimuat naik: ${file.name}` });
+      const entry = { id: crypto.randomUUID(), kind, line_item_id: slotKey, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
+      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} (${label}) dimuat naik: ${file.name}` });
     } catch (err) {
       alert('Gagal muat naik: ' + (err?.message || err));
     } finally {
@@ -949,21 +953,36 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
     onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
   };
 
-  if (!slots.length) return null;
+  if (!baseSlots.length) return null;
 
   return (
     <div>
       <div className="section-label" style={{marginBottom:6}}>Artwork &amp; Approval Customer</div>
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {slots.map(slot => (
-          <div key={slot.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
-            <div style={{fontSize:12,fontWeight:600,color:'#1A1025',marginBottom:6}}>📎 {slot.label}</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <UploadCol slot={slot} kind="artwork" title="Artwork" atts={attsFor(slot,'artwork')} busy={busyKey===`${slot.key}:artwork`} onUpload={handleUpload} onView={handleView} onDelete={handleDelete} />
-              <UploadCol slot={slot} kind="approval" title="Approval Customer" atts={attsFor(slot,'approval')} busy={busyKey===`${slot.key}:approval`} onUpload={handleUpload} onView={handleView} onDelete={handleDelete} />
+        {baseSlots.map(base => {
+          const count = instanceCount(base.key);
+          return (
+            <div key={base.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#1A1025',marginBottom:6}}>📎 {base.label}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {Array.from({length: count}, (_, idx) => {
+                  const slotKey = `${base.key}#${idx}`;
+                  const label = count > 1 ? `${base.label} — Design ${idx + 1}` : base.label;
+                  return (
+                    <div key={slotKey} style={idx > 0 ? {paddingTop:8,borderTop:'1px dashed #F0ECF4'} : undefined}>
+                      {count > 1 && <div style={{fontSize:10.5,fontWeight:600,color:'#E91E63',marginBottom:4}}>Design {idx + 1}</div>}
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                        <UploadCol title="Artwork" atts={attsFor(slotKey,'artwork')} busy={busyKey===`${slotKey}:artwork`} onUpload={f=>handleUpload(slotKey,label,'artwork',f)} onView={handleView} onDelete={handleDelete} />
+                        <UploadCol title="Approval Customer" atts={attsFor(slotKey,'approval')} busy={busyKey===`${slotKey}:approval`} onUpload={f=>handleUpload(slotKey,label,'approval',f)} onView={handleView} onDelete={handleDelete} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={()=>setExtraDesigns(p=>({...p,[base.key]:(p[base.key]||0)+1}))} style={{fontFamily:"'Poppins',sans-serif",fontSize:10.5,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:8}}>+ Tambah design lain</button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -972,14 +991,14 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
 // Defined outside AttachmentSlots so it keeps a stable component identity
 // across renders — nesting it inside would recreate the type on every
 // upload/delete and force React to fully remount every slot's file inputs.
-function UploadCol({ slot, kind, title, atts, busy, onUpload, onView, onDelete }) {
+function UploadCol({ title, atts, busy, onUpload, onView, onDelete }) {
   return (
     <div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
         <span style={{fontSize:10.5,fontWeight:600,color:'#9B93A8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{title}</span>
         <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
           {busy ? '...' : '+ Upload'}
-          <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; onUpload(slot, kind, f); e.target.value=''; }} />
+          <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; onUpload(f); e.target.value=''; }} />
         </label>
       </div>
       {atts.length > 0 ? (
