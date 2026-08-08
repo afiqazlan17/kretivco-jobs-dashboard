@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, packageTierOptions, findPackageTier } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 
 // ─── Micro Components ─────────────────────────────────────────
@@ -760,7 +760,7 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
                 {job.line_items.map((li,i)=>(
                   <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
                     <span style={{fontWeight:600,color:'#1A1025'}}>{li.item}</span>
-                    <span style={{color:'#6B6080'}}>{li.desc||'—'}</span>
+                    <span style={{color:'#6B6080',whiteSpace:'pre-line'}}>{li.desc||'—'}</span>
                     <span style={{color:'#6B6080'}}>{li.size||'—'}</span>
                     <span>{li.qty}</span>
                     <span>{formatRM(li.price)}</span>
@@ -956,7 +956,7 @@ export default function JobMonitor() {
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'' });
+  const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'', pkg:'' });
   const [newJob, setNewJob] = useState({depts:[],cid:'',perDept:{}});
   const [createAttempted, setCreateAttempted] = useState(false);
 
@@ -1078,6 +1078,10 @@ export default function JobMonitor() {
     const createdIds = newJob.depts.map(dept => {
       const f = newJob.perDept[dept];
       const jobId = genJobId(dept);
+      // Package pre-fills the job's line_items with the bundle's contents,
+      // priced as one line at the tier price — staff don't retype items
+      // that came straight off a fixed price sheet.
+      const tier = findPackageTier(dept, f.pkg);
       const jobObj = {
         id: crypto.randomUUID(),
         job_id: jobId,
@@ -1088,8 +1092,8 @@ export default function JobMonitor() {
         job_type_category: f.jobType || 'client_project',
         bank: f.bank || null,
         status: 'potential', // Fix: new jobs always start as Potential — not user-selectable at creation
-        estimation_value: null,
-        line_items: [],
+        estimation_value: tier ? tier.tier.price : null,
+        line_items: tier ? [{ item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: tier.pkg.items.join('\n'), size: '', qty: 1, price: tier.tier.price }] : [],
         final_value: null,
         pic: f.pic,
         start_date: f.start || null,
@@ -1462,6 +1466,25 @@ export default function JobMonitor() {
                     <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>set('jobType',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
                     <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i)=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.bank===k?v.color:(deptFieldErr(d,'bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:f.bank===k?v.color+'15':'#fff',color:f.bank===k?v.color:'#6B6080'}} onClick={()=>set('bank',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'bank')&&<div className="field-error">Wajib pilih bank.</div>}</div>
                   </div>
+
+                  {packageTierOptions(d).length > 0 && (
+                    <div style={{marginBottom:14}}>
+                      <label className="field-label">Package <span style={{fontWeight:400,color:'#9B93A8'}}>— pilihan, untuk job pakej sedia ada sahaja</span></label>
+                      <select className="field-select" style={{width:'100%'}} value={f.pkg} onChange={e=>{
+                        const val = e.target.value;
+                        const tier = findPackageTier(d, val);
+                        setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], pkg: val, type: tier ? `${tier.pkg.label} (${tier.tier.pcs}pcs)` : p.perDept[d].type } } }));
+                      }}>
+                        <option value="">— Job custom (bukan pakej) —</option>
+                        {packageTierOptions(d).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                      {f.pkg && (()=>{ const t = findPackageTier(d, f.pkg); return t ? (
+                        <div style={{marginTop:8,padding:'9px 12px',borderRadius:8,background:'#F7F5FA',fontSize:11.5,color:'#6B6080',lineHeight:1.6}}>
+                          {t.pkg.items.map((it,i)=><div key={i}>• {it}</div>)}
+                        </div>
+                      ) : null; })()}
+                    </div>
+                  )}
 
                   <div style={{marginBottom:14}}>
                     <label className="field-label">Nama Job *</label>
