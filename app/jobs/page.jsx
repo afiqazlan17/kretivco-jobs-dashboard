@@ -2,8 +2,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
+import { supabase, isMockMode } from '@/lib/supabase';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -276,7 +277,6 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 // and bank are fixed — bank always follows whatever was set on the job.
 function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
   const isReceipt = type === 'receipt';
-  const showSize = !!DEPT[job.department]?.usesSize;
   const cfg = DOC_TYPES[type];
   const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
   const notes = notesFor(type, bank);
@@ -300,10 +300,14 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
   });
   const [initial, setInitial] = useState(form);
   const [generating, setGenerating] = useState(false);
+  // Package bundles (e.g. Undangan.my) are tagged noSize on every item since
+  // they're never size-based — hide the column unless a non-package item is
+  // present, so staff can still enter a size on genuine custom print jobs.
+  const showSize = !!DEPT[job.department]?.usesSize && form.items.some(it => !it.noSize);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
-  const addItem = () => setForm(p => ({ ...p, items: [...p.items, { item: '', desc: '', size: '', qty: 1, price: 0 }] }));
+  const addItem = () => setForm(p => ({ ...p, items: [...p.items, { id: crypto.randomUUID(), item: '', desc: '', size: '', qty: 1, price: 0 }] }));
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
   const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
 
@@ -697,13 +701,19 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
     onAddNote(job.job_id, noteText.trim());
     setNoteText('');
   };
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkVal, setLinkVal] = useState(job.drive_link || '');
+  const saveLink = () => {
+    onUpdateJob(job.id, { drive_link: linkVal.trim() || null }, userName, { action: 'edited', field: 'drive_link', detail: 'Link reka bentuk dikemaskini' });
+    setEditingLink(false);
+  };
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState([]);
   const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
-  const eiAdd = () => setEditItems(p=>[...p,{item:'',desc:'',size:'',qty:1,price:0}]);
-  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiAdd = () => setEditItems(p=>[...p,{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
   const eiTotal = editItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
-  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({...li})) : [{item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
+  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({id:li.id||crypto.randomUUID(),...li})) : [{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
   const saveItems = () => {
     const valid = editItems.filter(li=>li.item.trim()).map(li=>({item:li.item.trim(),desc:li.desc?.trim()||'',size:li.size?.trim()||'',qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)}));
     const total = valid.reduce((s,li)=>s+li.total,0);
@@ -745,6 +755,26 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           )}
           {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
 
+          {/* Design file link — staff attach the Drive/Canva design here,
+              tied to this Job ID, before sending it to the printer/kilang. */}
+          <div style={{marginTop:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div className="section-label" style={{margin:0}}>Link Reka Bentuk</div>
+              {!editingLink && <button onClick={()=>{setLinkVal(job.drive_link||'');setEditingLink(true);}} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.drive_link?'✎ Edit':'+ Tambah Link'}</button>}
+            </div>
+            {editingLink ? (
+              <div style={{display:'flex',gap:6}}>
+                <input className="field-input" style={{flex:1,margin:0}} value={linkVal} onChange={e=>setLinkVal(e.target.value)} placeholder="https://drive.google.com/..." />
+                <button onClick={saveLink} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button>
+                <button onClick={()=>setEditingLink(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button>
+              </div>
+            ) : job.drive_link ? (
+              <a href={job.drive_link} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:'#3A86FF',wordBreak:'break-all'}}>{job.drive_link}</a>
+            ) : (
+              <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada link lagi</div>
+            )}
+          </div>
+
           {/* Line Items */}
           <div style={{marginTop:16}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
@@ -752,16 +782,19 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
               {!editingItems ? (job.status==='completed'||job.status==='cancelled' ? null : <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>)
               : <div style={{display:'flex',gap:6}}><button onClick={saveItems} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button><button onClick={()=>setEditingItems(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button></div>}
             </div>
-            {!editingItems && job.line_items?.length > 0 && (
+            {!editingItems && job.line_items?.length > 0 && (() => {
+              const showSize = !!DEPT[job.department]?.usesSize && job.line_items.some(li => !li.noSize);
+              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 1fr' : '2fr 2fr 0.6fr 1fr 1fr';
+              return (
               <div style={{border:'1px solid #E8E4ED',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
+                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
                 </div>
                 {job.line_items.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
+                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
                     <span style={{fontWeight:600,color:'#1A1025'}}>{li.item}</span>
-                    <span style={{color:'#6B6080'}}>{li.desc||'—'}</span>
-                    <span style={{color:'#6B6080'}}>{li.size||'—'}</span>
+                    <span style={{color:'#6B6080',whiteSpace:'pre-line'}}>{li.desc||'—'}</span>
+                    {showSize && <span style={{color:'#6B6080'}}>{li.size||'—'}</span>}
                     <span>{li.qty}</span>
                     <span>{formatRM(li.price)}</span>
                     <span style={{textAlign:'right',fontWeight:600}}>{formatRM(li.total||(li.qty*li.price))}</span>
@@ -771,17 +804,21 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
                   Jumlah: {formatRM(job.line_items.reduce((s,li)=>s+(li.total||(li.qty*li.price)||0),0))}
                 </div>
               </div>
-            )}
-            {editingItems && (
+              );
+            })()}
+            {editingItems && (() => {
+              const showSize = !!DEPT[job.department]?.usesSize && editItems.some(li => !li.noSize);
+              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px' : '2fr 2fr 0.6fr 1fr 0.8fr 28px';
+              return (
               <div style={{border:'1px solid #E91E6330',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item *</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
+                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item *</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
                 </div>
                 {editItems.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
+                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
                     <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.item} onChange={e=>eiUpdate(i,'item',e.target.value)} />
                     <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.desc||''} onChange={e=>eiUpdate(i,'desc',e.target.value)} />
-                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />
+                    {showSize && <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />}
                     <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.qty} onChange={e=>eiUpdate(i,'qty',e.target.value)} min="1" />
                     <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.price} onChange={e=>eiUpdate(i,'price',e.target.value)} />
                     <span style={{fontSize:11,fontWeight:600,textAlign:'right'}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
@@ -793,8 +830,14 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
                   <span style={{fontSize:12,fontWeight:700}}>Jumlah: RM {eiTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
                 </div>
               </div>
-            )}
+              );
+            })()}
             {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
+          </div>
+
+          {/* Artwork per item + Customer Approval */}
+          <div style={{marginTop:16}}>
+            <AttachmentSlots job={job} onUpdateJob={onUpdateJob} userName={userName} />
           </div>
 
           {/* Financial Breakdown */}
@@ -829,6 +872,155 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Artwork & Customer Approval Attachments ──────────────────
+// Artwork is one slot per item type — each item is genuinely a separate
+// design file. Doesn't auto-split by quantity ("4x Arrow" stays one slot):
+// multiple units of the same item usually share one design in practice.
+// Staff can add more design slots manually under an item for the real edge
+// case (e.g. each arrow pointing somewhere different). Approval is NOT
+// paired 1:1 with artwork — a customer typically approves the whole batch
+// in one reply/screenshot after seeing every design together, so it's one
+// shared section for the job (supports multiple uploads for revision
+// rounds). Files are actual uploads (screenshot, PDF, forwarded email), not
+// just a link, so the proof lives on the job itself — in a private Supabase
+// Storage bucket, viewed via a short-lived signed URL. Mock mode has no
+// real storage, so it falls back to an in-browser blob URL for the session.
+function baseSlotsFor(job) {
+  return (job.line_items || []).flatMap((li, i) => {
+    const lineItemId = li.id || `idx-${i}`;
+    if (li.noSize && li.desc) {
+      return li.desc.split('\n').filter(Boolean).map((line, di) => ({ key: `${lineItemId}::${di}`, label: line.replace(/^1x\s+/, '') }));
+    }
+    return [{ key: lineItemId, label: li.item || `Item ${i + 1}` }];
+  });
+}
+
+function AttachmentSlots({ job, onUpdateJob, userName }) {
+  const [busyKey, setBusyKey] = useState(null);
+  const [extraDesigns, setExtraDesigns] = useState({});
+  const attachments = job.attachments || [];
+  const baseSlots = baseSlotsFor(job);
+
+  // How many design instances to render for a base item: at least 1, more if
+  // attachments already exist for a later instance, more still if staff just
+  // clicked "+ Tambah design lain" this session.
+  const instanceCount = (baseKey) => {
+    const usedMax = attachments.reduce((max, a) => {
+      if (typeof a.line_item_id === 'string' && a.line_item_id.startsWith(baseKey + '#')) {
+        const idx = parseInt(a.line_item_id.slice(baseKey.length + 1), 10);
+        if (!isNaN(idx)) return Math.max(max, idx + 1);
+      }
+      return max;
+    }, 0);
+    return Math.max(1, usedMax, 1 + (extraDesigns[baseKey] || 0));
+  };
+
+  const attsFor = (slotKey, kind) => attachments.filter(a => a.kind === kind && a.line_item_id === slotKey);
+
+  const handleUpload = async (slotKey, label, kind, file) => {
+    if (!file) return;
+    setBusyKey(`${slotKey}:${kind}`);
+    try {
+      let path = null, url = null;
+      if (isMockMode) {
+        url = URL.createObjectURL(file);
+      } else {
+        path = `${job.job_id}/${kind}/${slotKey}/${Date.now()}_${file.name}`;
+        const { error } = await supabase.storage.from('job-attachments').upload(path, file);
+        if (error) throw error;
+      }
+      const entry = { id: crypto.randomUUID(), kind, line_item_id: slotKey, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
+      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} (${label}) dimuat naik: ${file.name}` });
+    } catch (err) {
+      alert('Gagal muat naik: ' + (err?.message || err));
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleView = async (att) => {
+    if (att.url) { window.open(att.url, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
+    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  const handleDelete = async (att) => {
+    if (!window.confirm(`Padam "${att.name}"?`)) return;
+    if (att.path && !isMockMode) await supabase.storage.from('job-attachments').remove([att.path]);
+    onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
+  };
+
+  if (!baseSlots.length) return null;
+
+  return (
+    <div>
+      <div className="section-label" style={{marginBottom:6}}>Artwork</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {baseSlots.map(base => {
+          const count = instanceCount(base.key);
+          return (
+            <div key={base.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
+              <div style={{fontSize:12,fontWeight:600,color:'#1A1025',marginBottom:6}}>📎 {base.label}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {Array.from({length: count}, (_, idx) => {
+                  const slotKey = `${base.key}#${idx}`;
+                  const label = count > 1 ? `${base.label} — Design ${idx + 1}` : base.label;
+                  return (
+                    <div key={slotKey} style={idx > 0 ? {paddingTop:8,borderTop:'1px dashed #F0ECF4'} : undefined}>
+                      {count > 1 && <div style={{fontSize:10.5,fontWeight:600,color:'#E91E63',marginBottom:4}}>Design {idx + 1}</div>}
+                      <UploadCol title="" atts={attsFor(slotKey,'artwork')} busy={busyKey===`${slotKey}:artwork`} onUpload={f=>handleUpload(slotKey,label,'artwork',f)} onView={handleView} onDelete={handleDelete} />
+                    </div>
+                  );
+                })}
+              </div>
+              <button onClick={()=>setExtraDesigns(p=>({...p,[base.key]:(p[base.key]||0)+1}))} style={{fontFamily:"'Poppins',sans-serif",fontSize:10.5,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:8}}>+ Tambah design lain</button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* One shared approval slot for the whole job — a customer typically
+          approves everything together in a single reply, not item by item.
+          Supports multiple uploads for revision rounds (reject -> revise
+          -> re-approve). */}
+      <div style={{marginTop:12,border:'1px solid #E91E6330',borderRadius:8,padding:'8px 10px',background:'#FFF5F8'}}>
+        <div style={{fontSize:12,fontWeight:600,color:'#E91E63',marginBottom:6}}>✅ Approval Customer</div>
+        <UploadCol title="" atts={attsFor('job','approval')} busy={busyKey==='job:approval'} onUpload={f=>handleUpload('job','Approval customer','approval',f)} onView={handleView} onDelete={handleDelete} />
+      </div>
+    </div>
+  );
+}
+
+// Defined outside AttachmentSlots so it keeps a stable component identity
+// across renders — nesting it inside would recreate the type on every
+// upload/delete and force React to fully remount every slot's file inputs.
+function UploadCol({ title, atts, busy, onUpload, onView, onDelete }) {
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+        <span style={{fontSize:10.5,fontWeight:600,color:'#9B93A8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{title}</span>
+        <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
+          {busy ? '...' : '+ Upload'}
+          <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; onUpload(f); e.target.value=''; }} />
+        </label>
+      </div>
+      {atts.length > 0 ? (
+        <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:3}}>
+          {atts.map(a => (
+            <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11}}>
+              <a onClick={()=>onView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
+              <button onClick={()=>onDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:6}}>×</button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>Tiada fail</div>
+      )}
     </div>
   );
 }
@@ -956,7 +1148,7 @@ export default function JobMonitor() {
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'' });
+  const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'', productLine:'', segment:'', pkg:'' });
   const [newJob, setNewJob] = useState({depts:[],cid:'',perDept:{}});
   const [createAttempted, setCreateAttempted] = useState(false);
 
@@ -1078,6 +1270,11 @@ export default function JobMonitor() {
     const createdIds = newJob.depts.map(dept => {
       const f = newJob.perDept[dept];
       const jobId = genJobId(dept);
+      // Package pre-fills the job's line_items with the bundle's contents,
+      // priced as one line at the tier price — staff don't retype items
+      // that came straight off a fixed price sheet. Only Product Sale jobs
+      // can carry a package; Client Project is always custom work.
+      const tier = f.jobType === 'product_sale' ? findPackageTier(dept, f.productLine, f.segment, f.pkg) : null;
       const jobObj = {
         id: crypto.randomUUID(),
         job_id: jobId,
@@ -1088,8 +1285,8 @@ export default function JobMonitor() {
         job_type_category: f.jobType || 'client_project',
         bank: f.bank || null,
         status: 'potential', // Fix: new jobs always start as Potential — not user-selectable at creation
-        estimation_value: null,
-        line_items: [],
+        estimation_value: tier ? tier.tier.price : null,
+        line_items: tier ? [{ id: crypto.randomUUID(), item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: packageItemsFor(tier.pkg, tier.tier).join('\n'), size: '', qty: 1, price: tier.tier.price, noSize: true }] : [],
         final_value: null,
         pic: f.pic,
         start_date: f.start || null,
@@ -1425,7 +1622,7 @@ export default function JobMonitor() {
             {/* Department — multi-select: pick more than one when the same customer request spans departments */}
             <div style={{marginBottom:16}}>
               <label className="field-label">Department * <span style={{fontWeight:400,color:'#9B93A8'}}>— boleh pilih lebih dari satu</span></label>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:8}}>
                 {DEPT_LIST.map(d=>{
                   const on = newJob.depts.includes(d.key);
                   return (
@@ -1459,9 +1656,56 @@ export default function JobMonitor() {
                   </div>
 
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
-                    <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>set('jobType',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
+                    <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], jobType: k, productLine:'', segment:'', pkg:'' } } }))}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
                     <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i)=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.bank===k?v.color:(deptFieldErr(d,'bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:f.bank===k?v.color+'15':'#fff',color:f.bank===k?v.color:'#6B6080'}} onClick={()=>set('bank',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'bank')&&<div className="field-error">Wajib pilih bank.</div>}</div>
                   </div>
+
+                  {f.jobType === 'product_sale' && productLinesFor(d).length > 0 && (
+                    <div style={{marginBottom:14,padding:12,borderRadius:8,background:'#F7F5FA',border:'1px dashed #D8D2E0'}}>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                        <div>
+                          <label className="field-label">Produk</label>
+                          <select className="field-select" style={{width:'100%'}} value={f.productLine} onChange={e=>{
+                            const val = e.target.value;
+                            setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], productLine: val, segment:'', pkg:'' } } }));
+                          }}>
+                            <option value="">— Job custom (bukan pakej) —</option>
+                            {productLinesFor(d).map(l=><option key={l.key} value={l.key}>{l.label}</option>)}
+                          </select>
+                        </div>
+                        {f.productLine && (
+                          <div>
+                            <label className="field-label">Jenis Customer</label>
+                            <select className="field-select" style={{width:'100%'}} value={f.segment} onChange={e=>{
+                              const val = e.target.value;
+                              setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], segment: val, pkg:'' } } }));
+                            }}>
+                              <option value="">— Pilih —</option>
+                              {segmentsFor(d, f.productLine).map(s=><option key={s.key} value={s.key}>{s.label}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                      {f.segment && (
+                        <div style={{marginTop:12}}>
+                          <label className="field-label">Package</label>
+                          <select className="field-select" style={{width:'100%'}} value={f.pkg} onChange={e=>{
+                            const val = e.target.value;
+                            const tier = findPackageTier(d, f.productLine, f.segment, val);
+                            setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], pkg: val, type: tier ? `${tier.pkg.label} (${tier.tier.pcs}pcs)` : p.perDept[d].type } } }));
+                          }}>
+                            <option value="">— Pilih package —</option>
+                            {packageTierOptions(d, f.productLine, f.segment).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                          {f.pkg && (()=>{ const t = findPackageTier(d, f.productLine, f.segment, f.pkg); return t ? (
+                            <div style={{marginTop:8,padding:'9px 12px',borderRadius:8,background:'#fff',fontSize:11.5,color:'#6B6080',lineHeight:1.6}}>
+                              {packageItemsFor(t.pkg, t.tier).map((it,i)=><div key={i}>• {it}</div>)}
+                            </div>
+                          ) : null; })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{marginBottom:14}}>
                     <label className="field-label">Nama Job *</label>
