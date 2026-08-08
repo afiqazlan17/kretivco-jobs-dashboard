@@ -1425,7 +1425,7 @@ export default function JobMonitor() {
             {/* Department — multi-select: pick more than one when the same customer request spans departments */}
             <div style={{marginBottom:16}}>
               <label className="field-label">Department * <span style={{fontWeight:400,color:'#9B93A8'}}>— boleh pilih lebih dari satu</span></label>
-              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:8}}>
                 {DEPT_LIST.map(d=>{
                   const on = newJob.depts.includes(d.key);
                   return (
