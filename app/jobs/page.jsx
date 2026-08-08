@@ -879,10 +879,18 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
   const [busyKey, setBusyKey] = useState(null);
   const attachments = job.attachments || [];
 
+  // A package bundle (e.g. Undangan.my) is one priced row on the invoice —
+  // no separate price per physical item — but each item inside it (card,
+  // banner, welcome board...) still needs its own artwork slot. Its desc
+  // holds one item per line, so split on that instead of the row itself.
+  // A plain custom row (not noSize-tagged) just gets a single slot.
   const slots = [
-    ...(job.line_items || []).map((li, i) => {
+    ...(job.line_items || []).flatMap((li, i) => {
       const lineItemId = li.id || `idx-${i}`;
-      return { key: lineItemId, label: li.item || `Item ${i + 1}`, lineItemId, isApproval: false };
+      if (li.noSize && li.desc) {
+        return li.desc.split('\n').filter(Boolean).map((label, si) => ({ key: `${lineItemId}::${si}`, label, lineItemId: `${lineItemId}::${si}`, isApproval: false }));
+      }
+      return [{ key: lineItemId, label: li.item || `Item ${i + 1}`, lineItemId, isApproval: false }];
     }),
     { key: 'approval', label: 'Customer Approval', lineItemId: null, isApproval: true },
   ];
