@@ -46,6 +46,14 @@ export default function Finance() {
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
 
+  // P&L Statement date range — defaults to year-to-date. Revenue/COGS/Expense
+  // are period figures (what happened between these dates); bank balances
+  // and outstanding AR stay all-time since those are a point-in-time position,
+  // not something that happened "during" a period.
+  const today = new Date();
+  const [plFrom, setPlFrom] = useState(`${today.getFullYear()}-01-01`);
+  const [plTo, setPlTo] = useState(today.toISOString().slice(0,10));
+
   const blankExpForm = () => ({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
@@ -71,18 +79,34 @@ export default function Finance() {
     return list;
   }, [scopedEntries, fDept, fBank]);
 
-  const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(scopedEntries, `revenue_${d}`), 0);
-  const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(scopedEntries, `cogs_${d}`), 0);
-  const totalOpex = isBod ? EXPENSE_CATEGORIES.reduce((s,c) => s + balanceFor(ledgerEntries, `opex_${c.value}`), 0) : 0;
+  // P&L period slices — scoped (dept-visible) and all (BOD-only figures like
+  // opex/bank), both cut down to just what happened within plFrom..plTo.
+  const inPeriod = (e) => (!plFrom || e.date?.slice(0,10) >= plFrom) && (!plTo || e.date?.slice(0,10) <= plTo);
+  const plEntries = useMemo(() => scopedEntries.filter(inPeriod), [scopedEntries, plFrom, plTo]);
+  const plAllEntries = useMemo(() => ledgerEntries.filter(inPeriod), [ledgerEntries, plFrom, plTo]);
+
+  const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(plEntries, `revenue_${d}`), 0);
+  const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(plEntries, `cogs_${d}`), 0);
+  const opexByCategory = isBod ? EXPENSE_CATEGORIES.map(c => ({ ...c, amount: balanceFor(plAllEntries, `opex_${c.value}`) })).filter(c => c.amount) : [];
+  const totalOpex = opexByCategory.reduce((s,c) => s + c.amount, 0);
   const outstanding = balanceFor(scopedEntries, 'ar');
   const grossProfit = totalRevenue - totalCogs;
   const netProfit = grossProfit - totalOpex;
   const bankBalances = isBod ? Object.keys(BANK).map(b => ({ key: b, label: BANK[b].label, bal: balanceFor(ledgerEntries, `bank_${b}`) })) : [];
 
+  // Money that actually moved through each bank during the period — receipts
+  // in, expenses out. Distinct from "Baki Bank" above, which is the running
+  // (all-time) cash position, not what happened in this specific period.
+  const bankActivity = isBod ? Object.keys(BANK).map(b => {
+    const collected = plAllEntries.filter(e => e.type === 'receipt' && e.bank === b && !e.reversed).reduce((s,e) => s + e.amount, 0);
+    const paidOut = plAllEntries.filter(e => (e.type === 'job_expense' || e.type === 'operating_expense') && e.bank === b && !e.reversed).reduce((s,e) => s + e.amount, 0);
+    return { key: b, label: BANK[b].label, collected, paidOut };
+  }).filter(b => b.collected || b.paidOut) : [];
+
   const deptBreakdown = deptKeys.map(d => ({
     key: d, label: DEPT[d].label, color: DEPT[d].color,
-    revenue: balanceFor(scopedEntries, `revenue_${d}`),
-    cogs: balanceFor(scopedEntries, `cogs_${d}`),
+    revenue: balanceFor(plEntries, `revenue_${d}`),
+    cogs: balanceFor(plEntries, `cogs_${d}`),
   }));
 
   const jobsForExpenseDept = expForm.department ? jobs.filter(j => j.department === expForm.department && !j.archived) : [];
@@ -166,21 +190,46 @@ export default function Finance() {
         </div>
 
         <div className="content">
-          <div className="sum-grid">
-            <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalRevenue)}</div></div>
-            <div className="sum-card" style={{borderLeftColor:"#E85D04"}}><div className="section-label">Kos Perkhidmatan</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalCogs)}</div></div>
-            <div className="sum-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Untung Kasar</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:grossProfit>=0?"#1A1025":"#EF4444"}}>{formatRM(grossProfit)}</div></div>
-            <div className="sum-card" style={{borderLeftColor:"#3A86FF"}}><div className="section-label">Outstanding (Belum Terima)</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(outstanding)}</div></div>
-            {isBod && <div className="sum-card" style={{borderLeftColor:"#EF4444"}}><div className="section-label">Operating Expense</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalOpex)}</div></div>}
-            {isBod && <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Untung Bersih</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:netProfit>=0?"#10B981":"#EF4444"}}>{formatRM(netProfit)}</div></div>}
+          <div className="card">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+              <div>
+                <div className="card-title">P&amp;L Statement (Untung Rugi)</div>
+                <div className="text-xs text-muted" style={{marginTop:2}}>Revenue, kos &amp; expense untuk tempoh dipilih</div>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <input type="date" className="fi" style={{width:150}} value={plFrom} onChange={e=>setPlFrom(e.target.value)} />
+                <span className="text-xs text-muted">hingga</span>
+                <input type="date" className="fi" style={{width:150}} value={plTo} onChange={e=>setPlTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="sum-grid" style={{marginBottom:0}}>
+              <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalRevenue)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#E85D04"}}><div className="section-label">Kos Perkhidmatan</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalCogs)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Untung Kasar</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:grossProfit>=0?"#1A1025":"#EF4444"}}>{formatRM(grossProfit)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#3A86FF"}}><div className="section-label">Outstanding (Belum Terima)</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(outstanding)}</div></div>
+              {isBod && <div className="sum-card" style={{borderLeftColor:"#EF4444"}}><div className="section-label">Operating Expense</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalOpex)}</div></div>}
+              {isBod && <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Untung Bersih</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:netProfit>=0?"#10B981":"#EF4444"}}>{formatRM(netProfit)}</div></div>}
+            </div>
+            {isBod && opexByCategory.length > 0 && (
+              <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #F3F1F6"}}>
+                <div className="section-label" style={{marginBottom:8}}>Operating Expense ikut Kategori</div>
+                {opexByCategory.map(c => (
+                  <div key={c.value} className="dept-row" style={{gridTemplateColumns:"1fr 120px"}}>
+                    <span className="text-sm">{c.label}</span>
+                    <span style={{textAlign:"right",fontWeight:600}}>{formatRM(c.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {isBod && bankBalances.length > 0 && (
             <div className="card">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
                 <div className="card-title">Baki Bank <span className="text-xs text-muted" style={{fontWeight:400}}>(klik untuk tapis Ledger)</span></div>
                 {fBank!=='all' && <button className="btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setFBank('all')}>× Clear filter</button>}
               </div>
+              <div className="text-xs text-muted" style={{marginBottom:14}}>Baki semasa (all-time) — bukan untuk tempoh P&amp;L di atas</div>
               <div className="bank-grid">
                 {bankBalances.map(b => (
                   <div key={b.key} className="bank-chip" style={{cursor:'pointer', outline: fBank===b.key ? '2px solid #E91E63' : 'none'}} onClick={()=>setFBank(p=>p===b.key?'all':b.key)} title="Klik untuk tapis Ledger ikut bank ini">
@@ -192,8 +241,27 @@ export default function Finance() {
             </div>
           )}
 
+          {isBod && bankActivity.length > 0 && (
+            <div className="card">
+              <div className="card-title" style={{marginBottom:14}}>Kutipan &amp; Bayaran Ikut Bank</div>
+              <div className="text-xs text-muted" style={{marginTop:-8,marginBottom:14}}>Duit yang betul-betul masuk/keluar setiap bank dalam tempoh P&amp;L di atas</div>
+              <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
+                <span>Bank</span><span style={{textAlign:"right"}}>Kutipan Masuk</span><span style={{textAlign:"right"}}>Bayaran Keluar</span><span style={{textAlign:"right"}}>Net</span>
+              </div>
+              {bankActivity.map(b => (
+                <div key={b.key} className="dept-row">
+                  <span>{b.label}</span>
+                  <span style={{textAlign:"right",fontWeight:600,color:"#10B981"}}>{formatRM(b.collected)}</span>
+                  <span style={{textAlign:"right",color:"#EF4444"}}>{formatRM(b.paidOut)}</span>
+                  <span style={{textAlign:"right",fontWeight:700}}>{formatRM(b.collected-b.paidOut)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="card">
-            <div className="card-title" style={{marginBottom:14}}>Pecahan Department</div>
+            <div className="card-title" style={{marginBottom:2}}>Pecahan Department</div>
+            <div className="text-xs text-muted" style={{marginBottom:12}}>Untuk tempoh P&amp;L di atas</div>
             <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
               <span>Department</span><span style={{textAlign:"right"}}>Revenue</span><span style={{textAlign:"right"}}>Kos</span><span style={{textAlign:"right"}}>Untung Kasar</span>
             </div>
