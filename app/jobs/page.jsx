@@ -782,16 +782,19 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
               {!editingItems ? (job.status==='completed'||job.status==='cancelled' ? null : <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>)
               : <div style={{display:'flex',gap:6}}><button onClick={saveItems} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button><button onClick={()=>setEditingItems(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button></div>}
             </div>
-            {!editingItems && job.line_items?.length > 0 && (
+            {!editingItems && job.line_items?.length > 0 && (() => {
+              const showSize = !!DEPT[job.department]?.usesSize && job.line_items.some(li => !li.noSize);
+              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 1fr' : '2fr 2fr 0.6fr 1fr 1fr';
+              return (
               <div style={{border:'1px solid #E8E4ED',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
+                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
                 </div>
                 {job.line_items.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 1fr',gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
+                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
                     <span style={{fontWeight:600,color:'#1A1025'}}>{li.item}</span>
                     <span style={{color:'#6B6080',whiteSpace:'pre-line'}}>{li.desc||'—'}</span>
-                    <span style={{color:'#6B6080'}}>{li.size||'—'}</span>
+                    {showSize && <span style={{color:'#6B6080'}}>{li.size||'—'}</span>}
                     <span>{li.qty}</span>
                     <span>{formatRM(li.price)}</span>
                     <span style={{textAlign:'right',fontWeight:600}}>{formatRM(li.total||(li.qty*li.price))}</span>
@@ -801,17 +804,21 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
                   Jumlah: {formatRM(job.line_items.reduce((s,li)=>s+(li.total||(li.qty*li.price)||0),0))}
                 </div>
               </div>
-            )}
-            {editingItems && (
+              );
+            })()}
+            {editingItems && (() => {
+              const showSize = !!DEPT[job.department]?.usesSize && editItems.some(li => !li.noSize);
+              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px' : '2fr 2fr 0.6fr 1fr 0.8fr 28px';
+              return (
               <div style={{border:'1px solid #E91E6330',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item *</span><span>Keterangan</span><span>Size</span><span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
+                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  <span>Item *</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
                 </div>
                 {editItems.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px',gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
+                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
                     <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.item} onChange={e=>eiUpdate(i,'item',e.target.value)} />
                     <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.desc||''} onChange={e=>eiUpdate(i,'desc',e.target.value)} />
-                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />
+                    {showSize && <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />}
                     <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.qty} onChange={e=>eiUpdate(i,'qty',e.target.value)} min="1" />
                     <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.price} onChange={e=>eiUpdate(i,'price',e.target.value)} />
                     <span style={{fontSize:11,fontWeight:600,textAlign:'right'}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
@@ -823,7 +830,8 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
                   <span style={{fontSize:12,fontWeight:700}}>Jumlah: RM {eiTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
                 </div>
               </div>
-            )}
+              );
+            })()}
             {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
           </div>
 
@@ -869,48 +877,58 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
 }
 
 // ─── Artwork & Customer Approval Attachments ──────────────────
-// One upload slot per line item (design artwork for that specific item) plus
-// a standalone Customer Approval slot (screenshot/forwarded email, etc.) —
-// staff attach a file, not just a link, so the actual proof lives in the job.
+// One artwork slot per physical unit needing its own design, each paired
+// with its own approval slot — a customer approves each design individually,
+// not the job as a whole. Staff attach an actual file (screenshot, PDF,
+// forwarded email), not just a link, so the proof lives on the job itself.
 // Files sit in a private Supabase Storage bucket; live-mode viewing goes
 // through a short-lived signed URL rather than a public link. Mock mode has
 // no real storage, so it just keeps an in-browser blob URL for the session.
+
+// A package bundle's desc holds one item per line, e.g. "4x Arrow 2x2ft" —
+// a leading "Nx " is a genuine unit count (4 separate arrows, each may need
+// its own design), never a dimension: "Kad Kahwin 4x8in..." doesn't match
+// since the digit+x isn't followed by a space at the very start of the line.
+function expandDescLine(line) {
+  const m = line.match(/^(\d+)x\s+(.*)$/);
+  if (!m) return [line];
+  const qty = parseInt(m[1], 10);
+  const rest = m[2];
+  if (qty <= 1) return [rest];
+  return Array.from({ length: qty }, (_, i) => `${rest} #${i + 1}`);
+}
+
 function AttachmentSlots({ job, onUpdateJob, userName }) {
   const [busyKey, setBusyKey] = useState(null);
   const attachments = job.attachments || [];
 
-  // A package bundle (e.g. Undangan.my) is one priced row on the invoice —
-  // no separate price per physical item — but each item inside it (card,
-  // banner, welcome board...) still needs its own artwork slot. Its desc
-  // holds one item per line, so split on that instead of the row itself.
-  // A plain custom row (not noSize-tagged) just gets a single slot.
-  const slots = [
-    ...(job.line_items || []).flatMap((li, i) => {
-      const lineItemId = li.id || `idx-${i}`;
-      if (li.noSize && li.desc) {
-        return li.desc.split('\n').filter(Boolean).map((label, si) => ({ key: `${lineItemId}::${si}`, label, lineItemId: `${lineItemId}::${si}`, isApproval: false }));
-      }
-      return [{ key: lineItemId, label: li.item || `Item ${i + 1}`, lineItemId, isApproval: false }];
-    }),
-    { key: 'approval', label: 'Customer Approval', lineItemId: null, isApproval: true },
-  ];
-  const attsFor = (slot) => attachments.filter(a => slot.isApproval ? a.kind === 'approval' : (a.kind === 'artwork' && a.line_item_id === slot.lineItemId));
+  const slots = (job.line_items || []).flatMap((li, i) => {
+    const lineItemId = li.id || `idx-${i}`;
+    if (li.noSize && li.desc) {
+      return li.desc.split('\n').filter(Boolean).flatMap((line, di) =>
+        expandDescLine(line).map((label, si) => ({ key: `${lineItemId}::${di}::${si}`, label }))
+      );
+    }
+    return [{ key: lineItemId, label: li.item || `Item ${i + 1}` }];
+  });
 
-  const handleUpload = async (slot, file) => {
+  const attsFor = (slot, kind) => attachments.filter(a => a.kind === kind && a.line_item_id === slot.key);
+
+  const handleUpload = async (slot, kind, file) => {
     if (!file) return;
-    setBusyKey(slot.key);
+    const busyKeyVal = `${slot.key}:${kind}`;
+    setBusyKey(busyKeyVal);
     try {
-      const kind = slot.isApproval ? 'approval' : 'artwork';
       let path = null, url = null;
       if (isMockMode) {
         url = URL.createObjectURL(file);
       } else {
-        path = `${job.job_id}/${kind}/${slot.lineItemId || 'approval'}/${Date.now()}_${file.name}`;
+        path = `${job.job_id}/${kind}/${slot.key}/${Date.now()}_${file.name}`;
         const { error } = await supabase.storage.from('job-attachments').upload(path, file);
         if (error) throw error;
       }
-      const entry = { id: crypto.randomUUID(), kind, line_item_id: slot.lineItemId, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
-      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} dimuat naik: ${file.name}` });
+      const entry = { id: crypto.randomUUID(), kind, line_item_id: slot.key, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
+      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} (${slot.label}) dimuat naik: ${file.name}` });
     } catch (err) {
       alert('Gagal muat naik: ' + (err?.message || err));
     } finally {
@@ -931,37 +949,49 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
     onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
   };
 
+  const UploadCol = ({ slot, kind, title }) => {
+    const atts = attsFor(slot, kind);
+    const busy = busyKey === `${slot.key}:${kind}`;
+    return (
+      <div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+          <span style={{fontSize:10.5,fontWeight:600,color:'#9B93A8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{title}</span>
+          <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
+            {busy ? '...' : '+ Upload'}
+            <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; handleUpload(slot, kind, f); e.target.value=''; }} />
+          </label>
+        </div>
+        {atts.length > 0 ? (
+          <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:3}}>
+            {atts.map(a => (
+              <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11}}>
+                <a onClick={()=>handleView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
+                <button onClick={()=>handleDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:6}}>×</button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>Tiada fail</div>
+        )}
+      </div>
+    );
+  };
+
+  if (!slots.length) return null;
+
   return (
     <div>
-      <div className="section-label" style={{marginBottom:6}}>Artwork &amp; Approval</div>
+      <div className="section-label" style={{marginBottom:6}}>Artwork &amp; Approval Customer</div>
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
-        {slots.map(slot => {
-          const atts = attsFor(slot);
-          const busy = busyKey === slot.key;
-          return (
-            <div key={slot.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                <span style={{fontSize:12,fontWeight:600,color: slot.isApproval ? '#E91E63' : '#1A1025'}}>{slot.isApproval ? '✅ Customer Approval' : `📎 ${slot.label}`}</span>
-                <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
-                  {busy ? 'Memuat naik...' : '+ Upload'}
-                  <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; handleUpload(slot, f); e.target.value=''; }} />
-                </label>
-              </div>
-              {atts.length > 0 ? (
-                <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:4}}>
-                  {atts.map(a => (
-                    <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11.5}}>
-                      <a onClick={()=>handleView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
-                      <button onClick={()=>handleDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:8}}>×</button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{marginTop:4,fontSize:11,color:'#9B93A8',fontStyle:'italic'}}>Tiada fail lagi</div>
-              )}
+        {slots.map(slot => (
+          <div key={slot.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
+            <div style={{fontSize:12,fontWeight:600,color:'#1A1025',marginBottom:6}}>📎 {slot.label}</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <UploadCol slot={slot} kind="artwork" title="Artwork" />
+              <UploadCol slot={slot} kind="approval" title="Approval Customer" />
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );
