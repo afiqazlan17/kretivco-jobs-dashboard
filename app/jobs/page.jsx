@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
+import { supabase, isMockMode } from '@/lib/supabase';
 
 // ─── Micro Components ─────────────────────────────────────────
 function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -306,7 +307,7 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
-  const addItem = () => setForm(p => ({ ...p, items: [...p.items, { item: '', desc: '', size: '', qty: 1, price: 0 }] }));
+  const addItem = () => setForm(p => ({ ...p, items: [...p.items, { id: crypto.randomUUID(), item: '', desc: '', size: '', qty: 1, price: 0 }] }));
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
   const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
 
@@ -709,10 +710,10 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState([]);
   const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
-  const eiAdd = () => setEditItems(p=>[...p,{item:'',desc:'',size:'',qty:1,price:0}]);
-  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiAdd = () => setEditItems(p=>[...p,{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
+  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
   const eiTotal = editItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
-  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({...li})) : [{item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
+  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({id:li.id||crypto.randomUUID(),...li})) : [{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
   const saveItems = () => {
     const valid = editItems.filter(li=>li.item.trim()).map(li=>({item:li.item.trim(),desc:li.desc?.trim()||'',size:li.size?.trim()||'',qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)}));
     const total = valid.reduce((s,li)=>s+li.total,0);
@@ -826,6 +827,11 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
             {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
           </div>
 
+          {/* Artwork per item + Customer Approval */}
+          <div style={{marginTop:16}}>
+            <AttachmentSlots job={job} onUpdateJob={onUpdateJob} userName={userName} />
+          </div>
+
           {/* Financial Breakdown */}
           <div style={{ marginTop: 16 }}>
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
@@ -857,6 +863,97 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
             >Tambah Catatan</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Artwork & Customer Approval Attachments ──────────────────
+// One upload slot per line item (design artwork for that specific item) plus
+// a standalone Customer Approval slot (screenshot/forwarded email, etc.) —
+// staff attach a file, not just a link, so the actual proof lives in the job.
+// Files sit in a private Supabase Storage bucket; live-mode viewing goes
+// through a short-lived signed URL rather than a public link. Mock mode has
+// no real storage, so it just keeps an in-browser blob URL for the session.
+function AttachmentSlots({ job, onUpdateJob, userName }) {
+  const [busyKey, setBusyKey] = useState(null);
+  const attachments = job.attachments || [];
+
+  const slots = [
+    ...(job.line_items || []).map((li, i) => {
+      const lineItemId = li.id || `idx-${i}`;
+      return { key: lineItemId, label: li.item || `Item ${i + 1}`, lineItemId, isApproval: false };
+    }),
+    { key: 'approval', label: 'Customer Approval', lineItemId: null, isApproval: true },
+  ];
+  const attsFor = (slot) => attachments.filter(a => slot.isApproval ? a.kind === 'approval' : (a.kind === 'artwork' && a.line_item_id === slot.lineItemId));
+
+  const handleUpload = async (slot, file) => {
+    if (!file) return;
+    setBusyKey(slot.key);
+    try {
+      const kind = slot.isApproval ? 'approval' : 'artwork';
+      let path = null, url = null;
+      if (isMockMode) {
+        url = URL.createObjectURL(file);
+      } else {
+        path = `${job.job_id}/${kind}/${slot.lineItemId || 'approval'}/${Date.now()}_${file.name}`;
+        const { error } = await supabase.storage.from('job-attachments').upload(path, file);
+        if (error) throw error;
+      }
+      const entry = { id: crypto.randomUUID(), kind, line_item_id: slot.lineItemId, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
+      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} dimuat naik: ${file.name}` });
+    } catch (err) {
+      alert('Gagal muat naik: ' + (err?.message || err));
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleView = async (att) => {
+    if (att.url) { window.open(att.url, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
+    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  const handleDelete = async (att) => {
+    if (!window.confirm(`Padam "${att.name}"?`)) return;
+    if (att.path && !isMockMode) await supabase.storage.from('job-attachments').remove([att.path]);
+    onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
+  };
+
+  return (
+    <div>
+      <div className="section-label" style={{marginBottom:6}}>Artwork &amp; Approval</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {slots.map(slot => {
+          const atts = attsFor(slot);
+          const busy = busyKey === slot.key;
+          return (
+            <div key={slot.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                <span style={{fontSize:12,fontWeight:600,color: slot.isApproval ? '#E91E63' : '#1A1025'}}>{slot.isApproval ? '✅ Customer Approval' : `📎 ${slot.label}`}</span>
+                <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
+                  {busy ? 'Memuat naik...' : '+ Upload'}
+                  <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; handleUpload(slot, f); e.target.value=''; }} />
+                </label>
+              </div>
+              {atts.length > 0 ? (
+                <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:4}}>
+                  {atts.map(a => (
+                    <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11.5}}>
+                      <a onClick={()=>handleView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
+                      <button onClick={()=>handleDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:8}}>×</button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{marginTop:4,fontSize:11,color:'#9B93A8',fontStyle:'italic'}}>Tiada fail lagi</div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1123,7 +1220,7 @@ export default function JobMonitor() {
         bank: f.bank || null,
         status: 'potential', // Fix: new jobs always start as Potential — not user-selectable at creation
         estimation_value: tier ? tier.tier.price : null,
-        line_items: tier ? [{ item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: packageItemsFor(tier.pkg, tier.tier).join('\n'), size: '', qty: 1, price: tier.tier.price, noSize: true }] : [],
+        line_items: tier ? [{ id: crypto.randomUUID(), item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: packageItemsFor(tier.pkg, tier.tier).join('\n'), size: '', qty: 1, price: tier.tier.price, noSize: true }] : [],
         final_value: null,
         pic: f.pic,
         start_date: f.start || null,
