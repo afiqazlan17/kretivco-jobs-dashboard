@@ -877,16 +877,18 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
 }
 
 // ─── Artwork & Customer Approval Attachments ──────────────────
-// One artwork slot per item type, each paired with its own approval slot —
-// a customer approves each design individually, not the job as a whole.
-// Doesn't auto-split by quantity ("4x Arrow" stays one slot): in practice
-// multiple units of the same item usually share one design. Staff can add
-// more design slots manually under an item for the real edge case (e.g. each
-// arrow pointing somewhere different needs its own design). Files are actual
-// uploads (screenshot, PDF, forwarded email), not just a link, so the proof
-// lives on the job itself — in a private Supabase Storage bucket, viewed via
-// a short-lived signed URL. Mock mode has no real storage, so it falls back
-// to an in-browser blob URL for the session.
+// Artwork is one slot per item type — each item is genuinely a separate
+// design file. Doesn't auto-split by quantity ("4x Arrow" stays one slot):
+// multiple units of the same item usually share one design in practice.
+// Staff can add more design slots manually under an item for the real edge
+// case (e.g. each arrow pointing somewhere different). Approval is NOT
+// paired 1:1 with artwork — a customer typically approves the whole batch
+// in one reply/screenshot after seeing every design together, so it's one
+// shared section for the job (supports multiple uploads for revision
+// rounds). Files are actual uploads (screenshot, PDF, forwarded email), not
+// just a link, so the proof lives on the job itself — in a private Supabase
+// Storage bucket, viewed via a short-lived signed URL. Mock mode has no
+// real storage, so it falls back to an in-browser blob URL for the session.
 function baseSlotsFor(job) {
   return (job.line_items || []).flatMap((li, i) => {
     const lineItemId = li.id || `idx-${i}`;
@@ -957,7 +959,7 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
 
   return (
     <div>
-      <div className="section-label" style={{marginBottom:6}}>Artwork &amp; Approval Customer</div>
+      <div className="section-label" style={{marginBottom:6}}>Artwork</div>
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {baseSlots.map(base => {
           const count = instanceCount(base.key);
@@ -971,10 +973,7 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
                   return (
                     <div key={slotKey} style={idx > 0 ? {paddingTop:8,borderTop:'1px dashed #F0ECF4'} : undefined}>
                       {count > 1 && <div style={{fontSize:10.5,fontWeight:600,color:'#E91E63',marginBottom:4}}>Design {idx + 1}</div>}
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                        <UploadCol title="Artwork" atts={attsFor(slotKey,'artwork')} busy={busyKey===`${slotKey}:artwork`} onUpload={f=>handleUpload(slotKey,label,'artwork',f)} onView={handleView} onDelete={handleDelete} />
-                        <UploadCol title="Approval Customer" atts={attsFor(slotKey,'approval')} busy={busyKey===`${slotKey}:approval`} onUpload={f=>handleUpload(slotKey,label,'approval',f)} onView={handleView} onDelete={handleDelete} />
-                      </div>
+                      <UploadCol title="" atts={attsFor(slotKey,'artwork')} busy={busyKey===`${slotKey}:artwork`} onUpload={f=>handleUpload(slotKey,label,'artwork',f)} onView={handleView} onDelete={handleDelete} />
                     </div>
                   );
                 })}
@@ -983,6 +982,15 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
             </div>
           );
         })}
+      </div>
+
+      {/* One shared approval slot for the whole job — a customer typically
+          approves everything together in a single reply, not item by item.
+          Supports multiple uploads for revision rounds (reject -> revise
+          -> re-approve). */}
+      <div style={{marginTop:12,border:'1px solid #E91E6330',borderRadius:8,padding:'8px 10px',background:'#FFF5F8'}}>
+        <div style={{fontSize:12,fontWeight:600,color:'#E91E63',marginBottom:6}}>✅ Approval Customer</div>
+        <UploadCol title="" atts={attsFor('job','approval')} busy={busyKey==='job:approval'} onUpload={f=>handleUpload('job','Approval customer','approval',f)} onView={handleView} onDelete={handleDelete} />
       </div>
     </div>
   );
