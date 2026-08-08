@@ -276,7 +276,6 @@ function FinancialBreakdown({ job, onToggleInstallment }) {
 // and bank are fixed — bank always follows whatever was set on the job.
 function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
   const isReceipt = type === 'receipt';
-  const showSize = !!DEPT[job.department]?.usesSize;
   const cfg = DOC_TYPES[type];
   const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
   const notes = notesFor(type, bank);
@@ -300,6 +299,10 @@ function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerate
   });
   const [initial, setInitial] = useState(form);
   const [generating, setGenerating] = useState(false);
+  // Package bundles (e.g. Undangan.my) are tagged noSize on every item since
+  // they're never size-based — hide the column unless a non-package item is
+  // present, so staff can still enter a size on genuine custom print jobs.
+  const showSize = !!DEPT[job.department]?.usesSize && form.items.some(it => !it.noSize);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
@@ -1094,7 +1097,7 @@ export default function JobMonitor() {
         bank: f.bank || null,
         status: 'potential', // Fix: new jobs always start as Potential — not user-selectable at creation
         estimation_value: tier ? tier.tier.price : null,
-        line_items: tier ? [{ item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: packageItemsFor(tier.pkg, tier.tier).join('\n'), size: '', qty: 1, price: tier.tier.price }] : [],
+        line_items: tier ? [{ item: `${tier.pkg.label} (${tier.tier.pcs}pcs)`, desc: packageItemsFor(tier.pkg, tier.tier).join('\n'), size: '', qty: 1, price: tier.tier.price, noSize: true }] : [],
         final_value: null,
         pic: f.pic,
         start_date: f.start || null,
