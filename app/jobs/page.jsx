@@ -700,6 +700,12 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
     onAddNote(job.job_id, noteText.trim());
     setNoteText('');
   };
+  const [editingLink, setEditingLink] = useState(false);
+  const [linkVal, setLinkVal] = useState(job.drive_link || '');
+  const saveLink = () => {
+    onUpdateJob(job.id, { drive_link: linkVal.trim() || null }, userName, { action: 'edited', field: 'drive_link', detail: 'Link reka bentuk dikemaskini' });
+    setEditingLink(false);
+  };
   const [editingItems, setEditingItems] = useState(false);
   const [editItems, setEditItems] = useState([]);
   const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
@@ -747,6 +753,26 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
             </div>
           )}
           {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
+
+          {/* Design file link — staff attach the Drive/Canva design here,
+              tied to this Job ID, before sending it to the printer/kilang. */}
+          <div style={{marginTop:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div className="section-label" style={{margin:0}}>Link Reka Bentuk</div>
+              {!editingLink && <button onClick={()=>{setLinkVal(job.drive_link||'');setEditingLink(true);}} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.drive_link?'✎ Edit':'+ Tambah Link'}</button>}
+            </div>
+            {editingLink ? (
+              <div style={{display:'flex',gap:6}}>
+                <input className="field-input" style={{flex:1,margin:0}} value={linkVal} onChange={e=>setLinkVal(e.target.value)} placeholder="https://drive.google.com/..." />
+                <button onClick={saveLink} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button>
+                <button onClick={()=>setEditingLink(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button>
+              </div>
+            ) : job.drive_link ? (
+              <a href={job.drive_link} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:'#3A86FF',wordBreak:'break-all'}}>{job.drive_link}</a>
+            ) : (
+              <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada link lagi</div>
+            )}
+          </div>
 
           {/* Line Items */}
           <div style={{marginTop:16}}>
