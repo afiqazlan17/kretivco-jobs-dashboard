@@ -949,34 +949,6 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
     onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
   };
 
-  const UploadCol = ({ slot, kind, title }) => {
-    const atts = attsFor(slot, kind);
-    const busy = busyKey === `${slot.key}:${kind}`;
-    return (
-      <div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
-          <span style={{fontSize:10.5,fontWeight:600,color:'#9B93A8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{title}</span>
-          <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
-            {busy ? '...' : '+ Upload'}
-            <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; handleUpload(slot, kind, f); e.target.value=''; }} />
-          </label>
-        </div>
-        {atts.length > 0 ? (
-          <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:3}}>
-            {atts.map(a => (
-              <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11}}>
-                <a onClick={()=>handleView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
-                <button onClick={()=>handleDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:6}}>×</button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>Tiada fail</div>
-        )}
-      </div>
-    );
-  };
-
   if (!slots.length) return null;
 
   return (
@@ -987,12 +959,41 @@ function AttachmentSlots({ job, onUpdateJob, userName }) {
           <div key={slot.key} style={{border:'1px solid #E8E4ED',borderRadius:8,padding:'8px 10px'}}>
             <div style={{fontSize:12,fontWeight:600,color:'#1A1025',marginBottom:6}}>📎 {slot.label}</div>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <UploadCol slot={slot} kind="artwork" title="Artwork" />
-              <UploadCol slot={slot} kind="approval" title="Approval Customer" />
+              <UploadCol slot={slot} kind="artwork" title="Artwork" atts={attsFor(slot,'artwork')} busy={busyKey===`${slot.key}:artwork`} onUpload={handleUpload} onView={handleView} onDelete={handleDelete} />
+              <UploadCol slot={slot} kind="approval" title="Approval Customer" atts={attsFor(slot,'approval')} busy={busyKey===`${slot.key}:approval`} onUpload={handleUpload} onView={handleView} onDelete={handleDelete} />
             </div>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Defined outside AttachmentSlots so it keeps a stable component identity
+// across renders — nesting it inside would recreate the type on every
+// upload/delete and force React to fully remount every slot's file inputs.
+function UploadCol({ slot, kind, title, atts, busy, onUpload, onView, onDelete }) {
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:6}}>
+        <span style={{fontSize:10.5,fontWeight:600,color:'#9B93A8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{title}</span>
+        <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor: busy ? 'default' : 'pointer',whiteSpace:'nowrap'}}>
+          {busy ? '...' : '+ Upload'}
+          <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} disabled={busy} onChange={e=>{ const f=e.target.files?.[0]; onUpload(slot, kind, f); e.target.value=''; }} />
+        </label>
+      </div>
+      {atts.length > 0 ? (
+        <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:3}}>
+          {atts.map(a => (
+            <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:11}}>
+              <a onClick={()=>onView(a)} style={{color:'#3A86FF',cursor:'pointer',wordBreak:'break-all'}}>{a.name}</a>
+              <button onClick={()=>onDelete(a)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0,marginLeft:6}}>×</button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>Tiada fail</div>
+      )}
     </div>
   );
 }
