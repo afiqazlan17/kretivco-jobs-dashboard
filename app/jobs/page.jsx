@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, CANCEL_REASONS, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, customerDisplayName, formatRM, formatDateTime, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, HOLD_STATUS, CANCEL_REASONS, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, customerDisplayName, formatRM, formatDateTime, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { StatusBadge, DTag, JID, DLBadge, Modal, Toast, GlobalJobStyles } from './_shared';
 
 // The active view comes from ?view= — isolated behind its own Suspense
@@ -241,7 +241,10 @@ function JobMonitorContent() {
     if (view === 'mine') list = list.filter(j => j.pic === profile?.name);
     else if (view === 'aging') list = list.filter(j => !['completed','cancelled'].includes(j.status));
     if (fDept !== "all") list = list.filter(j => j.department === fDept);
-    if (fStatus !== "all") list = list.filter(j => j.status === fStatus);
+    // Pending/Suspended are a separate hold flag, not a pipeline status —
+    // filtering on them checks job.hold_status instead of job.status.
+    if (fStatus === 'pending' || fStatus === 'suspended') list = list.filter(j => j.hold_status === fStatus);
+    else if (fStatus !== "all") list = list.filter(j => j.status === fStatus);
     if (search.trim()) { const q = search.toLowerCase(); list = list.filter(j => (j.job_id||'').toLowerCase().includes(q) || (j.customer_name||'').toLowerCase().includes(q) || (j.job_type||'').toLowerCase().includes(q) || (j.pic||'').toLowerCase().includes(q) || (j.project_id||'').toLowerCase().includes(q)); }
     list.sort((a, b) => { let va, vb; switch (sortCol) { case "id": va=a.job_id||''; vb=b.job_id||''; break; case "customer": va=a.customer_name||""; vb=b.customer_name||""; break; case "dept": va=a.department||''; vb=b.department||''; break; case "status": va=a.status||''; vb=b.status||''; break; case "value": va=a.estimation_value||0; vb=b.estimation_value||0; break; case "deadline": va=a.deadline||"9999"; vb=b.deadline||"9999"; break; case "touched": va=lastTouched[a.job_id]||''; vb=lastTouched[b.job_id]||''; break; default: va=a.job_id||''; vb=b.job_id||''; } if (va<vb) return sortDir==="asc"?-1:1; if (va>vb) return sortDir==="asc"?1:-1; return 0; });
     return list;
@@ -281,9 +284,10 @@ function JobMonitorContent() {
             ) : visDepts?.length === 1 ? (
               <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[visDepts[0]]?.color||'#1A1025',background:(DEPT[visDepts[0]]?.color||'#6B7280')+'12',borderRadius:8}}>{DEPT[visDepts[0]]?.label||visDepts[0]}</div>
             ) : null}
-            <select className="field-select" style={{ width: 140 }} value={fStatus} onChange={e=>setFStatus(e.target.value)}>
+            <select className="field-select" style={{ width: 160 }} value={fStatus} onChange={e=>setFStatus(e.target.value)}>
               <option value="all">All Statuses</option>
               {Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+              {Object.entries(HOLD_STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
             </select>
             {(fDept!=="all"||fStatus!=="all"||search) && <button className="btn-reset" onClick={()=>{setFDept("all");setFStatus("all");setSearch("")}}>Reset</button>}
           </div>
