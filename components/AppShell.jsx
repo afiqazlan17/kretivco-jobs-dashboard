@@ -1,9 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks'
 import { signOut } from '@/lib/auth'
 import { isMockMode } from '@/lib/supabase'
+import { REPORT_MENU } from '@/lib/constants'
 
 const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
@@ -14,6 +15,30 @@ const NAV = [
   { key:'finance', label:'Finance', path:'/finance', icon:'💰', roles:['bod','dept_head'] },
   { key:'settings', label:'Settings', path:'/settings', icon:'⚙️', roles:['bod'] },
 ]
+
+// The active report key comes from the URL (?report=gl) — isolated in its
+// own component so only this small part of the sidebar needs a Suspense
+// boundary for useSearchParams, instead of forcing every page in the app
+// (which all render through AppShell) to opt into dynamic rendering.
+function FinanceSubmenu({ isMobile, collapsed, onNav }) {
+  const searchParams = useSearchParams()
+  const activeReport = searchParams.get('report') || 'overview'
+  return (
+    <div style={{ padding: '2px 0 6px' }}>
+      {REPORT_MENU.map(r => (
+        <div key={r.key} onClick={(e) => { e.stopPropagation(); onNav(`/finance?report=${r.key}`) }}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: (isMobile || !collapsed) ? '0 20px 0 52px' : '0 12px', cursor: 'pointer',
+            background: activeReport === r.key ? 'rgba(255,255,255,.08)' : 'transparent',
+            color: activeReport === r.key ? '#fff' : 'rgba(255,255,255,.45)',
+            fontSize: 12, fontWeight: activeReport === r.key ? 600 : 400, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 13 }}>{r.icon}</span>
+          {(isMobile || !collapsed) && <span>{r.label}</span>}
+          {(isMobile || !collapsed) && !r.built && <span style={{ marginLeft: 'auto', fontSize: 8, opacity: .6 }}>●</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export default function AppShell({ children }) {
   const pathname = usePathname()
@@ -110,14 +135,22 @@ export default function AppShell({ children }) {
           <nav style={{ flex:1, padding:'4px 0' }}>
             {nav.map(item => {
               const active = pathname===item.path || (item.path!=='/' && pathname.startsWith(item.path))
+              const isFinance = item.key === 'finance'
               return (
-                <div key={item.key} onClick={()=>handleNav(item.path)}
-                  style={{ display:'flex', alignItems:'center', gap:12, height:44, padding:'0 20px', cursor:'pointer', position:'relative',
-                    background:active?'rgba(255,255,255,.06)':'transparent', color:active?'#fff':'rgba(255,255,255,.5)',
-                    fontSize:13, fontWeight:active?600:400, transition:'all .15s', whiteSpace:'nowrap' }}>
-                  {active && <div style={{ position:'absolute', left:0, top:7, bottom:7, width:3, background:'#E91E63', borderRadius:'0 2px 2px 0' }} />}
-                  <span style={{ fontSize:15, width:24, textAlign:'center' }}>{item.icon}</span>
-                  <span>{item.label}</span>
+                <div key={item.key}>
+                  <div onClick={()=>handleNav(item.path)}
+                    style={{ display:'flex', alignItems:'center', gap:12, height:44, padding:'0 20px', cursor:'pointer', position:'relative',
+                      background:active?'rgba(255,255,255,.06)':'transparent', color:active?'#fff':'rgba(255,255,255,.5)',
+                      fontSize:13, fontWeight:active?600:400, transition:'all .15s', whiteSpace:'nowrap' }}>
+                    {active && <div style={{ position:'absolute', left:0, top:7, bottom:7, width:3, background:'#E91E63', borderRadius:'0 2px 2px 0' }} />}
+                    <span style={{ fontSize:15, width:24, textAlign:'center' }}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </div>
+                  {isFinance && active && (
+                    <Suspense fallback={null}>
+                      <FinanceSubmenu isMobile={isMobile} collapsed={collapsed} onNav={handleNav} />
+                    </Suspense>
+                  )}
                 </div>
               )
             })}
