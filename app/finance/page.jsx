@@ -1,7 +1,8 @@
 "use client"
-import { useState, useMemo } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate, ledgerAccountLabel, ledgerAccountMeta } from '@/lib/constants';
+import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, REPORT_MENU, formatRM, formatDate, ledgerAccountLabel, ledgerAccountMeta } from '@/lib/constants';
+import { useSearchParams } from 'next/navigation';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -33,22 +34,6 @@ const TYPE_META = {
   opening_balance: { label: 'Baki Permulaan', color: '#6B7280', sign: '' },
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
-
-// Only the report types that actually apply to Kretivco's business (a
-// services/print agency, not a retailer) — no Stock/Warranty/Agent
-// Commission reports, and e-Filing & Zakat is skipped until there's an
-// actual filing need for it.
-const REPORT_MENU = [
-  { key: 'overview', label: 'Ringkasan', icon: '📊', built: true },
-  { key: 'gl', label: 'General Ledger Report', icon: '📒', built: true },
-  { key: 'trial_balance', label: 'Trial Balance', icon: '⚖️', built: false },
-  { key: 'balance_sheet', label: 'Balance Sheet', icon: '🧾', built: false },
-  { key: 'cash_book', label: 'Cash Book Statement', icon: '💵', built: false },
-  { key: 'aging', label: 'Aging Report', icon: '⏳', built: false },
-  { key: 'bank_recon', label: 'Bank Reconciliation Report', icon: '🏦', built: false },
-  { key: 'sales', label: 'Sales Report', icon: '📈', built: false },
-  { key: 'installment', label: 'Installment Outstanding', icon: '📅', built: false },
-];
 
 // ── General Ledger Report — Summary / Detail / Bank & Cash tabs ──
 // Summary shows gross debit/credit turnover per account (a Trial-Balance-
@@ -228,18 +213,29 @@ function ReportComingSoon({ label }) {
 }
 
 export default function Finance() {
+  return (
+    <Suspense fallback={null}>
+      <FinanceContent />
+    </Suspense>
+  );
+}
+
+function FinanceContent() {
   const { profile } = useAuth() || {};
   const { jobs = [], ledgerEntries = [], postExpenseEntry, postOpeningBalanceAdjustment } = useData() || {};
   const visDepts = useVisibleDepts();
   const isBod = profile?.role === 'bod';
+  const searchParams = useSearchParams();
+  // Which report is showing is driven by the URL (?report=gl) — the picker
+  // itself lives in AppShell's sidebar now, under the Finance nav item,
+  // rather than taking up space in the page content here.
+  const activeReport = searchParams.get('report') || 'overview';
 
   const [showExpense, setShowExpense] = useState(false);
   const [showOpening, setShowOpening] = useState(false);
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
-  const [activeReport, setActiveReport] = useState('overview');
-  const [reportMenuOpen, setReportMenuOpen] = useState(true);
 
   // P&L Statement date range — defaults to year-to-date. Revenue/COGS/Expense
   // are period figures (what happened between these dates); bank balances
@@ -384,30 +380,7 @@ export default function Finance() {
           </div>
         </div>
 
-        <div className="content" style={{display:"flex",gap:20,alignItems:"flex-start",maxWidth:1400}}>
-          <div className="card" style={{width:250,flexShrink:0,padding:"12px 8px"}}>
-            <button onClick={()=>setReportMenuOpen(p=>!p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"8px 10px",fontFamily:"'Poppins',sans-serif"}}>
-              <span style={{display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#E91E63",letterSpacing:".03em"}}>📊 REPORT</span>
-              <span style={{fontSize:11,color:"#9B93A8",transform:reportMenuOpen?"rotate(0deg)":"rotate(180deg)"}}>▲</span>
-            </button>
-            {reportMenuOpen && (
-              <div style={{display:"flex",flexDirection:"column",gap:2,marginTop:4}}>
-                {REPORT_MENU.map(r => (
-                  <button key={r.key} onClick={()=>setActiveReport(r.key)} style={{
-                    display:"flex",alignItems:"center",gap:8,textAlign:"left",width:"100%",
-                    padding:"10px 12px",borderRadius:8,border:"none",cursor:"pointer",
-                    fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:activeReport===r.key?700:400,
-                    background:activeReport===r.key?"#E91E63":"transparent",color:activeReport===r.key?"#fff":"#4B4358",
-                  }}>
-                    <span>{r.icon}</span><span>{r.label}</span>
-                    {!r.built && <span style={{marginLeft:"auto",fontSize:9,opacity:.7}}>●</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div style={{flex:1,minWidth:0}}>
+        <div className="content">
           {activeReport === 'gl' && <GeneralLedgerReport entries={scopedEntries} />}
           {activeReport !== 'overview' && activeReport !== 'gl' && (
             <ReportComingSoon label={REPORT_MENU.find(r => r.key === activeReport)?.label} />
@@ -539,7 +512,6 @@ export default function Finance() {
             </div>
           </div>
           </>)}
-          </div>
         </div>
 
         {showExpense && (
