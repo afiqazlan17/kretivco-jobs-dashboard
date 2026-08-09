@@ -38,7 +38,7 @@ export default function Login() {
       if (refresh) await refresh()
       setTimeout(() => router.push('/'), 300)
     }
-    catch { setError('Email atau password salah.') }
+    catch { setError('Incorrect email or password.') }
     finally { setLoading(false) }
   }
 
@@ -53,9 +53,9 @@ export default function Login() {
           <div style={{ marginTop:6, fontSize:12, fontWeight:500, color:'#E91E63', background:'#E91E6312', borderRadius:20, padding:'4px 14px', display:'inline-block' }}>Job Dashboard</div>
         </div>
         <div style={{ background:'#fff', borderRadius:16, padding:32, boxShadow:'0 4px 20px rgba(0,0,0,.06)' }}>
-          <div style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>Log Masuk</div>
+          <div style={{ fontSize:18, fontWeight:700, marginBottom:4 }}>Log In</div>
           <div style={{ fontSize:13, color:'#6B6080', marginBottom:24 }}>
-            🟢 Klik untuk terus masuk ikut access level
+            🟢 Click to log in directly by access level
           </div>
           {!showManual ? (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -79,7 +79,7 @@ export default function Login() {
               {!isMockMode && (
                 <button type="button" onClick={() => setShowManual(true)}
                   style={{ fontFamily:'inherit', fontSize:11, color:'#9B93A8', background:'none', border:'none', cursor:'pointer', textAlign:'center', marginTop:4 }}>
-                  Guna akaun lain
+                  Use another account
                 </button>
               )}
             </div>
@@ -98,11 +98,11 @@ export default function Login() {
             {error && <div style={{ fontSize:12, color:'#EF4444', background:'#EF444410', padding:'10px 14px', borderRadius:8, marginBottom:16 }}>{error}</div>}
             <button type="submit" disabled={loading}
               style={{ fontFamily:'inherit', fontSize:14, fontWeight:600, width:'100%', height:46, border:'none', borderRadius:8, background:loading?'#E8E4ED':'linear-gradient(135deg,#E91E63,#AD1457)', color:'#fff', cursor:loading?'not-allowed':'pointer' }}>
-              {loading ? 'Sedang log masuk...' : 'Log Masuk'}
+              {loading ? 'Logging in...' : 'Log In'}
             </button>
             <button type="button" onClick={() => setShowManual(false)}
               style={{ fontFamily:'inherit', fontSize:11, color:'#9B93A8', background:'none', border:'none', cursor:'pointer', textAlign:'center', width:'100%', marginTop:12 }}>
-              ← Balik ke quick login
+              ← Back to quick login
             </button>
           </form>
           )}

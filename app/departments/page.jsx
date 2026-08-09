@@ -12,26 +12,26 @@ const DEPT_INFO = {
   tech: {
     lead: 'Amnan Syahmi',
     services: ['Website Creation', 'Application Development', 'Sales Page / Landing Page'],
-    products: ['Undangan.my — Kad Kahwin Digital', 'Restu.ai — Wedding Planner Digital', 'Wedding Planner by Ila — Notion-based'],
+    products: ['Undangan.my — Digital Wedding Invitation', 'Restu.ai — Digital Wedding Planner', 'Wedding Planner by Ila — Notion-based'],
     rule: null,
   },
   print: {
     lead: 'Nurfadilah (Interim)',
-    services: ['Large Format — banner, bunting, backdrop', 'Small Format — business card, flyer, brochure, menu card', 'Corporate Gifts & Cenderamata', 'Packaging & Label', 'Digital & Offset Printing'],
+    services: ['Large Format — banner, bunting, backdrop', 'Small Format — business card, flyer, brochure, menu card', 'Corporate Gifts & Souvenirs', 'Packaging & Label', 'Digital & Offset Printing'],
     products: [],
     rule: 'Minor edit = KretivPrint handle. Custom design = loop KretivWork.',
   },
   event: {
     lead: 'Afiq Azlan (Interim)',
-    services: ['Event Planning & Coordination', 'Vendor Management', 'Event Decoration & Setup', 'Emcee & Stage Performance', 'Corporate Events, Majlis Rasmi, Product Launch'],
+    services: ['Event Planning & Coordination', 'Vendor Management', 'Event Decoration & Setup', 'Emcee & Stage Performance', 'Corporate Events, Official Functions, Product Launch'],
     products: [],
     rule: null,
   },
   wisb: {
     lead: 'Amirul Hafiz',
-    services: ['Bekalan & Jualan Mesin Industri'],
+    services: ['Supply & Sales of Industrial Machines'],
     products: [],
-    rule: 'Strategic Partner — collaboration dengan Kretivco, bukan department.',
+    rule: 'Strategic Partner — collaboration with Kretivco, not a department.',
   },
 }
 
@@ -43,7 +43,7 @@ export default function DepartmentsPage() {
     <>
       <div style={{marginBottom:24}}>
         <h1 style={{fontFamily:"'Poppins',sans-serif",fontSize:22,fontWeight:700,color:'#1A1025',margin:0}}>Departments</h1>
-        <p style={{fontSize:13,color:'#6B6080',marginTop:4}}>Overview servis, produk, dan PIC setiap department.</p>
+        <p style={{fontSize:13,color:'#6B6080',marginTop:4}}>Overview of services, products, and PIC for each department.</p>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
@@ -64,8 +64,8 @@ export default function DepartmentsPage() {
                     <h2 style={{fontFamily:"'Poppins',sans-serif",fontSize:16,fontWeight:700,color:'#1A1025',margin:'2px 0 0'}}>{dept.label}</h2>
                   </div>
                   <div style={{textAlign:'right',fontSize:11,color:'#6B6080'}}>
-                    <div><strong style={{color:'#1A1025'}}>{activeJobs.length}</strong> aktif</div>
-                    <div><strong style={{color:'#1A1025'}}>{completedJobs.length}</strong> selesai</div>
+                    <div><strong style={{color:'#1A1025'}}>{activeJobs.length}</strong> active</div>
+                    <div><strong style={{color:'#1A1025'}}>{completedJobs.length}</strong> completed</div>
                   </div>
                 </div>
                 <div style={{fontSize:11,color:'#6B6080',marginTop:6}}>Lead: <strong style={{color:'#1A1025'}}>{info.lead || '—'}</strong></div>
@@ -75,7 +75,7 @@ export default function DepartmentsPage() {
               <div style={{padding:'14px 20px'}}>
                 {/* Services */}
                 <div style={{marginBottom:info.products?.length ? 12 : 0}}>
-                  <div style={{fontSize:10,fontWeight:700,color:dept.color,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Servis</div>
+                  <div style={{fontSize:10,fontWeight:700,color:dept.color,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Services</div>
                   {info.services?.map((s, i) => (
                     <div key={i} style={{fontSize:12,color:'#1A1025',padding:'3px 0',borderBottom:'1px solid #F9F8FB'}}>
                       {s}
@@ -86,7 +86,7 @@ export default function DepartmentsPage() {
                 {/* Products */}
                 {info.products?.length > 0 && (
                   <div style={{marginBottom:info.rule ? 12 : 0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:'#10B981',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Produk Kretivco</div>
+                    <div style={{fontSize:10,fontWeight:700,color:'#10B981',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Kretivco Products</div>
                     {info.products.map((p, i) => (
                       <div key={i} style={{fontSize:12,color:'#1A1025',padding:'3px 0',borderBottom:'1px solid #F9F8FB'}}>
                         {p}

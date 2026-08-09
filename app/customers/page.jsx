@@ -55,33 +55,33 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
 
   return(
     <Modal w={720} onClose={onClose}>
-      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><CTypeBadge t={cust.customer_type}/><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={()=>router.push(`/jobs?new=1&cid=${cust.id}`)}>+ Job Baru</button><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
+      <div className="mheader"><div className="flex-row gap-3"><Av name={cust.name} sz={44}/><div><div className="mtitle">{cust.name}</div><div className="flex-row gap-2 mt-1"><span className="jid text-muted">{cust.customer_id}</span><CTypeBadge t={cust.customer_type}/><SrcBadge s={cust.source}/></div></div></div><div className="flex-row gap-2"><button className="btn-sm-outline" onClick={()=>router.push(`/jobs?new=1&cid=${cust.id}`)}>+ New Job</button><button className="btn-sm-outline" onClick={onEdit}>Edit</button><button className="mclose" onClick={onClose}>×</button></div></div>
       <div className="mbody">
         {/* Contact */}
         <div className="info-cards">
-          {(cust.customer_type==='company'?[{icon:"🏢",l:"Syarikat",v:cust.company||"—"},{icon:"📋",l:"No. SSM",v:cust.ssm_number||"—"}]:[]).map((c,i)=>(<div key={"co"+i} className="info-card"><div className="section-label">{c.icon} {c.l}</div><div className="text-body fw500">{c.v}</div></div>))}
-          <div className="info-card"><div className="section-label">📞 Telefon</div><div className="text-body fw500">{cust.phone?<a href={waLink(cust.phone)} target="_blank" rel="noopener noreferrer" style={{color:"#10B981",textDecoration:"none"}}>{cust.phone} · WhatsApp ↗</a>:"—"}</div></div>
+          {(cust.customer_type==='company'?[{icon:"🏢",l:"Company",v:cust.company||"—"},{icon:"📋",l:"SSM No.",v:cust.ssm_number||"—"}]:[]).map((c,i)=>(<div key={"co"+i} className="info-card"><div className="section-label">{c.icon} {c.l}</div><div className="text-body fw500">{c.v}</div></div>))}
+          <div className="info-card"><div className="section-label">📞 Phone</div><div className="text-body fw500">{cust.phone?<a href={waLink(cust.phone)} target="_blank" rel="noopener noreferrer" style={{color:"#10B981",textDecoration:"none"}}>{cust.phone} · WhatsApp ↗</a>:"—"}</div></div>
           <div className="info-card"><div className="section-label">✉️ Email</div><div className="text-body fw500">{cust.email||"—"}</div></div>
-          <div className="info-card"><div className="section-label">📍 Alamat</div><div className="text-body fw500">{[cust.address_line_1,cust.address_line_2,[cust.postcode,cust.city].filter(Boolean).join(" "),cust.state].filter(Boolean).join(", ")||"—"}</div></div>
+          <div className="info-card"><div className="section-label">📍 Address</div><div className="text-body fw500">{[cust.address_line_1,cust.address_line_2,[cust.postcode,cust.city].filter(Boolean).join(" "),cust.state].filter(Boolean).join(", ")||"—"}</div></div>
         </div>
-        {cust.notes&&<div className="info-card mb-6"><div className="section-label">📝 Nota</div><div className="text-body">{cust.notes}</div></div>}
+        {cust.notes&&<div className="info-card mb-6"><div className="section-label">📝 Notes</div><div className="text-body">{cust.notes}</div></div>}
         {/* Financial */}
         <div className="fin-cards">
-          <div className="fin-card" style={{borderLeftColor:"#E91E63"}}><div className="section-label">Total Value</div><div className="fin-val">{formatRM(totalEst)}</div><div className="text-xs text-secondary">{cj.filter(j=>j.status!=="cancelled").length} job</div></div>
-          <div className="fin-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div className="fin-val" style={{color:"#10B981"}}>{formatRM(revenue)}</div><div className="text-xs text-secondary">{comp.length} selesai</div></div>
-          <div className="fin-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Pipeline</div><div className="fin-val" style={{color:"#6366F1"}}>{formatRM(pipeline)}</div><div className="text-xs text-secondary">{active.length} aktif</div></div>
+          <div className="fin-card" style={{borderLeftColor:"#E91E63"}}><div className="section-label">Total Value</div><div className="fin-val">{formatRM(totalEst)}</div><div className="text-xs text-secondary">{cj.filter(j=>j.status!=="cancelled").length} jobs</div></div>
+          <div className="fin-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div className="fin-val" style={{color:"#10B981"}}>{formatRM(revenue)}</div><div className="text-xs text-secondary">{comp.length} completed</div></div>
+          <div className="fin-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Pipeline</div><div className="fin-val" style={{color:"#6366F1"}}>{formatRM(pipeline)}</div><div className="text-xs text-secondary">{active.length} active</div></div>
         </div>
         {/* Dept breakdown */}
-        {Object.keys(depts).length>0&&<div className="mb-6"><div className="section-label mb-2">Department Breakdown</div><div className="dept-chips">{Object.entries(depts).map(([d,data])=><div key={d} className="dept-chip" style={{background:DEPT[d].color+"08",border:`1px solid ${DEPT[d].color}20`}}><DTag d={d}/><div><div className="text-body fw600">{data.count} job</div><div className="text-xs text-secondary">{formatRM(data.est)}</div></div></div>)}</div></div>}
+        {Object.keys(depts).length>0&&<div className="mb-6"><div className="section-label mb-2">Department Breakdown</div><div className="dept-chips">{Object.entries(depts).map(([d,data])=><div key={d} className="dept-chip" style={{background:DEPT[d].color+"08",border:`1px solid ${DEPT[d].color}20`}}><DTag d={d}/><div><div className="text-body fw600">{data.count} jobs</div><div className="text-xs text-secondary">{formatRM(data.est)}</div></div></div>)}</div></div>}
         {/* Job history */}
-        <div className="card-title mb-3">Sejarah Job ({cj.length})</div>
-        {cj.length===0?<div className="empty-sm">Belum ada job.</div>:(<>
+        <div className="card-title mb-3">Job History ({cj.length})</div>
+        {cj.length===0?<div className="empty-sm">No jobs yet.</div>:(<>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {jobGroups.map((group,gi)=>{
               const isProject=group.length>1;
               const rows=group.map(j=>{
                 const canSeeFull=!visDepts||visDepts.includes(j.department);
-                return(<div key={j.id} className="mini-row" style={isProject?{border:"none",borderBottom:"1px solid #F3F1F6"}:undefined}><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/>{canSeeFull?<span className="text-body text-secondary flex-1 truncate">{j.job_type}</span>:<span className="text-body text-muted flex-1" style={{fontStyle:"italic"}}>(department lain)</span>}<StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>);
+                return(<div key={j.id} className="mini-row" style={isProject?{border:"none",borderBottom:"1px solid #F3F1F6"}:undefined}><input type="checkbox" checked={combineIds.has(j.id)} onChange={()=>toggleCombine(j.id)}/><span className="jid">{j.job_id}</span><DTag d={j.department}/>{canSeeFull?<span className="text-body text-secondary flex-1 truncate">{j.job_type}</span>:<span className="text-body text-muted flex-1" style={{fontStyle:"italic"}}>(other department)</span>}<StatusBadge s={j.status}/><span className="text-body fw500" style={{color:j.status==="completed"?"#10B981":"#1A1025"}}>{formatRM(j.final_value||j.estimation_value)}</span></div>);
               });
               if(!isProject) return <div key={gi} className="mini-table">{rows}</div>;
               return (
@@ -94,14 +94,14 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
           </div>
           {selectedJobs.length>1&&(
             <div style={{marginTop:12,padding:14,background:"#F9F8FB",borderRadius:10,border:"1px solid #F0ECF4"}}>
-              <div className="text-sm fw600 mb-2">{selectedJobs.length} job dipilih · {formatRM(selectedJobs.reduce((s,j)=>s+(j.estimation_value||0),0))}</div>
+              <div className="text-sm fw600 mb-2">{selectedJobs.length} jobs selected · {formatRM(selectedJobs.reduce((s,j)=>s+(j.estimation_value||0),0))}</div>
               {statusMismatch?(
-                <div className="text-xs" style={{color:"#EF4444",fontStyle:"italic"}}>⚠ Status job tak sepadan (cth: satu Active, satu Potential) — selaraskan status dahulu sebelum digabung jadi satu dokumen.</div>
+                <div className="text-xs" style={{color:"#EF4444",fontStyle:"italic"}}>⚠ Job statuses don't match (e.g. one Active, one Potential) — align the statuses before combining them into one document.</div>
               ):(
                 <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                   {combineDocs.map(d=>(
                     <button key={d.type} onClick={()=>handleGenCombined(d.type)} disabled={generating===d.type} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"7px 14px",borderRadius:8,border:`1px solid ${d.color}20`,background:`${d.color}10`,color:d.color,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                      <span>{d.icon}</span>{generating===d.type?"Menjana...":`${d.label} Gabungan`}
+                      <span>{d.icon}</span>{generating===d.type?"Generating...":`${d.label} Combined`}
                     </button>
                   ))}
                 </div>
@@ -109,7 +109,7 @@ function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
             </div>
           )}
         </>)}
-        <div className="text-xs text-placeholder mt-4">Customer sejak {formatDate(cust.created_at)}</div>
+        <div className="text-xs text-placeholder mt-4">Customer since {formatDate(cust.created_at)}</div>
       </div>
     </Modal>
   );
@@ -141,7 +141,7 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
   const dirty=JSON.stringify(f)!==JSON.stringify(initial);
   const changed=!isEdit||dirty;
   const valid=f.name.trim()&&(!isCompany||(f.company.trim()&&f.ssm_number.trim()));
-  const guardedClose=()=>{if(dirty&&!window.confirm("Perubahan belum disimpan akan hilang. Tutup borang ini?"))return;onClose()};
+  const guardedClose=()=>{if(dirty&&!window.confirm("Unsaved changes will be lost. Close this form?"))return;onClose()};
 
   const duplicateMatch=useMemo(()=>{
     if(!f.phone&&!f.email&&!f.ssm_number)return null;
@@ -155,9 +155,9 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
 
   return(
     <Modal w={520} onClose={guardedClose}>
-      <div className="mheader"><div><div className="mtitle">{isEdit?"Edit Customer":"Customer Baru"}</div><div className="jid text-muted mt-1">{isEdit?cust.customer_id:`ID: ${genCustId()}`}</div></div><button className="mclose" onClick={guardedClose}>×</button></div>
+      <div className="mheader"><div><div className="mtitle">{isEdit?"Edit Customer":"New Customer"}</div><div className="jid text-muted mt-1">{isEdit?cust.customer_id:`ID: ${genCustId()}`}</div></div><button className="mclose" onClick={guardedClose}>×</button></div>
       <div className="mbody">
-        <div className="fg"><label className="fl">Jenis Customer *</label>
+        <div className="fg"><label className="fl">Customer Type *</label>
           <div style={{display:"flex",gap:8}}>
             {Object.entries(CUSTOMER_TYPE).map(([k,v])=>(
               <button key={k} type="button" onClick={()=>s("customer_type",k)} style={{flex:1,fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:"10px 12px",borderRadius:8,cursor:"pointer",border:f.customer_type===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.customer_type===k?v.color+"0C":"#fff",color:f.customer_type===k?v.color:"#6B6080",textAlign:"left"}}>
@@ -166,22 +166,22 @@ function CustomerFormModal({cust,customers,genCustId,onSave,onClose}){
             ))}
           </div>
         </div>
-        {isCompany&&<div className="fg"><label className="fl">Nama Syarikat *</label><input className="fi" value={f.company} onChange={e=>s("company",e.target.value)} placeholder="Nama syarikat berdaftar"/></div>}
-        {isCompany&&<div className="fg"><label className="fl">No. SSM *</label><input className="fi" value={f.ssm_number} onChange={e=>s("ssm_number",e.target.value)} placeholder="cth: 202301012345"/></div>}
-        <div className="fg"><label className="fl">{isCompany?"Nama PIC *":"Nama Customer *"}</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} placeholder={isCompany?"Nama contact person":"Nama penuh"}/></div>
-        <div className="frow"><div><label className="fl">Telefon</label><input className="fi" value={f.phone} onChange={e=>s("phone",e.target.value)}/></div><div><label className="fl">Email</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)}/></div></div>
-        {duplicateMatch&&<div style={{marginBottom:16,padding:"9px 12px",borderRadius:8,background:"rgba(245,158,11,.08)",border:"1px dashed #F59E0B",fontSize:11.5,color:"#1A1025",lineHeight:1.5}}>⚠ Customer ni mungkin dah wujud: <strong>{duplicateMatch.customer_id} ({duplicateMatch.name})</strong> — semak dulu sebelum simpan supaya tak duplicate.</div>}
-        <div className="fg"><label className="fl">Alamat Baris 1</label><input className="fi" value={f.address_line_1} onChange={e=>s("address_line_1",e.target.value)}/></div>
-        <div className="fg"><label className="fl">Alamat Baris 2</label><input className="fi" value={f.address_line_2} onChange={e=>s("address_line_2",e.target.value)}/></div>
+        {isCompany&&<div className="fg"><label className="fl">Company Name *</label><input className="fi" value={f.company} onChange={e=>s("company",e.target.value)} placeholder="Registered company name"/></div>}
+        {isCompany&&<div className="fg"><label className="fl">SSM No. *</label><input className="fi" value={f.ssm_number} onChange={e=>s("ssm_number",e.target.value)} placeholder="e.g. 202301012345"/></div>}
+        <div className="fg"><label className="fl">{isCompany?"PIC Name *":"Customer Name *"}</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} placeholder={isCompany?"Contact person's name":"Full name"}/></div>
+        <div className="frow"><div><label className="fl">Phone</label><input className="fi" value={f.phone} onChange={e=>s("phone",e.target.value)}/></div><div><label className="fl">Email</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)}/></div></div>
+        {duplicateMatch&&<div style={{marginBottom:16,padding:"9px 12px",borderRadius:8,background:"rgba(245,158,11,.08)",border:"1px dashed #F59E0B",fontSize:11.5,color:"#1A1025",lineHeight:1.5}}>⚠ This customer may already exist: <strong>{duplicateMatch.customer_id} ({duplicateMatch.name})</strong> — please check before saving to avoid duplicates.</div>}
+        <div className="fg"><label className="fl">Address Line 1</label><input className="fi" value={f.address_line_1} onChange={e=>s("address_line_1",e.target.value)}/></div>
+        <div className="fg"><label className="fl">Address Line 2</label><input className="fi" value={f.address_line_2} onChange={e=>s("address_line_2",e.target.value)}/></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1.4fr 1fr",gap:16,marginBottom:16}}>
-          <div><label className="fl">Poskod</label><input className="fi" maxLength={5} value={f.postcode} onChange={e=>setPostcode(e.target.value.replace(/\D/g,""))} placeholder="40170"/></div>
-          <div><label className="fl">Bandar</label><input className="fi" value={f.city} onChange={e=>s("city",e.target.value)} placeholder="Auto-detect"/></div>
-          <div><label className="fl">Negeri</label><input className="fi" value={f.state} onChange={e=>s("state",e.target.value)} placeholder="Auto-detect"/></div>
+          <div><label className="fl">Postcode</label><input className="fi" maxLength={5} value={f.postcode} onChange={e=>setPostcode(e.target.value.replace(/\D/g,""))} placeholder="40170"/></div>
+          <div><label className="fl">City</label><input className="fi" value={f.city} onChange={e=>s("city",e.target.value)} placeholder="Auto-detect"/></div>
+          <div><label className="fl">State</label><input className="fi" value={f.state} onChange={e=>s("state",e.target.value)} placeholder="Auto-detect"/></div>
         </div>
-        <div className="fg"><label className="fl">Sumber</label><select className="fs" value={f.source} onChange={e=>s("source",e.target.value)}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
-        <div className="fg"><label className="fl">Nota</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:56,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>s("notes",e.target.value)} placeholder="cth: prefer WhatsApp, bayar cash"/></div>
+        <div className="fg"><label className="fl">Source</label><select className="fs" value={f.source} onChange={e=>s("source",e.target.value)}>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+        <div className="fg"><label className="fl">Notes</label><textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:56,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>s("notes",e.target.value)} placeholder="e.g. prefers WhatsApp, pays cash"/></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Batal</button><button className={changed&&valid?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&valid)onSave(f)}}>{isEdit?"Simpan":"Simpan Customer"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Cancel</button><button className={changed&&valid?"btn-primary":"btn-disabled"} onClick={()=>{if(changed&&valid)onSave(f)}}>{isEdit?"Save":"Save Customer"}</button></div>
     </Modal>
   );
 }
@@ -197,7 +197,7 @@ export default function CustomerDirectory(){
   const [editCust,setEditCust]=useState(null);
   const [toast,setToast]=useState(null);
   const [showNew,setShowNew]=useState(false);
-  const handleNewSave=(f)=>{const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,...f,created_at:new Date().toISOString()});setShowNew(false);setToast(`${custId} (${f.name}) ditambah.`)};
+  const handleNewSave=(f)=>{const custId=genCustId();addCustomer({id:crypto.randomUUID(),customer_id:custId,...f,created_at:new Date().toISOString()});setShowNew(false);setToast(`${custId} (${f.name}) added.`)};
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -273,18 +273,18 @@ export default function CustomerDirectory(){
       `}</style>
 
       <div className="page">
-        <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Customer Directory</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>{customers.length} customers</div></div><button onClick={()=>setShowNew(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> Customer Baru</button></div></div>
+        <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Customer Directory</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>{customers.length} customers</div></div><button onClick={()=>setShowNew(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> New Customer</button></div></div>
         <div className="content">
           <div className="sum-grid">
-            <div className="sum-card" style={{borderLeftColor:"#E91E63"}}><div className="section-label">Jumlah Customer</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{customers.length}</div></div>
+            <div className="sum-card" style={{borderLeftColor:"#E91E63"}}><div className="section-label">Total Customers</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{customers.length}</div></div>
             <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div style={{fontSize:24,fontWeight:700,color:"#10B981",marginTop:4}}>{formatRM(totalRev)}</div></div>
           </div>
           <div className="card filter-bar">
-            <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari customer..."/></div>
-            <select className="fs" style={{width:150}} value={fSrc} onChange={e=>setFSrc(e.target.value)}><option value="all">Semua Sumber</option>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customers..."/></div>
+            <select className="fs" style={{width:150}} value={fSrc} onChange={e=>setFSrc(e.target.value)}><option value="all">All Sources</option>{SOURCE_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>
           </div>
           <div className="card" style={{overflow:"hidden"}}>
-            <div className="tbl-h">{["","ID","Nama","Syarikat","Jobs","Value","Sumber",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
+            <div className="tbl-h">{["","ID","Name","Company","Jobs","Value","Source",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
             {filtered.map(c=>{const st=stats[c.id]||{jobs:0,est:0};return(
               <div key={c.id} className="tbl-r" onClick={()=>setProfile(c)}>
                 <div className="tbl-c"><Av name={c.name} sz={30}/></div>
@@ -298,10 +298,10 @@ export default function CustomerDirectory(){
               </div>
             )})}
           </div>
-          <div className="text-sm text-muted mt-4">{filtered.length} customer</div>
+          <div className="text-sm text-muted mt-4">{filtered.length} customers</div>
         </div>
         {currentProfile&&<ProfileModal cust={currentProfile} jobs={jobs} visDepts={visDepts} onEdit={()=>setEditCust(currentProfile)} onClose={()=>setProfile(null)}/>}
-        {currentEditCust&&<CustomerFormModal cust={currentEditCust} customers={customers} genCustId={genCustId} onSave={u=>{updateCustomer(currentEditCust.id,u);setEditCust(null);if(profile?.id===currentEditCust.id)setProfile({...currentEditCust,...u});setToast(`${currentEditCust.customer_id} dikemaskini.`);}} onClose={()=>setEditCust(null)}/>}
+        {currentEditCust&&<CustomerFormModal cust={currentEditCust} customers={customers} genCustId={genCustId} onSave={u=>{updateCustomer(currentEditCust.id,u);setEditCust(null);if(profile?.id===currentEditCust.id)setProfile({...currentEditCust,...u});setToast(`${currentEditCust.customer_id} updated.`);}} onClose={()=>setEditCust(null)}/>}
         {showNew&&<CustomerFormModal cust={null} customers={customers} genCustId={genCustId} onSave={handleNewSave} onClose={()=>setShowNew(false)}/>}
         {toast&&<Toast msg={toast} onDone={()=>setToast(null)}/>}
       </div>
