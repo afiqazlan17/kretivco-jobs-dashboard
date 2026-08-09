@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
 import { DEPT, ROLE } from '@/lib/constants';
-const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"short",year:"numeric"}):"—";
+const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"long",year:"numeric"}):"—";
 
 function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
 function DTag({d}){if(!d)return<span className="text-sm text-muted">Semua</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}

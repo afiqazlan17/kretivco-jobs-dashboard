@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate } from '@/lib/constants';
+import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate, ledgerAccountLabel } from '@/lib/constants';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -293,15 +293,17 @@ export default function Finance() {
             </div>
             <div style={{overflowX:"auto"}}>
               <table>
-                <thead><tr><th>Tarikh</th><th>Keterangan</th><th>Department</th><th>Bank</th><th>Jenis</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
+                <thead><tr><th>Tarikh</th><th>Keterangan</th><th>Debit</th><th>Credit</th><th>Department</th><th>Bank</th><th>Jenis</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
                 <tbody>
-                  {filteredEntries.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry lagi.</td></tr>}
+                  {filteredEntries.length === 0 && <tr><td colSpan={8} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry lagi.</td></tr>}
                   {filteredEntries.map(e => {
                     const meta = TYPE_META[e.type] || { label: e.type, color: "#9B93A8", sign: "" };
                     return (
                       <tr key={e.id} style={e.reversed ? { opacity: .5 } : undefined}>
                         <td className="text-sm">{formatDate(e.date)}</td>
                         <td className="text-sm">{e.description}{e.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+                        <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(e.debit_account)}</td>
+                        <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(e.credit_account)}</td>
                         <td>{e.department ? <span className="dept-tag" style={{color:DEPT[e.department]?.color,background:(DEPT[e.department]?.color||'#6B7280')+"15"}}>{DEPT[e.department]?.code}</span> : <span className="text-xs text-muted">—</span>}</td>
                         <td className="text-sm">{e.bank ? BANK[e.bank]?.label || e.bank : <span className="text-xs text-muted">—</span>}</td>
                         <td><span className="type-badge" style={{color:meta.color,background:meta.color+"15"}}>{meta.label}</span></td>
