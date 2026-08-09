@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 import { supabase, isMockMode } from '@/lib/supabase';
 
@@ -347,7 +347,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, onClose, onG
         balanceDue: isReceipt ? form.balanceDue : undefined,
       };
       const result = await generateDocument(type, job, cust, overrides);
-      onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total });
+      onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
       onClose();
     } catch (err) {
       console.error('PDF generation error:', err);
@@ -576,36 +576,65 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
     setGenerating(`combined-${type}`);
     try {
       const result = await generateCombinedDocument(type, combineJobs, cust);
-      onDocGenerated && onDocGenerated({ jobs: combineJobs, type, label: `${label} gabungan`, docNumber: result.docNumber });
+      onDocGenerated && onDocGenerated({ jobs: combineJobs, type, label: `${label} gabungan`, docNumber: result.docNumber, blob: result.blob, filename: result.filename });
     } catch (err) {
       console.error('Combined PDF generation error:', err);
     }
     setGenerating(null);
   };
 
-  if (docs.length === 0) return null;
+  // Every previously generated PDF for this job — a real copy archived at
+  // generation time, not just a claim that it was generated.
+  const documentAttachments = (job.attachments || []).filter(a => a.kind === 'document').sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at));
+  const handleViewDoc = async (att) => {
+    if (att.url) { window.open(att.url, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
+    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
+  if (docs.length === 0 && documentAttachments.length === 0) return null;
 
   return (
     <div style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
         <div className="section-label" style={{ marginBottom: 0 }}>Dokumen</div>
-        {siblings.length > 0 && !showCombine && (
+        {docs.length > 0 && siblings.length > 0 && !showCombine && (
           <button
             onClick={() => setShowCombine(true)}
             style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11.5, fontWeight: 700, color: '#E91E63', background: '#E91E6312', border: '1px solid #E91E6330', borderRadius: 8, cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
           >🔗 Gabung dengan Job Lain (Customer Sama)</button>
         )}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        {docs.map(d => (
-          <button key={d.type} onClick={() => setPreviewDoc({ type: d.type, label: d.label })} style={btnStyle(d.color)}>
-            <span>{d.icon}</span>
-            {d.label}
-          </button>
-        ))}
-      </div>
-      {(!job.line_items || job.line_items.length === 0) && (
-        <div style={{ fontSize: 11, color: '#E85D04', marginTop: 6, fontStyle: 'italic' }}>⚠ Tiada item — sila tambah item sebelum menjana dokumen.</div>
+      {docs.length > 0 && (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {docs.map(d => (
+              <button key={d.type} onClick={() => setPreviewDoc({ type: d.type, label: d.label })} style={btnStyle(d.color)}>
+                <span>{d.icon}</span>
+                {d.label}
+              </button>
+            ))}
+          </div>
+          {(!job.line_items || job.line_items.length === 0) && (
+            <div style={{ fontSize: 11, color: '#E85D04', marginTop: 6, fontStyle: 'italic' }}>⚠ Tiada item — sila tambah item sebelum menjana dokumen.</div>
+          )}
+        </>
+      )}
+      {documentAttachments.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {documentAttachments.map(att => {
+            const meta = DOC_TYPE_META[att.doc_type];
+            return (
+              <div key={att.id} onClick={() => handleViewDoc(att)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '6px 10px', borderRadius: 6, background: '#F9F8FB', cursor: 'pointer' }}>
+                <span>{meta?.icon || '📄'}</span>
+                <span style={{ fontWeight: 600, color: meta?.color || '#1A1025' }}>{meta?.label || att.doc_type}</span>
+                <span className="text-secondary">{att.doc_number}</span>
+                <span className="text-xs text-muted" style={{ marginLeft: 'auto' }}>{formatDateTime(att.uploaded_at)} · {att.uploaded_by}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {siblings.length > 0 && (
