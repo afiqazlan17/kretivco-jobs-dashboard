@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate, ledgerAccountLabel } from '@/lib/constants';
+import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, formatRM, formatDate, ledgerAccountLabel, ledgerAccountMeta } from '@/lib/constants';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -34,6 +34,199 @@ const TYPE_META = {
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
 
+// Only the report types that actually apply to Kretivco's business (a
+// services/print agency, not a retailer) — no Stock/Warranty/Agent
+// Commission reports, and e-Filing & Zakat is skipped until there's an
+// actual filing need for it.
+const REPORT_MENU = [
+  { key: 'overview', label: 'Ringkasan', icon: '📊', built: true },
+  { key: 'gl', label: 'General Ledger Report', icon: '📒', built: true },
+  { key: 'trial_balance', label: 'Trial Balance', icon: '⚖️', built: false },
+  { key: 'balance_sheet', label: 'Balance Sheet', icon: '🧾', built: false },
+  { key: 'cash_book', label: 'Cash Book Statement', icon: '💵', built: false },
+  { key: 'aging', label: 'Aging Report', icon: '⏳', built: false },
+  { key: 'bank_recon', label: 'Bank Reconciliation Report', icon: '🏦', built: false },
+  { key: 'sales', label: 'Sales Report', icon: '📈', built: false },
+  { key: 'installment', label: 'Installment Outstanding', icon: '📅', built: false },
+];
+
+// ── General Ledger Report — Summary / Detail / Bank & Cash tabs ──
+// Summary shows gross debit/credit turnover per account (a Trial-Balance-
+// style view, not netted) using the same account keys already posted
+// elsewhere in the app, dressed up with short COA-style codes. Detail
+// explodes each two-sided ledger entry into its own debit row and credit
+// row (standard general-ledger presentation) and, once a single account is
+// selected, adds a running balance column.
+function GeneralLedgerReport({ entries }) {
+  const [tab, setTab] = useState('summary');
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(String(thisYear));
+  const [monthFrom, setMonthFrom] = useState('01');
+  const [monthTo, setMonthTo] = useState('12');
+  const [account, setAccount] = useState('all');
+  const [bankAccountFilter, setBankAccountFilter] = useState('all');
+
+  const years = Array.from(new Set(entries.map(e => e.date?.slice(0,4)).filter(Boolean))).sort();
+  if (!years.includes(String(thisYear))) years.push(String(thisYear));
+  const monthOpts = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+  const monthName = (m) => new Date(2000, parseInt(m,10)-1, 1).toLocaleDateString('ms-MY', { month: 'long' });
+
+  const inRange = useMemo(() => entries.filter(e => {
+    const d = e.date?.slice(0,10);
+    if (!d || d.slice(0,4) !== year) return false;
+    const m = d.slice(5,7);
+    return m >= monthFrom && m <= monthTo;
+  }), [entries, year, monthFrom, monthTo]);
+
+  // Summary: every account touched, gross debit/credit totals (not netted).
+  const summaryRows = useMemo(() => {
+    const byAccount = {};
+    inRange.forEach(e => {
+      if (!byAccount[e.debit_account]) byAccount[e.debit_account] = { debit: 0, credit: 0 };
+      byAccount[e.debit_account].debit += e.amount;
+      if (!byAccount[e.credit_account]) byAccount[e.credit_account] = { debit: 0, credit: 0 };
+      byAccount[e.credit_account].credit += e.amount;
+    });
+    return Object.entries(byAccount).map(([key, v]) => ({ key, ...ledgerAccountMeta(key), ...v })).sort((a,b) => a.code.localeCompare(b.code));
+  }, [inRange]);
+
+  // Detail: explode each entry into a debit-side row and a credit-side row,
+  // then filter to the selected account. Running balance only makes sense
+  // scoped to one account, so it's blank when "Semua Akaun" is selected.
+  const explodedRows = useMemo(() => {
+    const rows = [];
+    inRange.forEach(e => {
+      rows.push({ id: e.id + '-d', date: e.date, account: e.debit_account, particular: e.description, ref: e.doc_number, debit: e.amount, credit: 0, reversed: e.reversed });
+      rows.push({ id: e.id + '-c', date: e.date, account: e.credit_account, particular: e.description, ref: e.doc_number, debit: 0, credit: e.amount, reversed: e.reversed });
+    });
+    return rows.sort((a,b) => new Date(a.date) - new Date(b.date));
+  }, [inRange]);
+
+  const detailAccountOptions = useMemo(() => Array.from(new Set(explodedRows.map(r => r.account))).map(k => ({ key: k, ...ledgerAccountMeta(k) })).sort((a,b) => a.code.localeCompare(b.code)), [explodedRows]);
+  const bankAccountOptions = detailAccountOptions.filter(o => o.key?.startsWith('bank_'));
+
+  const buildDetailView = (rows, selectedKey) => {
+    const filtered = selectedKey === 'all' ? rows : rows.filter(r => r.account === selectedKey);
+    let running = 0;
+    return filtered.map(r => {
+      if (selectedKey !== 'all') running += r.debit - r.credit;
+      return { ...r, balance: selectedKey !== 'all' ? running : null };
+    });
+  };
+
+  const detailView = useMemo(() => buildDetailView(explodedRows, account), [explodedRows, account]);
+  const bankRows = useMemo(() => explodedRows.filter(r => r.account?.startsWith('bank_')), [explodedRows]);
+  const bankCashView = useMemo(() => buildDetailView(bankRows, bankAccountFilter), [bankRows, bankAccountFilter]);
+
+  const DetailTable = ({ rows }) => (
+    <div style={{overflowX:"auto"}}>
+      <table>
+        <thead><tr><th>Tarikh</th><th>Akaun</th><th>Particular</th><th>Ref No</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th><th style={{textAlign:"right"}}>Baki Akru</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry untuk tempoh/akaun ini.</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
+              <td className="text-sm">{formatDate(r.date)}</td>
+              <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(r.account)}</td>
+              <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+              <td className="text-sm">{r.ref || '—'}</td>
+              <td style={{textAlign:"right"}}>{r.debit ? formatRM(r.debit) : '—'}</td>
+              <td style={{textAlign:"right"}}>{r.credit ? formatRM(r.credit) : '—'}</td>
+              <td style={{textAlign:"right",fontWeight:600}}>{r.balance == null ? '—' : formatRM(r.balance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="card">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
+        <div className="card-title">General Ledger Report</div>
+      </div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16}}>
+        <div><label className="fl">Tahun</label>
+          <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div><label className="fl">Bulan Dari</label>
+          <select className="fs" style={{width:150}} value={monthFrom} onChange={e=>setMonthFrom(e.target.value)}>
+            {monthOpts.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+          </select>
+        </div>
+        <div><label className="fl">Bulan Hingga</label>
+          <select className="fs" style={{width:150}} value={monthTo} onChange={e=>setMonthTo(e.target.value)}>
+            {monthOpts.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:18,borderBottom:"1px solid #F0ECF4",marginBottom:16}}>
+        {[{k:'summary',l:'Summary'},{k:'detail',l:'Detail'},{k:'bank',l:'Bank / Cash'}].map(t => (
+          <button key={t.k} onClick={()=>setTab(t.k)} style={{background:'none',border:'none',cursor:'pointer',padding:'8px 2px',fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,color:tab===t.k?'#E91E63':'#9B93A8',borderBottom:tab===t.k?'2px solid #E91E63':'2px solid transparent'}}>{t.l}</button>
+        ))}
+      </div>
+
+      {tab === 'summary' && (
+        <div style={{overflowX:"auto"}}>
+          <table>
+            <thead><tr><th>Kod</th><th>Nama Akaun</th><th>Jenis</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th></tr></thead>
+            <tbody>
+              {summaryRows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry untuk tempoh ini.</td></tr>}
+              {summaryRows.map(r => (
+                <tr key={r.key}>
+                  <td className="text-sm" style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{r.code}</td>
+                  <td className="text-sm">{r.label}</td>
+                  <td className="text-sm">{r.type}</td>
+                  <td style={{textAlign:"right"}}>{formatRM(r.debit)}</td>
+                  <td style={{textAlign:"right"}}>{formatRM(r.credit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === 'detail' && (
+        <>
+          <div style={{marginBottom:12,maxWidth:280}}>
+            <label className="fl">Akaun</label>
+            <select className="fs" value={account} onChange={e=>setAccount(e.target.value)}>
+              <option value="all">— Semua Akaun —</option>
+              {detailAccountOptions.map(o => <option key={o.key} value={o.key}>{o.code} · {o.label}</option>)}
+            </select>
+          </div>
+          <DetailTable rows={detailView} />
+        </>
+      )}
+
+      {tab === 'bank' && (
+        <>
+          <div style={{marginBottom:12,maxWidth:280}}>
+            <label className="fl">Akaun Bank</label>
+            <select className="fs" value={bankAccountFilter} onChange={e=>setBankAccountFilter(e.target.value)}>
+              <option value="all">— Semua Bank —</option>
+              {bankAccountOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+          </div>
+          <DetailTable rows={bankCashView} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReportComingSoon({ label }) {
+  return (
+    <div className="card" style={{textAlign:"center",padding:"48px 24px"}}>
+      <div style={{fontSize:32,marginBottom:12}}>🚧</div>
+      <div className="card-title" style={{marginBottom:6}}>{label}</div>
+      <div className="text-sm text-muted">Belum dibina lagi — akan datang.</div>
+    </div>
+  );
+}
+
 export default function Finance() {
   const { profile } = useAuth() || {};
   const { jobs = [], ledgerEntries = [], postExpenseEntry, postOpeningBalanceAdjustment } = useData() || {};
@@ -45,6 +238,8 @@ export default function Finance() {
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
+  const [activeReport, setActiveReport] = useState('overview');
+  const [reportMenuOpen, setReportMenuOpen] = useState(true);
 
   // P&L Statement date range — defaults to year-to-date. Revenue/COGS/Expense
   // are period figures (what happened between these dates); bank balances
@@ -189,7 +384,35 @@ export default function Finance() {
           </div>
         </div>
 
-        <div className="content">
+        <div className="content" style={{display:"flex",gap:20,alignItems:"flex-start",maxWidth:1400}}>
+          <div className="card" style={{width:250,flexShrink:0,padding:"12px 8px"}}>
+            <button onClick={()=>setReportMenuOpen(p=>!p)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:"none",border:"none",cursor:"pointer",padding:"8px 10px",fontFamily:"'Poppins',sans-serif"}}>
+              <span style={{display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#E91E63",letterSpacing:".03em"}}>📊 REPORT</span>
+              <span style={{fontSize:11,color:"#9B93A8",transform:reportMenuOpen?"rotate(0deg)":"rotate(180deg)"}}>▲</span>
+            </button>
+            {reportMenuOpen && (
+              <div style={{display:"flex",flexDirection:"column",gap:2,marginTop:4}}>
+                {REPORT_MENU.map(r => (
+                  <button key={r.key} onClick={()=>setActiveReport(r.key)} style={{
+                    display:"flex",alignItems:"center",gap:8,textAlign:"left",width:"100%",
+                    padding:"10px 12px",borderRadius:8,border:"none",cursor:"pointer",
+                    fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:activeReport===r.key?700:400,
+                    background:activeReport===r.key?"#E91E63":"transparent",color:activeReport===r.key?"#fff":"#4B4358",
+                  }}>
+                    <span>{r.icon}</span><span>{r.label}</span>
+                    {!r.built && <span style={{marginLeft:"auto",fontSize:9,opacity:.7}}>●</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{flex:1,minWidth:0}}>
+          {activeReport === 'gl' && <GeneralLedgerReport entries={scopedEntries} />}
+          {activeReport !== 'overview' && activeReport !== 'gl' && (
+            <ReportComingSoon label={REPORT_MENU.find(r => r.key === activeReport)?.label} />
+          )}
+          {activeReport === 'overview' && (<>
           <div className="card">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div>
@@ -314,6 +537,8 @@ export default function Finance() {
                 </tbody>
               </table>
             </div>
+          </div>
+          </>)}
           </div>
         </div>
 
