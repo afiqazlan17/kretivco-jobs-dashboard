@@ -55,7 +55,7 @@ export function Toast({ msg, action, onDone }) {
 
 export function ConfirmModal({ title, msg, label, color, onConfirm, onClose, showReasonField }) {
   const [reasonText, setReasonText] = useState("");
-  const guardedClose = () => { if (reasonText.trim() && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
+  const guardedClose = () => { if (reasonText.trim() && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
   return (
     <Modal width={400} onClose={guardedClose}>
       <div style={{ padding: "24px 24px 16px" }}>
@@ -63,13 +63,13 @@ export function ConfirmModal({ title, msg, label, color, onConfirm, onClose, sho
         <p className="text-body text-secondary" style={{ marginTop: 8, lineHeight: 1.6 }}>{msg}</p>
         {showReasonField && (
           <div style={{ marginTop: 12 }}>
-            <label className="field-label">Sebab (optional)</label>
-            <input className="field-input" value={reasonText} onChange={e => setReasonText(e.target.value)} placeholder="Nyatakan sebab..." />
+            <label className="field-label">Reason (optional)</label>
+            <input className="field-input" value={reasonText} onChange={e => setReasonText(e.target.value)} placeholder="State the reason..." />
           </div>
         )}
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
+        <button className="btn-secondary" onClick={guardedClose}>Cancel</button>
         <button className="btn-primary" style={{ background: color }} onClick={() => onConfirm(reasonText)}>{label}</button>
       </div>
     </Modal>
@@ -80,26 +80,26 @@ export function ConfirmModal({ title, msg, label, color, onConfirm, onClose, sho
 export function CancelModal({ job, onConfirm, onClose }) {
   const [reason, setReason] = useState(CANCEL_REASONS[0].value);
   const [customText, setCustomText] = useState("");
-  const guardedClose = () => { if ((reason !== CANCEL_REASONS[0].value || customText.trim()) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
+  const guardedClose = () => { if ((reason !== CANCEL_REASONS[0].value || customText.trim()) && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
   return (
     <Modal width={440} onClose={guardedClose}>
-      <div className="modal-header"><span className="modal-title">Batalkan Job</span><button className="modal-close" onClick={guardedClose}>×</button></div>
+      <div className="modal-header"><span className="modal-title">Cancel Job</span><button className="modal-close" onClick={guardedClose}>×</button></div>
       <div className="modal-body">
         <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}</div>
-        <label className="field-label">Sebab Pembatalan *</label>
+        <label className="field-label">Cancellation Reason *</label>
         <select className="field-select" style={{ width: '100%', marginBottom: 12 }} value={reason} onChange={e => setReason(e.target.value)}>
           {CANCEL_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
         {reason === 'other' && (
           <div>
-            <label className="field-label">Nyatakan sebab</label>
-            <input className="field-input" value={customText} onChange={e => setCustomText(e.target.value)} placeholder="Sebab pembatalan..." />
+            <label className="field-label">State the reason</label>
+            <input className="field-input" value={customText} onChange={e => setCustomText(e.target.value)} placeholder="Cancellation reason..." />
           </div>
         )}
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
-        <button className="btn-primary" style={{ background: '#EF4444' }} onClick={() => onConfirm(reason, customText)}>Ya, Batalkan</button>
+        <button className="btn-secondary" onClick={guardedClose}>Cancel</button>
+        <button className="btn-primary" style={{ background: '#EF4444' }} onClick={() => onConfirm(reason, customText)}>Yes, Cancel</button>
       </div>
     </Modal>
   );
@@ -111,17 +111,17 @@ export function ReassignModal({ job, onConfirm, onClose }) {
   const [name, setName] = useState(job.pic || options[0] || '');
   return (
     <Modal width={400} onClose={onClose}>
-      <div className="modal-header"><span className="modal-title">Tukar Current Responsible</span><button className="modal-close" onClick={onClose}>×</button></div>
+      <div className="modal-header"><span className="modal-title">Change Current Responsible</span><button className="modal-close" onClick={onClose}>×</button></div>
       <div className="modal-body">
-        <div className="summary-box"><JID>{job.job_id}</JID> · Sekarang: {job.pic || 'Belum assign'}</div>
-        <label className="field-label">Staff Baru *</label>
+        <div className="summary-box"><JID>{job.job_id}</JID> · Currently: {job.pic || 'Not assigned'}</div>
+        <label className="field-label">New Staff *</label>
         <select className="field-select" style={{ width: '100%' }} value={name} onChange={e => setName(e.target.value)}>
           {options.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
       <div className="modal-footer">
-        <button className="btn-secondary" onClick={onClose}>Batal</button>
-        <button className="btn-primary" disabled={!name} onClick={() => onConfirm(name)}>Tukar</button>
+        <button className="btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" disabled={!name} onClick={() => onConfirm(name)}>Change</button>
       </div>
     </Modal>
   );
@@ -141,18 +141,18 @@ function creationSnapshot(job) {
     `Department: ${DEPT[job.department]?.label || job.department || '—'}`,
     `Job Type: ${JOB_TYPE[job.job_type_category]?.label || '—'}`,
     `Bank: ${BANK[job.bank]?.label || '—'}`,
-    `PIC: ${job.pic || 'Belum assign'}`,
+    `PIC: ${job.pic || 'Not assigned'}`,
     `Est. Value: ${formatRM(job.estimation_value)}`,
-    `Mula: ${formatDate(job.start_date)}`,
+    `Start: ${formatDate(job.start_date)}`,
     `Deadline: ${formatDate(job.deadline)}`,
   ];
-  if (job.notes) lines.push(`Nota: ${job.notes}`);
+  if (job.notes) lines.push(`Notes: ${job.notes}`);
   return lines.join('\n');
 }
 
 export function Timeline({ jobId, getActivity, job }) {
   const logs = getActivity(jobId);
-  if (!logs.length) return <div className="text-sm text-muted" style={{ padding: "12px 0" }}>Tiada activity log.</div>;
+  if (!logs.length) return <div className="text-sm text-muted" style={{ padding: "12px 0" }}>No activity log.</div>;
 
   const sorted = [...logs].sort((a, b) => new Date(a.time) - new Date(b.time));
 
@@ -172,18 +172,18 @@ export function Timeline({ jobId, getActivity, job }) {
 
   const actionText = (l) => {
     switch (l.action) {
-      case 'created': return 'cipta job ini';
-      case 'status_change': return <><span>tukar status: </span><StatusBadge s={l.from || l.old?.toLowerCase()} /> → <StatusBadge s={l.to || l.val?.toLowerCase()} /></>;
-      case 'rollback': return <><span>rollback status: </span><StatusBadge s={l.from} /> → <StatusBadge s={l.to} /></>;
-      case 'cancelled': return <span>batalkan job{l.detail ? ` — ${l.detail}` : ''}</span>;
-      case 'completed': return <span>tandakan selesai{l.detail ? ` — ${l.detail}` : ''}</span>;
+      case 'created': return 'created this job';
+      case 'status_change': return <><span>changed status: </span><StatusBadge s={l.from || l.old?.toLowerCase()} /> → <StatusBadge s={l.to || l.val?.toLowerCase()} /></>;
+      case 'rollback': return <><span>rolled back status: </span><StatusBadge s={l.from} /> → <StatusBadge s={l.to} /></>;
+      case 'cancelled': return <span>cancelled job{l.detail ? ` — ${l.detail}` : ''}</span>;
+      case 'completed': return <span>marked as completed{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'edited': return l.field === 'pic'
-        ? <span>ambil alih ticket (PIC): {l.old || 'Belum assign'} → <strong>{l.val}</strong></span>
+        ? <span>took over ticket (PIC): {l.old || 'Not assigned'} → <strong>{l.val}</strong></span>
         : l.field === 'hold_status'
-        ? <span>{l.val ? `letak job "${HOLD_STATUS[l.val]?.label || l.val}"` : 'sambung semula job (Resume)'}{l.detail ? ` — ${l.detail}` : ''}</span>
+        ? <span>{l.val ? `put ticket on hold: "${HOLD_STATUS[l.val]?.label || l.val}"` : 'resumed ticket'}{l.detail ? ` — ${l.detail}` : ''}</span>
         : <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
-      case 'note': return 'menulis catatan';
-      case 'document_generated': return <span>menjana {l.detail}</span>;
+      case 'note': return 'wrote a note';
+      case 'document_generated': return <span>generated {l.detail}</span>;
       default: return l.action;
     }
   };
@@ -191,7 +191,7 @@ export function Timeline({ jobId, getActivity, job }) {
   const viewLogAttachment = async (att) => {
     if (att.url) { window.open(att.url, '_blank'); return; }
     const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
-    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    if (error) { alert('Failed to open file: ' + error.message); return; }
     window.open(data.signedUrl, '_blank');
   };
 
@@ -209,7 +209,7 @@ export function Timeline({ jobId, getActivity, job }) {
           {l.action === 'created' && job && (
             <pre className="text-sm text-secondary" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: '4px 0 0', background: '#F9F8FB', border: '1px solid #F0ECF4', borderRadius: 6, padding: '8px 10px' }}>{creationSnapshot(job)}</pre>
           )}
-          {l.reason && <div className="text-sm text-secondary">Sebab: "{l.reason}"</div>}
+          {l.reason && <div className="text-sm text-secondary">Reason: "{l.reason}"</div>}
           {l.note && (l.action === 'note'
             ? <div className="text-sm text-secondary rich-note-content" style={{ marginTop: 2 }} dangerouslySetInnerHTML={{ __html: l.note }} />
             : <div className="text-sm text-secondary">"{l.note}"</div>)}
@@ -222,7 +222,7 @@ export function Timeline({ jobId, getActivity, job }) {
           )}
           {(l.attachmentPath || l.attachmentUrl) && (
             <div className="text-sm" style={{marginTop:2}}>
-              <a onClick={()=>viewLogAttachment({ path: l.attachmentPath, url: l.attachmentUrl })} style={{color:'#3A86FF',cursor:'pointer'}}>📎 {l.attachmentName || 'Lihat screenshot'}</a>
+              <a onClick={()=>viewLogAttachment({ path: l.attachmentPath, url: l.attachmentUrl })} style={{color:'#3A86FF',cursor:'pointer'}}>📎 {l.attachmentName || 'View screenshot'}</a>
             </div>
           )}
           <div className="text-xs text-muted">{formatDateTime(l.time)}</div>
@@ -239,7 +239,7 @@ export function CustMini({ job, customers }) {
   const name = job.customer_name || job.customer_id || "—";
   const goToCustomer = () => { if (cust) router.push(`/customers?customer=${cust.id}`); };
   return (
-    <div className="cust-mini" onClick={goToCustomer} style={cust ? { cursor: 'pointer' } : undefined} title={cust ? 'Lihat profil customer' : undefined}>
+    <div className="cust-mini" onClick={goToCustomer} style={cust ? { cursor: 'pointer' } : undefined} title={cust ? 'View customer profile' : undefined}>
       <div className="cust-mini-head"><div className="avatar-sm">{name.charAt(0)}</div><div><div className="text-body font-semibold">{name}</div><div className="jid text-muted">{cust?.customer_id || job.customer_id}</div></div></div>
       <div className="cust-mini-grid">
         <div><span className="text-muted">Company:</span> {cust?.company || "—"}</div>
@@ -253,8 +253,8 @@ export function CustMini({ job, customers }) {
 
 // ─── Financial Breakdown Panel ────────────────────────────────
 // Only special-arrangement jobs (consignment/cost-splits/installments) get
-// a Kewangan card here — the plain Total Value/Baki figures every other job
-// would show are already covered by Dokumen (line items + generated docs),
+// a Finance card here — the plain Total Value/Balance figures every other job
+// would show are already covered by Documents (line items + generated docs),
 // so showing them again here was just empty-feeling duplication.
 export function FinancialBreakdown({ job, onToggleInstallment }) {
   const displayVal = job.final_value || job.estimation_value;
@@ -266,7 +266,7 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
 
   return (
     <div className="finance-box">
-      <div className="section-label">Kewangan — Special Arrangement</div>
+      <div className="section-label">Finance — Special Arrangement</div>
       <div className="info-grid" style={{ gridTemplateColumns: "140px 1fr" }}>
         <span className="info-label">Total Value</span><span className="font-semibold">{formatRM(displayVal)}</span>
       </div>
@@ -275,7 +275,7 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
           <div className="text-xs text-muted" style={{ marginBottom: 6, textTransform: "uppercase", letterSpacing: ".02em", fontWeight: 500 }}>Cost Breakdown</div>
           <div style={{ background: "#F9F8FB", borderRadius: 8, border: "1px solid #F0ECF4", overflow: "hidden" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px", padding: "8px 12px", fontSize: 11, fontWeight: 500, color: "#9B93A8", borderBottom: "1px solid #F0ECF4" }}>
-              <span>Jenis</span><span>Penerima</span><span style={{ textAlign: "right" }}>Amount</span>
+              <span>Type</span><span>Recipient</span><span style={{ textAlign: "right" }}>Amount</span>
             </div>
             {job.cost_breakdown.map((item, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px", padding: "8px 12px", fontSize: 12, borderBottom: i < job.cost_breakdown.length - 1 ? "1px solid #F0ECF4" : "none" }}>
@@ -286,7 +286,7 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
         </div>
       )}
       <div className="info-grid" style={{ gridTemplateColumns: "140px 1fr", marginTop: 12 }}>
-        <span className="info-label">Baki Kretivco</span><span className="font-semibold text-green">{formatRM(baki)}</span>
+        <span className="info-label">Kretivco Balance</span><span className="font-semibold text-green">{formatRM(baki)}</span>
       </div>
 
       {(job.installments || []).length > 0 && (
@@ -299,7 +299,7 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
             {job.installments.map((inst, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", padding: "8px 12px", fontSize: 12, alignItems: "center", borderBottom: i < job.installments.length - 1 ? "1px solid #F0ECF4" : "none" }}>
                 <span style={{ fontWeight: 600 }}>{formatRM(inst.amount)}</span>
-                <span>{inst.due_date ? new Date(inst.due_date + "-01").toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) : "—"}</span>
+                <span>{inst.due_date ? new Date(inst.due_date + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "—"}</span>
                 <span style={{ textAlign: "center" }}>
                   <button
                     onClick={() => onToggleInstallment && onToggleInstallment(job, i)}
@@ -371,7 +371,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
   const addItem = () => setForm(p => ({ ...p, items: [...p.items, { id: crypto.randomUUID(), item: '', desc: '', size: '', qty: 1, price: 0 }] }));
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
-  const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
+  const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
 
   const subtotal = form.items.reduce((s, it) => s + ((Number(it.qty) || 0) * (Number(it.price) || 0)), 0);
   const total = subtotal + (Number(form.delivery) || 0) - (Number(form.discount) || 0);
@@ -401,8 +401,8 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const [saved, setSaved] = useState(false);
   const handleSave = () => {
     setSaving(true);
-    // Clicking Simpan again with nothing actually edited shouldn't write a
-    // fresh "dikemaskini" entry to the Activity Log every time.
+    // Clicking Save again with nothing actually edited shouldn't write a
+    // fresh "updated" entry to the Activity Log every time.
     const unchanged = JSON.stringify(form) === JSON.stringify(initial);
     const validItems = form.items.filter(it => it.item?.trim()).map(it => ({
       item: it.item.trim(), desc: it.desc?.trim() || '', size: it.size?.trim() || '',
@@ -415,7 +415,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         line_items: validItems,
         estimation_value: itemsTotal || job.estimation_value,
         job_type: form.jobTitle || job.job_type,
-      }, userName, { action: 'edited', field: `${label}`, detail: `${label} dikemaskini (Simpan)` });
+      }, userName, { action: 'edited', field: `${label}`, detail: `${label} updated (Save)` });
     }
     // Capture the customer's address for next time, if it wasn't already saved
     if (onUpdateCustomer && cust?.id && (form.addressLine1 || form.addressLine2) &&
@@ -441,38 +441,38 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* Edit form */}
           <div style={{ width: 340, padding: '4px 20px 20px', overflowY: 'auto', borderRight: '1px solid #F0ECF4', flexShrink: 0 }}>
-            <label style={{ ...labelSt, marginTop: 12 }}>Nama Customer</label>
+            <label style={{ ...labelSt, marginTop: 12 }}>Customer Name</label>
             <input style={inputSt} value={form.customerName} onChange={e => set('customerName', e.target.value)} />
-            <label style={labelSt}>Syarikat</label>
+            <label style={labelSt}>Company</label>
             <input style={inputSt} value={form.customerCompany} onChange={e => set('customerCompany', e.target.value)} />
-            <label style={labelSt}>Alamat Baris 1</label>
+            <label style={labelSt}>Address Line 1</label>
             <input style={inputSt} value={form.addressLine1} onChange={e => set('addressLine1', e.target.value)} />
-            <label style={labelSt}>Alamat Baris 2</label>
+            <label style={labelSt}>Address Line 2</label>
             <input style={inputSt} value={form.addressLine2} onChange={e => set('addressLine2', e.target.value)} />
-            <label style={labelSt}>Tajuk Job/Project</label>
+            <label style={labelSt}>Job/Project Title</label>
             <input style={inputSt} value={form.jobTitle} onChange={e => set('jobTitle', e.target.value)} />
             <label style={labelSt}>By (Staff)</label>
             <input style={inputSt} value={form.staffName} onChange={e => set('staffName', e.target.value)} />
 
             <div style={{ ...labelSt, marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Item</span>
-              <button onClick={addItem} style={{ fontSize: 11, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer' }}>+ Tambah</button>
+              <button onClick={addItem} style={{ fontSize: 11, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer' }}>+ Add</button>
             </div>
             {form.items.map((it, i) => (
               <div key={i} style={{ border: '1px solid #F0ECF4', borderRadius: 8, padding: 8, marginBottom: 6 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Nama Item</div>
-                <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Nama item" value={it.item} onChange={e => setItem(i, 'item', e.target.value)} />
-                <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Keterangan</div>
-                <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Keterangan (optional)" value={it.desc || ''} onChange={e => setItem(i, 'desc', e.target.value)} />
-                {showSize && <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Saiz (cth: A3, 3ft x 6ft)" value={it.size || ''} onChange={e => setItem(i, 'size', e.target.value)} />}
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Item Name</div>
+                <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Item name" value={it.item} onChange={e => setItem(i, 'item', e.target.value)} />
+                <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Description</div>
+                <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Description (optional)" value={it.desc || ''} onChange={e => setItem(i, 'desc', e.target.value)} />
+                {showSize && <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Size (e.g. A3, 3ft x 6ft)" value={it.size || ''} onChange={e => setItem(i, 'size', e.target.value)} />}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 24px', gap: 4 }}>
                   <div>
-                    <div style={{ fontSize: 9.5, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Kuantiti (Qty)</div>
+                    <div style={{ fontSize: 9.5, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Quantity (Qty)</div>
                     <input type="number" style={inputSt} placeholder="Qty" value={it.qty} onChange={e => setItem(i, 'qty', e.target.value)} min="1" />
                   </div>
                   <div>
-                    <div style={{ fontSize: 9.5, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Harga (RM)</div>
-                    <input type="number" style={inputSt} placeholder="Harga (RM)" value={it.price} onChange={e => setItem(i, 'price', e.target.value)} />
+                    <div style={{ fontSize: 9.5, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Price (RM)</div>
+                    <input type="number" style={inputSt} placeholder="Price (RM)" value={it.price} onChange={e => setItem(i, 'price', e.target.value)} />
                   </div>
                   <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: 14, alignSelf: 'end', height: 34 }}>×</button>
                 </div>
@@ -492,7 +492,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
               </select>
               <label style={labelSt}>Amount Paid (RM)</label>
               <input type="number" style={inputSt} value={form.amountPaid} onChange={e => set('amountPaid', e.target.value)} />
-              {latestInvoice && <div style={{ fontSize: 10, color: '#9B93A8', marginTop: 3 }}>Auto dari Invoice {latestInvoice.doc_number}</div>}
+              {latestInvoice && <div style={{ fontSize: 10, color: '#9B93A8', marginTop: 3 }}>Auto from Invoice {latestInvoice.doc_number}</div>}
               <label style={labelSt}>Balance Due (RM)</label>
               <input type="number" style={inputSt} value={form.balanceDue} onChange={e => set('balanceDue', e.target.value)} />
             </>}
@@ -584,10 +584,10 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
           </div>
         </div>
         <div style={{ padding: '14px 22px', borderTop: '1px solid #F0ECF4', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
-          {saved && <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600, marginRight: 'auto' }}>✓ Disimpan</span>}
-          <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Batal</button>
-          <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Menyimpan...' : 'Simpan'}</button>
-          <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Menjana...' : 'Muat Turun PDF'}</button>
+          {saved && <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600, marginRight: 'auto' }}>✓ Saved</span>}
+          <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Download PDF'}</button>
         </div>
       </div>
     </Modal>
@@ -623,7 +623,7 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
     setGenerating(`combined-${type}`);
     try {
       const result = await generateCombinedDocument(type, combineJobs, cust);
-      onDocGenerated && onDocGenerated({ jobs: combineJobs, type, label: `${label} gabungan`, docNumber: result.docNumber, blob: result.blob, filename: result.filename });
+      onDocGenerated && onDocGenerated({ jobs: combineJobs, type, label: `${label} combined`, docNumber: result.docNumber, blob: result.blob, filename: result.filename });
     } catch (err) {
       console.error('Combined PDF generation error:', err);
     }
@@ -636,7 +636,7 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
   const handleViewDoc = async (att) => {
     if (att.url) { window.open(att.url, '_blank'); return; }
     const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
-    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    if (error) { alert('Failed to open file: ' + error.message); return; }
     window.open(data.signedUrl, '_blank');
   };
 
@@ -655,7 +655,7 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
           <button
             onClick={() => setShowCombine(true)}
             style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11.5, fontWeight: 700, color: '#E91E63', background: '#E91E6312', border: '1px solid #E91E6330', borderRadius: 8, cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
-          >🔗 Gabung dengan Job Lain (Customer Sama)</button>
+          >🔗 Combine with Other Job (Same Customer)</button>
         </div>
       )}
       {docs.length > 0 && (
@@ -674,10 +674,10 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
             ))}
           </div>
           {!ticketClaimed && (
-            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Ticket belum diambil — guna "Take In Ticket" di Action menu dahulu sebelum jana dokumen.</div>
+            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Ticket not yet claimed — use "Take In Ticket" in the Action menu first before generating documents.</div>
           )}
           {ticketClaimed && (!job.line_items || job.line_items.length === 0) && (
-            <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Klik mana-mana butang untuk isi item &amp; jana dokumen.</div>
+            <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Click any button to fill in items &amp; generate documents.</div>
           )}
         </>
       )}
@@ -710,35 +710,35 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
         <div style={{ marginTop: 10 }}>
           {showCombine && (
             <div style={{ padding: 12, background: '#F9F8FB', borderRadius: 8, border: '1px solid #F0ECF4' }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 8 }}>Pilih job lain untuk digabung dalam satu dokumen (cth: 1 cek bayar untuk beberapa department):</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 8 }}>Select other jobs to combine into a single document (e.g. 1 payment cheque covering several departments):</div>
               {siblings.map(s => {
                 const canSeeFull = !visDepts || visDepts.includes(s.department);
                 return (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0', cursor: 'pointer' }}>
                     <input type="checkbox" checked={combineIds.has(s.id)} onChange={() => toggleCombine(s.id)} />
                     <JID>{s.job_id}</JID> <DTag d={s.department} />
-                    {canSeeFull ? <span className="text-secondary">{s.job_type}</span> : <span className="text-muted" style={{ fontStyle: 'italic' }}>(department lain)</span>}
+                    {canSeeFull ? <span className="text-secondary">{s.job_type}</span> : <span className="text-muted" style={{ fontStyle: 'italic' }}>(other department)</span>}
                     <StatusBadge s={s.status} /> <span style={{ marginLeft: 'auto', fontWeight: 600 }}>{formatRM(s.estimation_value)}</span>
                   </label>
                 );
               })}
               {statusMismatch && (
-                <div style={{ fontSize: 11, color: '#EF4444', marginTop: 8, fontStyle: 'italic' }}>⚠ Status job tak sepadan — selaraskan status dahulu sebelum digabung.</div>
+                <div style={{ fontSize: 11, color: '#EF4444', marginTop: 8, fontStyle: 'italic' }}>⚠ Job statuses don't match — align the statuses first before combining.</div>
               )}
               {selectedSiblings.length > 0 && !statusMismatch && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F0ECF4' }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 6 }}>Jana Dokumen Gabungan ({combineJobs.length} job · {formatRM(combineJobs.reduce((sum,j)=>sum+(j.estimation_value||0),0))}):</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 6 }}>Generate Combined Document ({combineJobs.length} jobs · {formatRM(combineJobs.reduce((sum,j)=>sum+(j.estimation_value||0),0))}):</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {combineDocs.map(d => (
                       <button key={d.type} onClick={() => handleGenCombined(d.type, d.label)} disabled={generating === `combined-${d.type}`} style={btnStyle(d.color)}>
                         <span>{d.icon}</span>
-                        {generating === `combined-${d.type}` ? 'Menjana...' : d.label}
+                        {generating === `combined-${d.type}` ? 'Generating...' : d.label}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              <button onClick={() => { setShowCombine(false); setCombineIds(new Set()); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 500, color: '#9B93A8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 10 }}>Batal</button>
+              <button onClick={() => { setShowCombine(false); setCombineIds(new Set()); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 500, color: '#9B93A8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 10 }}>Cancel</button>
             </div>
           )}
         </div>
@@ -764,7 +764,7 @@ const PIPELINE_STAGES = ['potential', 'new', 'assigned', 'active', 'completed'];
 export function ProgressStepper({ job, onStatus, onRollback }) {
   const { status } = job;
   if (status === 'cancelled') {
-    return <div className="stepper-cancelled">✕ Job Dibatalkan{job.cancel_reason ? ` — ${CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}${job.cancel_reason_text ? `: ${job.cancel_reason_text}` : ''}` : ''}</div>;
+    return <div className="stepper-cancelled">✕ Job Cancelled{job.cancel_reason ? ` — ${CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}${job.cancel_reason_text ? `: ${job.cancel_reason_text}` : ''}` : ''}</div>;
   }
   const idx = PIPELINE_STAGES.indexOf(status);
   const forwardSet = new Set(STATUS_FLOW[status] || []);
@@ -773,7 +773,7 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
   return (
     <div className="stepper-wrap">
       <div className="stepper-top">
-        <span className="stepper-label">Progress Job</span>
+        <span className="stepper-label">Job Progress</span>
       </div>
       <div className="stepper">
         {PIPELINE_STAGES.map((s, i) => {
@@ -790,7 +790,7 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
               key={s}
               className={`step ${state} ${clickable ? 'clickable' : ''}`}
               onClick={clickable ? () => (canForward ? onStatus(job, s) : onRollback(job, s)) : undefined}
-              title={canForward ? `Gerak ke ${STATUS[s].label}` : canBack ? `Rollback ke ${STATUS[s].label}` : undefined}
+              title={canForward ? `Move to ${STATUS[s].label}` : canBack ? `Roll back to ${STATUS[s].label}` : undefined}
             >
               <div className="line" />
               <div className="dot" style={dotStyle}>{state === 'done' ? '✓' : i + 1}</div>
@@ -842,7 +842,7 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseTicket, 
             {canClose && item('Close Ticket', '✅', onCloseTicket, '#10B981')}
             {canCancel && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
             {canCancel && item('Cancel Ticket', '✕', onCancel, '#EF4444')}
-            {canArchive && item('Arkib', '🗄️', onArchive, '#6B7280')}
+            {canArchive && item('Archive', '🗄️', onArchive, '#6B7280')}
           </div>
         </>
       )}
@@ -863,7 +863,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
         <div className="project-line">
           🔗 Project <span className="jid">{job.project_id}</span>
           {projectSiblings.length > 0 && <>
-            {' '}— bersama {projectSiblings.map((s, i) => (
+            {' '}— with {projectSiblings.map((s, i) => (
               <span key={s.id}>{i > 0 && ', '}<a onClick={() => onJumpToJob(s.job_id)}>{s.job_id} · {DEPT[s.department]?.label}</a></span>
             ))}
           </>}
@@ -871,7 +871,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
       )}
       <div className="detail-grid">
         <div>
-          <div className="card-title mb-3">Catatan Baru</div>
+          <div className="card-title mb-3">New Note</div>
           <RichNoteComposer jobId={job.job_id} onSubmit={submitRichNote} />
 
           <div className="card-title mt-6 mb-3">Activity Log</div>
@@ -880,9 +880,9 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
         <div>
           {/* Document Generation — item editing now happens inside whichever
               doc's preview modal is opened, so there's no separate item
-              table here anymore; Simpan there writes straight to
+              table here anymore; Save there writes straight to
               job.line_items, shared by every doc type. */}
-          <div className="card-title mb-3">Dokumen</div>
+          <div className="card-title mb-3">Documents</div>
           <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
 
           {/* Financial Breakdown — only renders for special-arrangement jobs */}
@@ -930,7 +930,7 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
 
   // How many design instances to render for a base item: at least 1, more if
   // attachments already exist for a later instance, more still if staff just
-  // clicked "+ Tambah design lain" this session.
+  // clicked "+ Add another design" this session.
   const instanceCount = (baseKey) => {
     const usedMax = attachments.reduce((max, a) => {
       if (typeof a.line_item_id === 'string' && a.line_item_id.startsWith(baseKey + '#')) {
@@ -957,9 +957,9 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
         if (error) throw error;
       }
       const entry = { id: crypto.randomUUID(), kind, line_item_id: slotKey, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
-      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Approval customer' : 'Artwork'} (${label}) dimuat naik: ${file.name}` });
+      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `${kind === 'approval' ? 'Customer approval' : 'Artwork'} (${label}) uploaded: ${file.name}` });
     } catch (err) {
-      alert('Gagal muat naik: ' + (err?.message || err));
+      alert('Failed to upload: ' + (err?.message || err));
     } finally {
       setBusyKey(null);
     }
@@ -968,14 +968,14 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
   const handleView = async (att) => {
     if (att.url) { window.open(att.url, '_blank'); return; }
     const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
-    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    if (error) { alert('Failed to open file: ' + error.message); return; }
     window.open(data.signedUrl, '_blank');
   };
 
   const handleDelete = async (att) => {
-    if (!window.confirm(`Padam "${att.name}"?`)) return;
+    if (!window.confirm(`Delete "${att.name}"?`)) return;
     if (att.path && !isMockMode) await supabase.storage.from('job-attachments').remove([att.path]);
-    onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
+    onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment deleted: ${att.name}` });
   };
 
   // Every artwork file across every item, zipped into one download — the
@@ -997,7 +997,7 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
           fileUrl = data.signedUrl;
         }
         const blob = await fetch(fileUrl).then(r => r.blob());
-        let name = att.name || 'fail';
+        let name = att.name || 'file';
         while (usedNames.has(name)) name = `dup_${name}`;
         usedNames.add(name);
         zip.file(name, blob);
@@ -1010,7 +1010,7 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert('Gagal jana ZIP: ' + (err?.message || err));
+      alert('Failed to generate ZIP: ' + (err?.message || err));
     } finally {
       setZipping(false);
     }
@@ -1024,7 +1024,7 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
         <div className="section-label" style={{margin:0}}>Artwork</div>
         {artworkAtts.length > 0 && (
           <button onClick={handleDownloadZip} disabled={zipping} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:zipping?'default':'pointer',padding:0}}>
-            {zipping ? 'Menjana ZIP...' : '⬇ Muat Turun Semua (ZIP)'}
+            {zipping ? 'Generating ZIP...' : '⬇ Download All (ZIP)'}
           </button>
         )}
       </div>
@@ -1046,7 +1046,7 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
                   );
                 })}
               </div>
-              <button onClick={()=>setExtraDesigns(p=>({...p,[base.key]:(p[base.key]||0)+1}))} style={{fontFamily:"'Poppins',sans-serif",fontSize:10.5,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:8}}>+ Tambah design lain</button>
+              <button onClick={()=>setExtraDesigns(p=>({...p,[base.key]:(p[base.key]||0)+1}))} style={{fontFamily:"'Poppins',sans-serif",fontSize:10.5,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:'pointer',padding:0,marginTop:8}}>+ Add another design</button>
             </div>
           );
         })}
@@ -1079,7 +1079,7 @@ export function UploadCol({ title, atts, busy, onUpload, onView, onDelete }) {
           ))}
         </div>
       ) : (
-        <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>Tiada fail</div>
+        <div style={{marginTop:3,fontSize:10.5,color:'#B0A8BC',fontStyle:'italic'}}>No files</div>
       )}
     </div>
   );
@@ -1101,16 +1101,16 @@ export function SpecialArrangementSection({ specialArr, setSpecialArr, costBreak
   return (
     <div style={{ marginBottom: 16 }}>
       {/* Special Arrangement Toggle */}
-      <label className="field-label">Ada special arrangement?</label>
+      <label className="field-label">Special arrangement?</label>
       <div style={{ display: "flex", gap: 0, marginBottom: specialArr ? 16 : 0 }}>
         <button
           style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: "8px 20px", borderRadius: "8px 0 0 8px", cursor: "pointer", border: "1px solid #E8E4ED", borderRight: "none", background: !specialArr ? "#1A1025" : "#fff", color: !specialArr ? "#fff" : "#6B6080" }}
           onClick={() => { setSpecialArr(false); setCostBreakdown([]); setHasInstallment(false); setInstallments([]); }}
-        >Tidak</button>
+        >No</button>
         <button
           style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: "8px 20px", borderRadius: "0 8px 8px 0", cursor: "pointer", border: "1px solid #E8E4ED", background: specialArr ? "#E91E63" : "#fff", color: specialArr ? "#fff" : "#6B6080" }}
           onClick={() => setSpecialArr(true)}
-        >Ya</button>
+        >Yes</button>
       </div>
 
       {specialArr && (
@@ -1122,41 +1122,41 @@ export function SpecialArrangementSection({ specialArr, setSpecialArr, costBreak
               <button
                 onClick={addBreakdownRow}
                 style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 6, border: "1px solid #E8E4ED", background: "#fff", color: "#E91E63", cursor: "pointer" }}
-              >+ Tambah Item</button>
+              >+ Add Item</button>
             </div>
             {costBreakdown.map((item, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 100px 28px", gap: 8, marginBottom: 8, alignItems: "center" }}>
                 <select className="field-select" style={{ width: "100%", height: 36, fontSize: 12 }} value={item.type} onChange={e => updateBreakdown(i, "type", e.target.value)}>
                   <option value="Consignment Offset">Consignment Offset</option>
                   <option value="Vendor">Vendor</option>
-                  <option value="Komisyen">Komisyen</option>
-                  <option value="Lain-lain">Lain-lain</option>
+                  <option value="Komisyen">Commission</option>
+                  <option value="Lain-lain">Other</option>
                 </select>
-                <input className="field-input" style={{ height: 36, fontSize: 12 }} value={item.recipient} onChange={e => updateBreakdown(i, "recipient", e.target.value)} placeholder="Penerima" />
+                <input className="field-input" style={{ height: 36, fontSize: 12 }} value={item.recipient} onChange={e => updateBreakdown(i, "recipient", e.target.value)} placeholder="Recipient" />
                 <input type="number" className="field-input" style={{ height: 36, fontSize: 12 }} value={item.amount} onChange={e => updateBreakdown(i, "amount", e.target.value)} placeholder="RM" />
                 <button onClick={() => removeBreakdownRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
               </div>
             ))}
-            {costBreakdown.length === 0 && <div className="text-sm text-muted" style={{ padding: "8px 0" }}>Tiada item. Klik "+ Tambah Item" untuk mula.</div>}
+            {costBreakdown.length === 0 && <div className="text-sm text-muted" style={{ padding: "8px 0" }}>No items. Click "+ Add Item" to start.</div>}
 
-            {/* Baki calculation */}
+            {/* Balance calculation */}
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #E8E4ED", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span className="text-sm text-secondary">Baki Kretivco = {formatRM(Number(estValue) || 0)} - {formatRM(breakdownTotal)}</span>
+              <span className="text-sm text-secondary">Kretivco Balance = {formatRM(Number(estValue) || 0)} - {formatRM(breakdownTotal)}</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: baki >= 0 ? "#10B981" : "#EF4444" }}>{formatRM(baki)}</span>
             </div>
           </div>
 
           {/* Installment Toggle */}
-          <label className="field-label">Ada installment?</label>
+          <label className="field-label">Installment plan?</label>
           <div style={{ display: "flex", gap: 0, marginBottom: hasInstallment ? 16 : 0 }}>
             <button
               style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: "8px 20px", borderRadius: "8px 0 0 8px", cursor: "pointer", border: "1px solid #E8E4ED", borderRight: "none", background: !hasInstallment ? "#1A1025" : "#fff", color: !hasInstallment ? "#fff" : "#6B6080" }}
               onClick={() => { setHasInstallment(false); setInstallments([]); }}
-            >Tidak</button>
+            >No</button>
             <button
               style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: "8px 20px", borderRadius: "0 8px 8px 0", cursor: "pointer", border: "1px solid #E8E4ED", background: hasInstallment ? "#E91E63" : "#fff", color: hasInstallment ? "#fff" : "#6B6080" }}
               onClick={() => setHasInstallment(true)}
-            >Ya</button>
+            >Yes</button>
           </div>
 
           {hasInstallment && (
@@ -1166,7 +1166,7 @@ export function SpecialArrangementSection({ specialArr, setSpecialArr, costBreak
                 <button
                   onClick={addInstallmentRow}
                   style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 6, border: "1px solid #E8E4ED", background: "#fff", color: "#E91E63", cursor: "pointer" }}
-                >+ Tambah Installment</button>
+                >+ Add Installment</button>
               </div>
               {installments.map((inst, i) => (
                 <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 28px", gap: 8, marginBottom: 8, alignItems: "center" }}>
@@ -1175,7 +1175,7 @@ export function SpecialArrangementSection({ specialArr, setSpecialArr, costBreak
                   <button onClick={() => removeInstallmentRow(i)} style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", fontSize: 16, padding: 0, lineHeight: 1 }}>×</button>
                 </div>
               ))}
-              {installments.length === 0 && <div className="text-sm text-muted" style={{ padding: "8px 0" }}>Tiada installment. Klik "+ Tambah Installment" untuk mula.</div>}
+              {installments.length === 0 && <div className="text-sm text-muted" style={{ padding: "8px 0" }}>No installments. Click "+ Add Installment" to start.</div>}
             </div>
           )}
         </>
@@ -1194,7 +1194,7 @@ export function GlobalJobStyles() {
         .page{background:#F5F3F7;min-height:100vh;color:#1A1025}
         .header{background:linear-gradient(135deg,#E91E63,#AD1457);padding:24px 32px;color:#fff}
         .h-title{font-size:20px;font-weight:700} .h-sub{font-size:12px;color:rgba(255,255,255,.6);margin-top:2px}
-        .content{padding:24px;max-width:1400px;margin:0 auto}
+        .content{padding:24px}
         .card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
         .filter-bar{padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
         .field-input{font-family:'Poppins',sans-serif;font-size:13px;border:1px solid #E8E4ED;border-radius:8px;padding:0 12px;height:40px;outline:none;background:#fff;color:#1A1025;width:100%;box-sizing:border-box}

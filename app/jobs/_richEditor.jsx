@@ -61,7 +61,7 @@ export function RichNoteComposer({ jobId, onSubmit }) {
         const file = item.getAsFile();
         if (!file) return false;
         if (file.size > MAX_IMAGE_BYTES) {
-          alert("Gambar terlalu besar (>4MB). Guna \"+ Fail\" untuk attach sebagai fail biasa.");
+          alert("Image too large (>4MB). Use \"+ File\" to attach it as a regular file instead.");
           return true;
         }
         const reader = new FileReader();
@@ -79,7 +79,7 @@ export function RichNoteComposer({ jobId, onSubmit }) {
   const insertImage = useCallback((file) => {
     if (!file) return;
     if (file.size > MAX_IMAGE_BYTES) {
-      alert("Gambar terlalu besar (>4MB). Guna \"+ Fail\" untuk attach sebagai fail biasa.");
+      alert("Image too large (>4MB). Use \"+ File\" to attach it as a regular file instead.");
       return;
     }
     const reader = new FileReader();
@@ -88,7 +88,7 @@ export function RichNoteComposer({ jobId, onSubmit }) {
   }, [editor]);
 
   const addLink = useCallback(() => {
-    const url = window.prompt("URL pautan:");
+    const url = window.prompt("Link URL:");
     if (url) editor?.chain().focus().setLink({ href: url }).run();
   }, [editor]);
 
@@ -119,7 +119,7 @@ export function RichNoteComposer({ jobId, onSubmit }) {
       editor.commands.clearContent();
       setFiles([]);
     } catch (err) {
-      alert("Gagal simpan catatan: " + (err?.message || err));
+      alert("Failed to save note: " + (err?.message || err));
     } finally {
       setSubmitting(false);
     }
@@ -134,11 +134,11 @@ export function RichNoteComposer({ jobId, onSubmit }) {
         <ToolbarBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic"><i>I</i></ToolbarBtn>
         <ToolbarBtn active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline"><u>U</u></ToolbarBtn>
         <span style={{ width: 1, height: 18, background: "#E8E4ED", margin: "0 4px" }} />
-        <ToolbarBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Senarai">•≡</ToolbarBtn>
-        <ToolbarBtn active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Senarai bernombor">1≡</ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet List">•≡</ToolbarBtn>
+        <ToolbarBtn active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered List">1≡</ToolbarBtn>
         <span style={{ width: 1, height: 18, background: "#E8E4ED", margin: "0 4px" }} />
         <div style={{ position: "relative" }}>
-          <ToolbarBtn onClick={() => setShowColors(p => !p)} title="Warna teks">🎨</ToolbarBtn>
+          <ToolbarBtn onClick={() => setShowColors(p => !p)} title="Text Color">🎨</ToolbarBtn>
           {showColors && (
             <div style={{ position: "absolute", top: 32, left: 0, zIndex: 20, background: "#fff", border: "1px solid #E8E4ED", borderRadius: 8, padding: 6, display: "flex", gap: 4, boxShadow: "0 4px 12px rgba(0,0,0,.1)" }}>
               {COLORS.map(c => (
@@ -147,12 +147,12 @@ export function RichNoteComposer({ jobId, onSubmit }) {
             </div>
           )}
         </div>
-        <ToolbarBtn onClick={addLink} title="Pautan">🔗</ToolbarBtn>
-        <label style={{ width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }} title="Sisip gambar">
+        <ToolbarBtn onClick={addLink} title="Link">🔗</ToolbarBtn>
+        <label style={{ width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }} title="Insert Image">
           🖼️
           <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => { insertImage(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
-        <label style={{ width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }} title="Lampir fail (Excel, Word, dll)">
+        <label style={{ width: 28, height: 28, borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }} title="Attach File (Excel, Word, etc.)">
           📎
           <input type="file" accept=".xls,.xlsx,.doc,.docx,.pdf,.csv,.zip" style={{ display: "none" }} onChange={e => { addFileChip(e.target.files?.[0]); e.target.value = ""; }} />
         </label>
@@ -177,7 +177,7 @@ export function RichNoteComposer({ jobId, onSubmit }) {
           onClick={submit}
           disabled={isEmpty || submitting}
           style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: "8px 18px", borderRadius: 8, border: "none", cursor: (!isEmpty && !submitting) ? "pointer" : "not-allowed", background: (!isEmpty && !submitting) ? "#E91E63" : "#E8E4ED", color: (!isEmpty && !submitting) ? "#fff" : "#9B93A8" }}
-        >{submitting ? "Menyimpan..." : "Tambah Catatan"}</button>
+        >{submitting ? "Saving..." : "Add Note"}</button>
       </div>
     </div>
   );

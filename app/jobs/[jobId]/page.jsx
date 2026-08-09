@@ -38,7 +38,7 @@ export default function JobDetailPage() {
       const itemsTotal = (job.line_items || []).reduce((s2, li) => s2 + (li.total || (li.qty * li.price) || 0), 0);
       const finalValue = latestInvoice?.amount || itemsTotal || job.estimation_value || 0;
       updateJob(job.id, { status: "completed", final_value: finalValue }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(finalValue)}` });
-      setToast(`${job.job_id} selesai. Final: ${formatRM(finalValue)}`);
+      setToast(`${job.job_id} completed. Final: ${formatRM(finalValue)}`);
       return;
     }
     updateJob(job.id, { status: s }, profile?.name, { action: 'status_change', from: job.status, to: s });
@@ -48,7 +48,7 @@ export default function JobDetailPage() {
   const handleRollback = useCallback((job, s) => {
     setConfirm({
       title: "Rollback Status?",
-      msg: `Adakah anda pasti mahu rollback ${job.job_id} dari ${STATUS[job.status]?.label} ke ${STATUS[s]?.label}?`,
+      msg: `Are you sure you want to roll back ${job.job_id} from ${STATUS[job.status]?.label} to ${STATUS[s]?.label}?`,
       label: `← ${STATUS[s]?.label}`,
       color: "#F59E0B",
       showReasonField: true,
@@ -113,16 +113,16 @@ export default function JobDetailPage() {
     updateJob(cancelJob.id, { status: 'cancelled', cancel_reason: reason, cancel_reason_text: reason === 'other' ? customText : '' }, profile?.name, { action: 'cancelled', detail });
     reverseJobLedgerEntries(cancelJob.job_id, profile?.name);
     setCancelJob(null);
-    setToast(`${cancelJob.job_id} dibatalkan.`);
+    setToast(`${cancelJob.job_id} cancelled.`);
   }, [cancelJob, updateJob, reverseJobLedgerEntries, profile]);
 
   const handleArchive = useCallback((job) => {
     setConfirm({
-      title: "Arkib Job?", msg: `${job.job_id} akan diarkibkan.`, label: "Arkib", color: "#6B7280",
+      title: "Archive Job?", msg: `${job.job_id} will be archived.`, label: "Archive", color: "#6B7280",
       onConfirm: () => {
         updateJob(job.id, { archived: true }, profile?.name, { action: 'edited', field: 'archived', old: 'false', val: 'true' });
         setConfirm(null);
-        setToast(`${job.job_id} diarkibkan.`);
+        setToast(`${job.job_id} archived.`);
       }
     });
   }, [updateJob, profile]);
@@ -141,18 +141,18 @@ export default function JobDetailPage() {
     const name = profile?.name || 'Staff';
     const newStatus = job.status === 'new' ? 'assigned' : job.status;
     updateJob(job.id, { pic: name, status: newStatus }, profile?.name, { action: 'edited', field: 'pic', old: job.pic || '', val: name });
-    setToast(`${job.job_id}: diambil oleh ${name}.`);
+    setToast(`${job.job_id}: claimed by ${name}.`);
   }, [updateJob, profile]);
 
   const handleHold = useCallback((job, type) => {
-    const reasonText = window.prompt(`Sebab ${HOLD_STATUS[type]?.label || type} (optional):`) || '';
+    const reasonText = window.prompt(`Reason for ${HOLD_STATUS[type]?.label || type} (optional):`) || '';
     updateJob(job.id, { hold_status: type, hold_reason: reasonText }, profile?.name, { action: 'edited', field: 'hold_status', old: job.hold_status || '', val: type, detail: reasonText || undefined });
     setToast(`${job.job_id}: ${HOLD_STATUS[type]?.label}.`);
   }, [updateJob, profile]);
 
   const handleResume = useCallback((job) => {
     updateJob(job.id, { hold_status: null, hold_reason: null }, profile?.name, { action: 'edited', field: 'hold_status', old: job.hold_status || '', val: '' });
-    setToast(`${job.job_id}: disambung semula.`);
+    setToast(`${job.job_id}: resumed.`);
   }, [updateJob, profile]);
 
   const handleReassignConfirm = useCallback((name) => {
@@ -168,11 +168,11 @@ export default function JobDetailPage() {
         <GlobalJobStyles />
         <div className="page">
           <div className="header">
-            <div className="h-title">{dataLoading ? 'Memuatkan...' : 'Job tidak dijumpai'}</div>
-            <div className="h-sub">{dataLoading ? '' : `Tiada job dengan ID "${jobId}"`}</div>
+            <div className="h-title">{dataLoading ? 'Loading...' : 'Job not found'}</div>
+            <div className="h-sub">{dataLoading ? '' : `No job found with ID "${jobId}"`}</div>
           </div>
           <div className="content">
-            <button className="btn-secondary" onClick={() => router.push('/jobs')}>← Kembali ke Job Monitor</button>
+            <button className="btn-secondary" onClick={() => router.push('/jobs')}>← Back to Job Monitor</button>
           </div>
         </div>
       </>
@@ -187,7 +187,7 @@ export default function JobDetailPage() {
       <div className="page">
         <div className="header">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
-            <button onClick={() => router.push('/jobs')} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.4)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}>← Kembali</button>
+            <button onClick={() => router.push('/jobs')} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.4)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}>← Back</button>
             <ActionMenu
               job={job}
               onTakeIn={() => handleTakeIn(job)}
@@ -213,7 +213,7 @@ export default function JobDetailPage() {
             </div>
             <div style={{ textAlign: 'right' }}>
               <div className="job-header-line" style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Status: {STATUS[job.status]?.label}</div>
-              <div className="job-header-line">Current Responsible: {job.pic || <span style={{ fontStyle: 'italic' }}>Belum assign</span>}</div>
+              <div className="job-header-line">Current Responsible: {job.pic || <span style={{ fontStyle: 'italic' }}>Not yet assigned</span>}</div>
               <div className="job-header-line">Current Department: {DEPT[job.department]?.label || job.department}</div>
               {heldMeta && <div className="hold-badge" style={{ background: '#fff', color: heldMeta.color }}>{heldMeta.icon} {heldMeta.label}{job.hold_reason ? `: ${job.hold_reason}` : ''}</div>}
             </div>

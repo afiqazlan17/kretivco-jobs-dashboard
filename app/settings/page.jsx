@@ -2,10 +2,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
 import { DEPT, ROLE } from '@/lib/constants';
-const formatDate=d=>d?new Date(d).toLocaleDateString("ms-MY",{day:"numeric",month:"long",year:"numeric"}):"—";
+const formatDate=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}):"—";
 
 function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
-function DTag({d}){if(!d)return<span className="text-sm text-muted">Semua</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
+function DTag({d}){if(!d)return<span className="text-sm text-muted">All</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
 function Av({name,sz=32}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04","#10B981","#F59E0B","#6366F1"];const i=(name?.charCodeAt(0)||0)%colors.length;return<div className="avatar" style={{width:sz,height:sz,fontSize:sz*.38,background:colors[i]+"18",color:colors[i]}}>{name?.charAt(0)||"?"}</div>}
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);const c=type==="danger"?"#EF4444":"#10B981";return<div className="toast" style={{borderLeftColor:c}}>{type==="danger"?"✕":"✓"} {msg}</div>}
@@ -20,14 +20,14 @@ function UserModal({user,onSave,onClose}){
   const needsDept=f.role!=="bod";
   const dirty=JSON.stringify(f)!==JSON.stringify(initial);
   const changed=!isEdit||dirty;
-  const guardedClose=()=>{if(dirty&&!window.confirm("Perubahan belum disimpan akan hilang. Tutup borang ini?"))return;onClose()};
-  const validate=()=>{const e={};if(!f.name.trim())e.name="Wajib.";if(!f.email.trim())e.email="Wajib.";if(needsDept&&!f.department)e.department="Pilih department.";setErr(e);return!Object.keys(e).length};
+  const guardedClose=()=>{if(dirty&&!window.confirm("Unsaved changes will be lost. Close this form?"))return;onClose()};
+  const validate=()=>{const e={};if(!f.name.trim())e.name="Required.";if(!f.email.trim())e.email="Required.";if(needsDept&&!f.department)e.department="Select a department.";setErr(e);return!Object.keys(e).length};
 
   return(
     <Modal w={500} onClose={guardedClose}>
-      <div className="mheader"><div className="mtitle">{isEdit?"Edit User":"Tambah User"}</div><button className="mclose" onClick={guardedClose}>×</button></div>
+      <div className="mheader"><div className="mtitle">{isEdit?"Edit User":"Add User"}</div><button className="mclose" onClick={guardedClose}>×</button></div>
       <div className="mbody">
-        <div className="fg"><label className="fl">Nama Penuh *</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} style={{borderColor:err.name?"#EF4444":"#E8E4ED"}}/>{err.name&&<div className="ferr">{err.name}</div>}</div>
+        <div className="fg"><label className="fl">Full Name *</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} style={{borderColor:err.name?"#EF4444":"#E8E4ED"}}/>{err.name&&<div className="ferr">{err.name}</div>}</div>
         <div className="fg"><label className="fl">Email *</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)} placeholder="email@kretiv.co"/></div>
         <div className="fg"><label className="fl">Role *</label>
           <div className="role-cards">{Object.entries(ROLE).map(([k,v])=>(
@@ -38,20 +38,20 @@ function UserModal({user,onSave,onClose}){
           ))}</div>
         </div>
         {needsDept&&<div className="fg"><label className="fl">Department *</label><div className="dept-btns">{Object.entries(DEPT).map(([k,v])=><button key={k} className="dept-btn" style={{border:f.department===k?`2px solid ${v.color}`:"1px solid #E8E4ED",background:f.department===k?v.color+"12":"#fff",color:f.department===k?v.color:"#6B6080"}} onClick={()=>s("department",k)}>{v.label}</button>)}</div>{err.department&&<div className="ferr">{err.department}</div>}</div>}
-        {needsDept&&<div className="fg"><label className="fl">Visible Departments</label><div className="text-xs text-muted" style={{marginBottom:8}}>Pilih department yang user ini boleh lihat. Kosong = department sendiri sahaja.</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{Object.entries(DEPT).map(([k,v])=>{const checked=(f.visible_departments||[]).includes(k);return<label key={k} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,cursor:'pointer',border:checked?`2px solid ${v.color}`:'1px solid #E8E4ED',background:checked?v.color+'08':'#fff',fontSize:12,fontWeight:checked?600:400,color:checked?v.color:'#6B6080'}}><input type="checkbox" checked={checked} onChange={()=>toggleVisDept(k)} style={{accentColor:v.color,width:14,height:14}}/>{v.label}</label>})}</div></div>}
-        <div className="access-preview"><div className="section-label" style={{marginBottom:8}}>Preview Akses</div><div className="text-sm" style={{lineHeight:1.8}}>
-          {f.role==="bod"?<><span className="text-green">✓</span> Semua department<br/><span className="text-green">✓</span> Full reports & export<br/><span className="text-green">✓</span> Settings & user management</>:
-          f.role==="dept_head"?<><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Boleh lihat: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`Job ${f.department?DEPT[f.department]?.label:"dept"} sahaja`}<br/><span className="text-green">✓</span> Reports dept yang visible<br/><span className="text-red">✕</span> Tidak boleh akses Settings</>:
-          <><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Boleh lihat: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`Job ${f.department?DEPT[f.department]?.label:"dept"} sahaja`}<br/><span className="text-amber">~</span> Edit terhad<br/><span className="text-red">✕</span> Tidak boleh Reports & Settings</>}
+        {needsDept&&<div className="fg"><label className="fl">Visible Departments</label><div className="text-xs text-muted" style={{marginBottom:8}}>Select the departments this user can view. Leave empty for their own department only.</div><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{Object.entries(DEPT).map(([k,v])=>{const checked=(f.visible_departments||[]).includes(k);return<label key={k} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',borderRadius:8,cursor:'pointer',border:checked?`2px solid ${v.color}`:'1px solid #E8E4ED',background:checked?v.color+'08':'#fff',fontSize:12,fontWeight:checked?600:400,color:checked?v.color:'#6B6080'}}><input type="checkbox" checked={checked} onChange={()=>toggleVisDept(k)} style={{accentColor:v.color,width:14,height:14}}/>{v.label}</label>})}</div></div>}
+        <div className="access-preview"><div className="section-label" style={{marginBottom:8}}>Access Preview</div><div className="text-sm" style={{lineHeight:1.8}}>
+          {f.role==="bod"?<><span className="text-green">✓</span> All departments<br/><span className="text-green">✓</span> Full reports & export<br/><span className="text-green">✓</span> Settings & user management</>:
+          f.role==="dept_head"?<><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Can view: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`${f.department?DEPT[f.department]?.label:"Department"} jobs only`}<br/><span className="text-green">✓</span> Reports for visible departments<br/><span className="text-red">✕</span> Cannot access Settings</>:
+          <><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Can view: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`${f.department?DEPT[f.department]?.label:"Department"} jobs only`}<br/><span className="text-amber">~</span> Limited editing<br/><span className="text-red">✕</span> Cannot access Reports & Settings</>}
         </div></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Batal</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Simpan":"Tambah"}</button></div>
+      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Cancel</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Save":"Add"}</button></div>
     </Modal>
   );
 }
 
 function ConfirmModal({title,msg,label,color,onConfirm,onClose}){
-  return(<Modal w={400} onClose={onClose}><div style={{padding:"24px 24px 16px"}}><div className="mtitle">{title}</div><p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>{msg}</p></div><div className="mfooter"><button className="btn-secondary" onClick={onClose}>Batal</button><button className="btn-primary" style={{background:color}} onClick={onConfirm}>{label}</button></div></Modal>);
+  return(<Modal w={400} onClose={onClose}><div style={{padding:"24px 24px 16px"}}><div className="mtitle">{title}</div><p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>{msg}</p></div><div className="mfooter"><button className="btn-secondary" onClick={onClose}>Cancel</button><button className="btn-primary" style={{background:color}} onClick={onConfirm}>{label}</button></div></Modal>);
 }
 
 export default function Settings(){
@@ -66,9 +66,9 @@ export default function Settings(){
 
   const ac=users.filter(u=>u.active).length;const bc=users.filter(u=>u.role==="bod"&&u.active).length;const dc=users.filter(u=>u.role==="dept_head"&&u.active).length;const sc=users.filter(u=>u.role==="staff"&&u.active).length;
 
-  const handleToggle=u=>{if(u.active){setConfirm({title:"Nyahaktifkan?",msg:`${u.name} tidak akan boleh log masuk. Boleh aktifkan semula kemudian.`,label:"Nyahaktifkan",color:"#EF4444",onConfirm:()=>{updateUser(u.id,{active:false});setConfirm(null);setToast({msg:`${u.name} dinyahaktifkan.`,type:"danger"})}});}else{updateUser(u.id,{active:true});setToast({msg:`${u.name} diaktifkan.`,type:"success"});}};
+  const handleToggle=u=>{if(u.active){setConfirm({title:"Deactivate?",msg:`${u.name} will no longer be able to log in. They can be reactivated later.`,label:"Deactivate",color:"#EF4444",onConfirm:()=>{updateUser(u.id,{active:false});setConfirm(null);setToast({msg:`${u.name} has been deactivated.`,type:"danger"})}});}else{updateUser(u.id,{active:true});setToast({msg:`${u.name} has been activated.`,type:"success"});}};
 
-  const caps=[["Lihat semua dept",1,0,0],["Lihat dept sendiri",1,1,1],["Cipta job",1,1,1],["Edit job",1,1,0],["Tukar status",1,1,0],["Arkib/Batal",1,0,0],["Reports",1,1,0],["Export",1,0,0],["User Management",1,0,0],["Settings",1,0,0]];
+  const caps=[["View all departments",1,0,0],["View own department",1,1,1],["Create job",1,1,1],["Edit job",1,1,0],["Change status",1,1,0],["Archive/Cancel",1,0,0],["Reports",1,1,0],["Export",1,0,0],["User Management",1,0,0],["Settings",1,0,0]];
 
   return(
     <>
@@ -120,37 +120,37 @@ export default function Settings(){
       `}</style>
 
       <div className="page">
-        <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Settings</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>User Management</div></div><button className="btn-header" onClick={()=>setAddModal(true)}><span style={{fontSize:16}}>+</span> Tambah User</button></div></div>
+        <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Settings</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>User Management</div></div><button className="btn-header" onClick={()=>setAddModal(true)}><span style={{fontSize:16}}>+</span> Add User</button></div></div>
         <div className="content">
           <div className="sum-grid">
-            {[{l:"Jumlah Aktif",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.color},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.color},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.color}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
+            {[{l:"Total Active",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.color},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.color},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.color}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
           </div>
           <div className="card filter-bar">
-            <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari nama atau email..."/></div>
-            <select className="fs" style={{width:140}} value={fRole} onChange={e=>setFRole(e.target.value)}><option value="all">Semua Role</option>{Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
-            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B6080",cursor:"pointer"}}><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)} style={{accentColor:"#E91E63"}}/>Tunjuk tidak aktif</label>
+            <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or email..."/></div>
+            <select className="fs" style={{width:140}} value={fRole} onChange={e=>setFRole(e.target.value)}><option value="all">All Roles</option>{Object.entries(ROLE).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select>
+            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B6080",cursor:"pointer"}}><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)} style={{accentColor:"#E91E63"}}/>Show inactive</label>
           </div>
           <div className="card" style={{overflow:"hidden"}}>
-            <div className="tbl-h">{["","Nama","Email","Role","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
-            {filtered.length===0?<div style={{padding:"48px 20px",textAlign:"center",color:"#9B93A8",fontSize:13}}>Tiada user.</div>:filtered.map(u=>(
+            <div className="tbl-h">{["","Name","Email","Role","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
+            {filtered.length===0?<div style={{padding:"48px 20px",textAlign:"center",color:"#9B93A8",fontSize:13}}>No users.</div>:filtered.map(u=>(
               <div key={u.id} className="tbl-r" style={{opacity:u.active?1:.55}}>
                 <div className="tbl-c"><Av name={u.name}/></div>
-                <div className="tbl-c"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Sejak {formatDate(u.created_at)}</div></div>
+                <div className="tbl-c"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Since {formatDate(u.created_at)}</div></div>
                 <div className="tbl-c text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
                 <div className="tbl-c">{u.visible_departments?.length>0?u.visible_departments.map(d=><DTag key={d} d={d}/>):<DTag d={u.department}/>}</div>
-                <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Aktif":"Tidak aktif"}</div>
+                <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Active":"Inactive"}</div>
                 <div className="tbl-c" style={{display:"flex",gap:6}}>
                   <button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button>
-                  {u.active?<button className="btn-danger-sm" onClick={()=>handleToggle(u)}>Nyahaktif</button>:<button className="btn-success-sm" onClick={()=>handleToggle(u)}>Aktifkan</button>}
+                  {u.active?<button className="btn-danger-sm" onClick={()=>handleToggle(u)}>Deactivate</button>:<button className="btn-success-sm" onClick={()=>handleToggle(u)}>Activate</button>}
                 </div>
               </div>
             ))}
           </div>
           <div className="text-sm text-muted" style={{marginTop:12}}>{filtered.length} user</div>
 
-          <div className="card" style={{marginTop:24,padding:"20px 24px"}}><div style={{fontSize:14,fontWeight:700,marginBottom:16}}>Rujukan Akses</div>
-            <table className="ref"><thead><tr><th>Keupayaan</th>{Object.entries(ROLE).map(([k,v])=><th key={k} style={{textAlign:"center",color:v.color,fontWeight:600}}>{v.label}</th>)}</tr></thead><tbody>
+          <div className="card" style={{marginTop:24,padding:"20px 24px"}}><div style={{fontSize:14,fontWeight:700,marginBottom:16}}>Access Reference</div>
+            <table className="ref"><thead><tr><th>Capability</th>{Object.entries(ROLE).map(([k,v])=><th key={k} style={{textAlign:"center",color:v.color,fontWeight:600}}>{v.label}</th>)}</tr></thead><tbody>
               {caps.map(([cap,b,d,s],i)=><tr key={i}><td>{cap}</td><td style={{textAlign:"center"}}>{b?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{d?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{s?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td></tr>)}
             </tbody></table>
           </div>
@@ -160,7 +160,7 @@ export default function Settings(){
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
                 <div style={{fontSize:14,fontWeight:700,color:'#F59E0B'}}>Reset Job Monitor</div>
-                <div className="text-sm text-secondary" style={{marginTop:4}}>Padam semua jobs & activity logs. Customers, users & data lain kekal. Dev phase sahaja.</div>
+                <div className="text-sm text-secondary" style={{marginTop:4}}>Deletes all jobs & activity logs. Customers, users & other data remain unchanged. Dev phase only.</div>
               </div>
               <button className="btn-danger-sm" style={{padding:'9px 20px',fontSize:13,background:'#F59E0B12',color:'#F59E0B',borderColor:'#F59E0B30'}} onClick={()=>setResetJobsModal(true)}>Reset Jobs</button>
             </div>
@@ -170,43 +170,43 @@ export default function Settings(){
           <div className="card" style={{marginTop:24,padding:"20px 24px",borderLeft:"4px solid #EF4444"}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <div style={{fontSize:14,fontWeight:700,color:'#EF4444'}}>Reset Semua Data</div>
-                <div className="text-sm text-secondary" style={{marginTop:4}}>Padam semua jobs, customers & activity logs. Users kekal. Dev phase sahaja.</div>
+                <div style={{fontSize:14,fontWeight:700,color:'#EF4444'}}>Reset All Data</div>
+                <div className="text-sm text-secondary" style={{marginTop:4}}>Deletes all jobs, customers & activity logs. Users remain unchanged. Dev phase only.</div>
               </div>
               <button className="btn-danger-sm" style={{padding:'9px 20px',fontSize:13}} onClick={()=>setResetModal(true)}>Reset Data</button>
             </div>
           </div>
         </div>
 
-        {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.label}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
-        {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
+        {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} added as ${ROLE[d.role]?.label}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
+        {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} updated.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
         {resetJobsModal&&<Modal w={420} onClose={()=>{setResetJobsModal(false);setResetJobsInput('')}}>
           <div style={{padding:"24px"}}>
             <div className="mtitle" style={{color:'#F59E0B'}}>⚠️ Reset Job Monitor</div>
-            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>Ini akan padam semua jobs dan activity logs. Customer & user tidak akan disentuh. Tindakan ini tidak boleh diundo.</p>
+            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>This will permanently delete all jobs and activity logs. Customers and users will not be affected. This action cannot be undone.</p>
             <div style={{marginTop:16}}>
-              <label className="fl">Taip &quot;RESET&quot; untuk sahkan</label>
+              <label className="fl">Type &quot;RESET&quot; to confirm</label>
               <input className="fi" value={resetJobsInput} onChange={e=>setResetJobsInput(e.target.value)} placeholder="RESET" style={{borderColor:resetJobsInput==='RESET'?'#F59E0B':'#E8E4ED'}}/>
             </div>
           </div>
           <div className="mfooter">
-            <button className="btn-secondary" onClick={()=>{setResetJobsModal(false);setResetJobsInput('')}}>Batal</button>
-            <button className="btn-primary" style={{background:resetJobsInput==='RESET'?'#F59E0B':'#E8E4ED',color:resetJobsInput==='RESET'?'#fff':'#9B93A8',cursor:resetJobsInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetJobsInput==='RESET'){resetJobs();setResetJobsModal(false);setResetJobsInput('');setToast({msg:'Semua job telah direset.',type:'danger'})}}}>Reset Jobs</button>
+            <button className="btn-secondary" onClick={()=>{setResetJobsModal(false);setResetJobsInput('')}}>Cancel</button>
+            <button className="btn-primary" style={{background:resetJobsInput==='RESET'?'#F59E0B':'#E8E4ED',color:resetJobsInput==='RESET'?'#fff':'#9B93A8',cursor:resetJobsInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetJobsInput==='RESET'){resetJobs();setResetJobsModal(false);setResetJobsInput('');setToast({msg:'All jobs have been reset.',type:'danger'})}}}>Reset Jobs</button>
           </div>
         </Modal>}
         {resetModal&&<Modal w={420} onClose={()=>{setResetModal(false);setResetInput('')}}>
           <div style={{padding:"24px"}}>
-            <div className="mtitle" style={{color:'#EF4444'}}>⚠️ Reset Semua Data</div>
-            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>Ini akan padam semua jobs, customers, dan activity logs. Users akan kekal. Tindakan ini tidak boleh diundo.</p>
+            <div className="mtitle" style={{color:'#EF4444'}}>⚠️ Reset All Data</div>
+            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>This will permanently delete all jobs, customers, and activity logs. Users will not be affected. This action cannot be undone.</p>
             <div style={{marginTop:16}}>
-              <label className="fl">Taip &quot;RESET&quot; untuk sahkan</label>
+              <label className="fl">Type &quot;RESET&quot; to confirm</label>
               <input className="fi" value={resetInput} onChange={e=>setResetInput(e.target.value)} placeholder="RESET" style={{borderColor:resetInput==='RESET'?'#EF4444':'#E8E4ED'}}/>
             </div>
           </div>
           <div className="mfooter">
-            <button className="btn-secondary" onClick={()=>{setResetModal(false);setResetInput('')}}>Batal</button>
-            <button className="btn-primary" style={{background:resetInput==='RESET'?'#EF4444':'#E8E4ED',color:resetInput==='RESET'?'#fff':'#9B93A8',cursor:resetInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetInput==='RESET'){resetAll();setResetModal(false);setResetInput('');setToast({msg:'Semua data telah direset.',type:'danger'})}}}>Reset Semua</button>
+            <button className="btn-secondary" onClick={()=>{setResetModal(false);setResetInput('')}}>Cancel</button>
+            <button className="btn-primary" style={{background:resetInput==='RESET'?'#EF4444':'#E8E4ED',color:resetInput==='RESET'?'#fff':'#9B93A8',cursor:resetInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetInput==='RESET'){resetAll();setResetModal(false);setResetInput('');setToast({msg:'All data has been reset.',type:'danger'})}}}>Reset All</button>
           </div>
         </Modal>}
         {toast&&<Toast msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}

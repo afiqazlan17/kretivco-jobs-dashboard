@@ -27,11 +27,11 @@ function balanceFor(entries, accountKey) {
 }
 
 const TYPE_META = {
-  invoice: { label: 'Invois', color: DOC_TYPE_META.invoice.color, sign: '' },
-  receipt: { label: 'Resit', color: DOC_TYPE_META.receipt.color, sign: '+' },
-  job_expense: { label: 'Kos Job', color: '#E85D04', sign: '-' },
+  invoice: { label: 'Invoice', color: DOC_TYPE_META.invoice.color, sign: '' },
+  receipt: { label: 'Receipt', color: DOC_TYPE_META.receipt.color, sign: '+' },
+  job_expense: { label: 'Job Cost', color: '#E85D04', sign: '-' },
   operating_expense: { label: 'Expense', color: '#EF4444', sign: '-' },
-  opening_balance: { label: 'Baki Permulaan', color: '#6B7280', sign: '' },
+  opening_balance: { label: 'Opening Balance', color: '#6B7280', sign: '' },
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
 
@@ -54,7 +54,7 @@ function GeneralLedgerReport({ entries }) {
   const years = Array.from(new Set(entries.map(e => e.date?.slice(0,4)).filter(Boolean))).sort();
   if (!years.includes(String(thisYear))) years.push(String(thisYear));
   const monthOpts = ['01','02','03','04','05','06','07','08','09','10','11','12'];
-  const monthName = (m) => new Date(2000, parseInt(m,10)-1, 1).toLocaleDateString('ms-MY', { month: 'long' });
+  const monthName = (m) => new Date(2000, parseInt(m,10)-1, 1).toLocaleDateString('en-GB', { month: 'long' });
 
   const inRange = useMemo(() => entries.filter(e => {
     const d = e.date?.slice(0,10);
@@ -77,7 +77,7 @@ function GeneralLedgerReport({ entries }) {
 
   // Detail: explode each entry into a debit-side row and a credit-side row,
   // then filter to the selected account. Running balance only makes sense
-  // scoped to one account, so it's blank when "Semua Akaun" is selected.
+  // scoped to one account, so it's blank when "All Accounts" is selected.
   const explodedRows = useMemo(() => {
     const rows = [];
     inRange.forEach(e => {
@@ -106,14 +106,14 @@ function GeneralLedgerReport({ entries }) {
   const DetailTable = ({ rows }) => (
     <div style={{overflowX:"auto"}}>
       <table>
-        <thead><tr><th>Tarikh</th><th>Akaun</th><th>Particular</th><th>Ref No</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th><th style={{textAlign:"right"}}>Baki Akru</th></tr></thead>
+        <thead><tr><th>Date</th><th>Account</th><th>Particular</th><th>Ref No</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th><th style={{textAlign:"right"}}>Running Balance</th></tr></thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry untuk tempoh/akaun ini.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period/account.</td></tr>}
           {rows.map(r => (
             <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
               <td className="text-sm">{formatDate(r.date)}</td>
               <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(r.account)}</td>
-              <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+              <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (reversed)</span>}</td>
               <td className="text-sm">{r.ref || '—'}</td>
               <td style={{textAlign:"right"}}>{r.debit ? formatRM(r.debit) : '—'}</td>
               <td style={{textAlign:"right"}}>{r.credit ? formatRM(r.credit) : '—'}</td>
@@ -131,17 +131,17 @@ function GeneralLedgerReport({ entries }) {
         <div className="card-title">General Ledger Report</div>
       </div>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:16}}>
-        <div><label className="fl">Tahun</label>
+        <div><label className="fl">Year</label>
           <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
-        <div><label className="fl">Bulan Dari</label>
+        <div><label className="fl">Month From</label>
           <select className="fs" style={{width:150}} value={monthFrom} onChange={e=>setMonthFrom(e.target.value)}>
             {monthOpts.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
           </select>
         </div>
-        <div><label className="fl">Bulan Hingga</label>
+        <div><label className="fl">Month To</label>
           <select className="fs" style={{width:150}} value={monthTo} onChange={e=>setMonthTo(e.target.value)}>
             {monthOpts.map(m => <option key={m} value={m}>{monthName(m)}</option>)}
           </select>
@@ -156,9 +156,9 @@ function GeneralLedgerReport({ entries }) {
       {tab === 'summary' && (
         <div style={{overflowX:"auto"}}>
           <table>
-            <thead><tr><th>Kod</th><th>Nama Akaun</th><th>Jenis</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th></tr></thead>
+            <thead><tr><th>Code</th><th>Account Name</th><th>Type</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th></tr></thead>
             <tbody>
-              {summaryRows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry untuk tempoh ini.</td></tr>}
+              {summaryRows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period.</td></tr>}
               {summaryRows.map(r => (
                 <tr key={r.key}>
                   <td className="text-sm" style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{r.code}</td>
@@ -176,9 +176,9 @@ function GeneralLedgerReport({ entries }) {
       {tab === 'detail' && (
         <>
           <div style={{marginBottom:12,maxWidth:280}}>
-            <label className="fl">Akaun</label>
+            <label className="fl">Account</label>
             <select className="fs" value={account} onChange={e=>setAccount(e.target.value)}>
-              <option value="all">— Semua Akaun —</option>
+              <option value="all">— All Accounts —</option>
               {detailAccountOptions.map(o => <option key={o.key} value={o.key}>{o.code} · {o.label}</option>)}
             </select>
           </div>
@@ -189,9 +189,9 @@ function GeneralLedgerReport({ entries }) {
       {tab === 'bank' && (
         <>
           <div style={{marginBottom:12,maxWidth:280}}>
-            <label className="fl">Akaun Bank</label>
+            <label className="fl">Bank Account</label>
             <select className="fs" value={bankAccountFilter} onChange={e=>setBankAccountFilter(e.target.value)}>
-              <option value="all">— Semua Bank —</option>
+              <option value="all">— All Banks —</option>
               {bankAccountOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>
           </div>
@@ -234,14 +234,14 @@ function TrialBalanceReport({ entries }) {
     <div className="card">
       <div className="card-title" style={{marginBottom:14}}>Trial Balance</div>
       <div style={{marginBottom:16,maxWidth:200}}>
-        <label className="fl">Sebagai Pada (As of)</label>
+        <label className="fl">As of</label>
         <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
       </div>
       <div style={{overflowX:"auto"}}>
         <table>
-          <thead><tr><th>Kod</th><th>Nama Akaun</th><th>Jenis</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th></tr></thead>
+          <thead><tr><th>Code</th><th>Account Name</th><th>Type</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada baki setakat tarikh ini.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No balances as of this date.</td></tr>}
             {rows.map(r => (
               <tr key={r.key}>
                 <td className="text-sm" style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{r.code}</td>
@@ -255,7 +255,7 @@ function TrialBalanceReport({ entries }) {
           {rows.length > 0 && (
             <tfoot>
               <tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}>
-                <td colSpan={3}>Jumlah</td>
+                <td colSpan={3}>Total</td>
                 <td style={{textAlign:"right"}}>{formatRM(totalDebit)}</td>
                 <td style={{textAlign:"right"}}>{formatRM(totalCredit)}</td>
               </tr>
@@ -265,7 +265,7 @@ function TrialBalanceReport({ entries }) {
       </div>
       {rows.length > 0 && (
         <div style={{marginTop:12,fontSize:12,fontWeight:600,color:balanced?"#10B981":"#EF4444"}}>
-          {balanced ? "✓ Debit = Kredit, seimbang." : "⚠ Debit ≠ Kredit — semak posting."}
+          {balanced ? "✓ Debit = Credit, balanced." : "⚠ Debit ≠ Credit — check posting."}
         </div>
       )}
     </div>
@@ -303,29 +303,29 @@ function BalanceSheetReport({ entries }) {
     <div className="card">
       <div className="card-title" style={{marginBottom:14}}>Balance Sheet</div>
       <div style={{marginBottom:16,maxWidth:200}}>
-        <label className="fl">Sebagai Pada (As of)</label>
+        <label className="fl">As of</label>
         <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
       </div>
 
-      <div className="section-label" style={{marginBottom:6}}>Aset (Assets)</div>
-      <Row label="Belum Diterima (AR)" value={arBalance} />
+      <div className="section-label" style={{marginBottom:6}}>Assets</div>
+      <Row label="Accounts Receivable (AR)" value={arBalance} />
       {bankBalances.map(b => <Row key={b.key} label={b.label} value={b.bal} />)}
-      <Row label="Jumlah Aset" value={totalAssets} bold />
+      <Row label="Total Assets" value={totalAssets} bold />
 
-      <div className="section-label" style={{margin:"18px 0 6px"}}>Liabiliti (Liabilities)</div>
-      <div className="text-xs text-muted" style={{marginBottom:6}}>Tiada liability account direkod dalam sistem lagi (cth: AP, pinjaman) — akan ditambah bila diperlukan.</div>
-      <Row label="Jumlah Liabiliti" value={totalLiabilities} bold />
+      <div className="section-label" style={{margin:"18px 0 6px"}}>Liabilities</div>
+      <div className="text-xs text-muted" style={{marginBottom:6}}>No liability accounts recorded in the system yet (e.g. AP, loans) — will be added when needed.</div>
+      <Row label="Total Liabilities" value={totalLiabilities} bold />
 
-      <div className="section-label" style={{margin:"18px 0 6px"}}>Ekuiti (Equity)</div>
-      <Row label="Baki Permulaan" value={openingEquity} />
-      <Row label="Untung Terkumpul (Retained Earnings)" value={retainedEarnings} />
-      <Row label="Jumlah Ekuiti" value={totalEquity} bold />
+      <div className="section-label" style={{margin:"18px 0 6px"}}>Equity</div>
+      <Row label="Opening Balance" value={openingEquity} />
+      <Row label="Retained Earnings" value={retainedEarnings} />
+      <Row label="Total Equity" value={totalEquity} bold />
 
       <div style={{marginTop:16,paddingTop:12,borderTop:"2px solid #E8E4ED"}}>
-        <Row label="Aset = Liabiliti + Ekuiti?" value={totalLiabilities + totalEquity} bold />
+        <Row label="Assets = Liabilities + Equity?" value={totalLiabilities + totalEquity} bold />
       </div>
       <div style={{marginTop:8,fontSize:12,fontWeight:600,color:balanced?"#10B981":"#EF4444"}}>
-        {balanced ? "✓ Balance sheet seimbang." : "⚠ Tidak seimbang — semak posting."}
+        {balanced ? "✓ Balance sheet balanced." : "⚠ Not balanced — check posting."}
       </div>
     </div>
   );
@@ -366,7 +366,7 @@ function CashBookStatement({ entries }) {
             {bankKeys.map(b => <option key={b} value={b}>{BANK[b].label}</option>)}
           </select>
         </div>
-        <div><label className="fl">Tahun</label>
+        <div><label className="fl">Year</label>
           <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
@@ -374,13 +374,13 @@ function CashBookStatement({ entries }) {
       </div>
       <div style={{overflowX:"auto"}}>
         <table>
-          <thead><tr><th>Tarikh</th><th>Particulars</th><th>Ref No</th><th style={{textAlign:"right"}}>Terimaan</th><th style={{textAlign:"right"}}>Bayaran</th><th style={{textAlign:"right"}}>Baki</th></tr></thead>
+          <thead><tr><th>Date</th><th>Particulars</th><th>Ref No</th><th style={{textAlign:"right"}}>Receipts</th><th style={{textAlign:"right"}}>Payments</th><th style={{textAlign:"right"}}>Balance</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada pergerakan untuk bank/tahun ini.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No activity for this bank/year.</td></tr>}
             {rows.map(r => (
               <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
                 <td className="text-sm">{formatDate(r.date)}</td>
-                <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+                <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (reversed)</span>}</td>
                 <td className="text-sm">{r.ref || '—'}</td>
                 <td style={{textAlign:"right",color:"#10B981"}}>{r.terimaan ? formatRM(r.terimaan) : '—'}</td>
                 <td style={{textAlign:"right",color:"#EF4444"}}>{r.bayaran ? formatRM(r.bayaran) : '—'}</td>
@@ -391,7 +391,7 @@ function CashBookStatement({ entries }) {
           {rows.length > 0 && (
             <tfoot>
               <tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}>
-                <td colSpan={3}>Jumlah</td>
+                <td colSpan={3}>Total</td>
                 <td style={{textAlign:"right"}}>{formatRM(totalIn)}</td>
                 <td style={{textAlign:"right"}}>{formatRM(totalOut)}</td>
                 <td style={{textAlign:"right"}}>{formatRM(totalIn-totalOut)}</td>
@@ -435,16 +435,16 @@ function AgingReport({ entries, jobs }) {
       <div className="sum-grid" style={{marginBottom:20}}>
         {bucketTotals.map(b => (
           <div key={b.bucket} className="sum-card" style={{borderLeftColor: b.bucket==='90+'?'#EF4444':b.bucket==='61-90'?'#E85D04':b.bucket==='31-60'?'#F59E0B':'#10B981'}}>
-            <div className="section-label">{b.bucket} hari</div>
+            <div className="section-label">{b.bucket} days</div>
             <div style={{fontSize:20,fontWeight:700,marginTop:6}}>{formatRM(b.total)}</div>
           </div>
         ))}
       </div>
       <div style={{overflowX:"auto"}}>
         <table>
-          <thead><tr><th>Customer</th><th>Job ID</th><th>Tarikh Invois</th><th style={{textAlign:"center"}}>Hari</th><th>Bucket</th><th style={{textAlign:"right"}}>Outstanding</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Job ID</th><th>Invoice Date</th><th style={{textAlign:"center"}}>Days</th><th>Bucket</th><th style={{textAlign:"right"}}>Outstanding</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada outstanding AR.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No outstanding AR.</td></tr>}
             {rows.map(r => (
               <tr key={r.jobId}>
                 <td className="text-sm">{r.customer}</td>
@@ -457,7 +457,7 @@ function AgingReport({ entries, jobs }) {
             ))}
           </tbody>
           {rows.length > 0 && (
-            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={5}>Jumlah</td><td style={{textAlign:"right"}}>{formatRM(grandTotal)}</td></tr></tfoot>
+            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={5}>Total</td><td style={{textAlign:"right"}}>{formatRM(grandTotal)}</td></tr></tfoot>
           )}
         </table>
       </div>
@@ -480,14 +480,14 @@ function BankReconciliationReport({ entries }) {
   return (
     <div className="card">
       <div className="card-title" style={{marginBottom:6}}>Bank Reconciliation Report</div>
-      <div className="text-xs text-muted" style={{marginBottom:16}}>Bandingkan baki buku (sistem) dengan baki penyata bank sebenar. Masukkan baki penyata bank secara manual untuk setiap akaun.</div>
+      <div className="text-xs text-muted" style={{marginBottom:16}}>Compare the book balance (system) against the actual bank statement balance. Enter the bank statement balance manually for each account.</div>
       <div style={{marginBottom:16,maxWidth:200}}>
-        <label className="fl">Sebagai Pada (As of)</label>
+        <label className="fl">As of</label>
         <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
       </div>
       <div style={{overflowX:"auto"}}>
         <table>
-          <thead><tr><th>Bank</th><th style={{textAlign:"right"}}>Baki Buku (Sistem)</th><th style={{textAlign:"right"}}>Baki Penyata Bank</th><th style={{textAlign:"right"}}>Variance</th><th style={{textAlign:"center"}}>Status</th></tr></thead>
+          <thead><tr><th>Bank</th><th style={{textAlign:"right"}}>Book Balance (System)</th><th style={{textAlign:"right"}}>Bank Statement Balance</th><th style={{textAlign:"right"}}>Variance</th><th style={{textAlign:"center"}}>Status</th></tr></thead>
           <tbody>
             {bankKeys.map(b => {
               const bookBal = balanceFor(upToDate, `bank_${b}`);
@@ -504,7 +504,7 @@ function BankReconciliationReport({ entries }) {
                       value={stmt ?? ''} onChange={e=>setStatementBalances(p=>({...p,[b]:e.target.value}))} />
                   </td>
                   <td style={{textAlign:"right",fontWeight:600,color:variance==null?"#9B93A8":reconciled?"#10B981":"#EF4444"}}>{variance==null?'—':formatRM(variance)}</td>
-                  <td style={{textAlign:"center"}}>{variance==null?<span className="text-xs text-muted">—</span>:reconciled?<span style={{color:"#10B981",fontWeight:700}}>✓ Sepadan</span>:<span style={{color:"#EF4444",fontWeight:700}}>⚠ Tak Sepadan</span>}</td>
+                  <td style={{textAlign:"center"}}>{variance==null?<span className="text-xs text-muted">—</span>:reconciled?<span style={{color:"#10B981",fontWeight:700}}>✓ Matched</span>:<span style={{color:"#EF4444",fontWeight:700}}>⚠ Not Matched</span>}</td>
                 </tr>
               );
             })}
@@ -543,22 +543,22 @@ function SalesReport({ entries }) {
     <div className="card">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
         <div className="card-title">Sales Report</div>
-        <div><label className="fl">Tahun</label>
+        <div><label className="fl">Year</label>
           <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
       <div className="sum-card" style={{borderLeftColor:"#10B981",marginBottom:20,maxWidth:260}}>
-        <div className="section-label">Jumlah Sales ({year})</div>
+        <div className="section-label">Total Sales ({year})</div>
         <div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(grandTotal)}</div>
       </div>
 
-      <div className="section-label" style={{marginBottom:8}}>Ikut Department</div>
+      <div className="section-label" style={{marginBottom:8}}>By Department</div>
       <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
-        <span>Department</span><span style={{textAlign:"right"}}>Bil. Invois</span><span style={{textAlign:"right"}}>Jumlah</span>
+        <span>Department</span><span style={{textAlign:"right"}}>No. of Invoices</span><span style={{textAlign:"right"}}>Total</span>
       </div>
-      {byDept.length === 0 && <div className="text-sm text-muted" style={{padding:"12px 0"}}>Tiada invois untuk tahun ini.</div>}
+      {byDept.length === 0 && <div className="text-sm text-muted" style={{padding:"12px 0"}}>No invoices for this year.</div>}
       {byDept.map(d => (
         <div key={d.key} className="dept-row" style={{gridTemplateColumns:"140px 1fr 1fr"}}>
           <span><span className="dept-tag" style={{color:d.color,background:d.color+"15"}}>{DEPT[d.key].code}</span> {d.label}</span>
@@ -567,12 +567,12 @@ function SalesReport({ entries }) {
         </div>
       ))}
 
-      <div className="section-label" style={{margin:"20px 0 8px"}}>Ikut Customer</div>
+      <div className="section-label" style={{margin:"20px 0 8px"}}>By Customer</div>
       <div style={{overflowX:"auto"}}>
         <table>
-          <thead><tr><th>Customer</th><th style={{textAlign:"right"}}>Bil. Invois</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
+          <thead><tr><th>Customer</th><th style={{textAlign:"right"}}>No. of Invoices</th><th style={{textAlign:"right"}}>Total</th></tr></thead>
           <tbody>
-            {byCustomer.length === 0 && <tr><td colSpan={3} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada invois untuk tahun ini.</td></tr>}
+            {byCustomer.length === 0 && <tr><td colSpan={3} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No invoices for this year.</td></tr>}
             {byCustomer.map(c => (
               <tr key={c.name}>
                 <td className="text-sm">{c.name}</td>
@@ -603,27 +603,27 @@ function InstallmentOutstandingReport({ jobs }) {
   return (
     <div className="card">
       <div className="card-title" style={{marginBottom:6}}>Installment Outstanding</div>
-      <div className="text-xs text-muted" style={{marginBottom:16}}>Semua ansuran belum dibayar merentasi semua job special arrangement</div>
+      <div className="text-xs text-muted" style={{marginBottom:16}}>All unpaid installments across every job with a special payment arrangement</div>
       <div style={{overflowX:"auto"}}>
         <table>
           <thead><tr><th>Job ID</th><th>Customer</th><th>Due Date</th><th style={{textAlign:"right"}}>Amount</th><th style={{textAlign:"center"}}>Status</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada ansuran outstanding.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No outstanding installments.</td></tr>}
             {rows.map(r => {
               const overdue = r.dueDate && r.dueDate < today;
               return (
                 <tr key={r.id}>
                   <td className="jid text-sm">{r.jobId}</td>
                   <td className="text-sm">{r.customer}</td>
-                  <td className="text-sm">{r.dueDate ? new Date(r.dueDate + "-01").toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) : "—"}</td>
+                  <td className="text-sm">{r.dueDate ? new Date(r.dueDate + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "—"}</td>
                   <td style={{textAlign:"right",fontWeight:600}}>{formatRM(r.amount)}</td>
-                  <td style={{textAlign:"center"}}>{overdue ? <span style={{color:"#EF4444",fontWeight:700,fontSize:11}}>⚠ Lewat</span> : <span style={{color:"#F59E0B",fontWeight:700,fontSize:11}}>Pending</span>}</td>
+                  <td style={{textAlign:"center"}}>{overdue ? <span style={{color:"#EF4444",fontWeight:700,fontSize:11}}>⚠ Overdue</span> : <span style={{color:"#F59E0B",fontWeight:700,fontSize:11}}>Pending</span>}</td>
                 </tr>
               );
             })}
           </tbody>
           {rows.length > 0 && (
-            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={3}>Jumlah</td><td style={{textAlign:"right"}}>{formatRM(total)}</td><td /></tr></tfoot>
+            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={3}>Total</td><td style={{textAlign:"right"}}>{formatRM(total)}</td><td /></tr></tfoot>
           )}
         </table>
       </div>
@@ -668,7 +668,7 @@ function FinanceContent() {
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
   const [openForm, setOpenForm] = useState(blankOpenForm);
-  const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; closeFn(); };
+  const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Unsaved changes will be lost. Close this form?')) return; closeFn(); };
   const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()), () => setShowExpense(false));
   const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
 
@@ -705,7 +705,7 @@ function FinanceContent() {
   const bankBalances = isBod ? Object.keys(BANK).map(b => ({ key: b, label: BANK[b].label, bal: balanceFor(ledgerEntries, `bank_${b}`) })) : [];
 
   // Money that actually moved through each bank during the period — receipts
-  // in, expenses out. Distinct from "Baki Bank" above, which is the running
+  // in, expenses out. Distinct from "Bank Balance" above, which is the running
   // (all-time) cash position, not what happened in this specific period.
   const bankActivity = isBod ? Object.keys(BANK).map(b => {
     const collected = plAllEntries.filter(e => e.type === 'receipt' && e.bank === b && !e.reversed).reduce((s,e) => s + e.amount, 0);
@@ -723,7 +723,7 @@ function FinanceContent() {
 
   const handleAddExpense = () => {
     if (!expForm.amount || !expForm.bank) return;
-    if (!expForm.department && !window.confirm('Department dikosongkan — expense ini akan direkod sebagai kos company-wide (bukan kos department tertentu). Teruskan?')) return;
+    if (!expForm.department && !window.confirm('Department left blank — this expense will be recorded as a company-wide cost (not tied to a specific department). Continue?')) return;
     postExpenseEntry({
       category: expForm.category,
       department: expForm.department || null,
@@ -735,7 +735,7 @@ function FinanceContent() {
     }, profile?.name);
     setShowExpense(false);
     setExpForm(blankExpForm());
-    setToast('Expense direkodkan.');
+    setToast('Expense recorded.');
   };
 
   const handleAddOpening = () => {
@@ -743,7 +743,7 @@ function FinanceContent() {
     postOpeningBalanceAdjustment(openForm.bank, openForm.amount, profile?.name);
     setShowOpening(false);
     setOpenForm(blankOpenForm());
-    setToast('Baki permulaan diselaraskan.');
+    setToast('Opening balance adjusted.');
   };
 
   return (
@@ -793,8 +793,8 @@ function FinanceContent() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
             <div><div style={{fontSize:20,fontWeight:700}}>Finance</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>Revenue, expense &amp; ledger</div></div>
             <div style={{display:"flex",gap:8}}>
-              {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Selaraskan Baki Bank</button>}
-              <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Tambah Expense</button>
+              {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Adjust Bank Balance</button>}
+              <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Add Expense</button>
             </div>
           </div>
         </div>
@@ -812,26 +812,26 @@ function FinanceContent() {
           <div className="card">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
               <div>
-                <div className="card-title">P&amp;L Statement (Untung Rugi)</div>
-                <div className="text-xs text-muted" style={{marginTop:2}}>Revenue, kos &amp; expense untuk tempoh dipilih</div>
+                <div className="card-title">P&amp;L Statement (Profit &amp; Loss)</div>
+                <div className="text-xs text-muted" style={{marginTop:2}}>Revenue, cost &amp; expense for the selected period</div>
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center"}}>
                 <input type="date" className="fi" style={{width:150}} value={plFrom} onChange={e=>setPlFrom(e.target.value)} />
-                <span className="text-xs text-muted">hingga</span>
+                <span className="text-xs text-muted">to</span>
                 <input type="date" className="fi" style={{width:150}} value={plTo} onChange={e=>setPlTo(e.target.value)} />
               </div>
             </div>
             <div className="sum-grid" style={{marginBottom:0}}>
               <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Revenue</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalRevenue)}</div></div>
-              <div className="sum-card" style={{borderLeftColor:"#E85D04"}}><div className="section-label">Kos Perkhidmatan</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalCogs)}</div></div>
-              <div className="sum-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Untung Kasar</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:grossProfit>=0?"#1A1025":"#EF4444"}}>{formatRM(grossProfit)}</div></div>
-              <div className="sum-card" style={{borderLeftColor:"#3A86FF"}}><div className="section-label">Outstanding (Belum Terima)</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(outstanding)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#E85D04"}}><div className="section-label">Cost of Services</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalCogs)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#6366F1"}}><div className="section-label">Gross Profit</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:grossProfit>=0?"#1A1025":"#EF4444"}}>{formatRM(grossProfit)}</div></div>
+              <div className="sum-card" style={{borderLeftColor:"#3A86FF"}}><div className="section-label">Outstanding (Receivable)</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(outstanding)}</div></div>
               {isBod && <div className="sum-card" style={{borderLeftColor:"#EF4444"}}><div className="section-label">Operating Expense</div><div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(totalOpex)}</div></div>}
-              {isBod && <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Untung Bersih</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:netProfit>=0?"#10B981":"#EF4444"}}>{formatRM(netProfit)}</div></div>}
+              {isBod && <div className="sum-card" style={{borderLeftColor:"#10B981"}}><div className="section-label">Net Profit</div><div style={{fontSize:24,fontWeight:700,marginTop:6,color:netProfit>=0?"#10B981":"#EF4444"}}>{formatRM(netProfit)}</div></div>}
             </div>
             {isBod && opexByCategory.length > 0 && (
               <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid #F3F1F6"}}>
-                <div className="section-label" style={{marginBottom:8}}>Operating Expense ikut Kategori</div>
+                <div className="section-label" style={{marginBottom:8}}>Operating Expense by Category</div>
                 {opexByCategory.map(c => (
                   <div key={c.value} className="dept-row" style={{gridTemplateColumns:"1fr 120px"}}>
                     <span className="text-sm">{c.label}</span>
@@ -845,13 +845,13 @@ function FinanceContent() {
           {isBod && bankBalances.length > 0 && (
             <div className="card">
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
-                <div className="card-title">Baki Bank <span className="text-xs text-muted" style={{fontWeight:400}}>(klik untuk tapis Ledger)</span></div>
+                <div className="card-title">Bank Balance <span className="text-xs text-muted" style={{fontWeight:400}}>(click to filter Ledger)</span></div>
                 {fBank!=='all' && <button className="btn-secondary" style={{fontSize:11,padding:'4px 10px'}} onClick={()=>setFBank('all')}>× Clear filter</button>}
               </div>
-              <div className="text-xs text-muted" style={{marginBottom:14}}>Baki semasa (all-time) — bukan untuk tempoh P&amp;L di atas</div>
+              <div className="text-xs text-muted" style={{marginBottom:14}}>Current balance (all-time) — not limited to the P&amp;L period above</div>
               <div className="bank-grid">
                 {bankBalances.map(b => (
-                  <div key={b.key} className="bank-chip" style={{cursor:'pointer', outline: fBank===b.key ? '2px solid #E91E63' : 'none'}} onClick={()=>setFBank(p=>p===b.key?'all':b.key)} title="Klik untuk tapis Ledger ikut bank ini">
+                  <div key={b.key} className="bank-chip" style={{cursor:'pointer', outline: fBank===b.key ? '2px solid #E91E63' : 'none'}} onClick={()=>setFBank(p=>p===b.key?'all':b.key)} title="Click to filter Ledger by this bank">
                     <div className="text-xs text-muted">{b.label}</div>
                     <div style={{fontSize:19,fontWeight:700,marginTop:4}}>{formatRM(b.bal)}</div>
                   </div>
@@ -862,10 +862,10 @@ function FinanceContent() {
 
           {isBod && bankActivity.length > 0 && (
             <div className="card">
-              <div className="card-title" style={{marginBottom:14}}>Kutipan &amp; Bayaran Ikut Bank</div>
-              <div className="text-xs text-muted" style={{marginTop:-8,marginBottom:14}}>Duit yang betul-betul masuk/keluar setiap bank dalam tempoh P&amp;L di atas</div>
+              <div className="card-title" style={{marginBottom:14}}>Collections &amp; Payments by Bank</div>
+              <div className="text-xs text-muted" style={{marginTop:-8,marginBottom:14}}>Money that actually moved in/out of each bank during the P&amp;L period above</div>
               <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
-                <span>Bank</span><span style={{textAlign:"right"}}>Kutipan Masuk</span><span style={{textAlign:"right"}}>Bayaran Keluar</span><span style={{textAlign:"right"}}>Net</span>
+                <span>Bank</span><span style={{textAlign:"right"}}>Collected</span><span style={{textAlign:"right"}}>Paid Out</span><span style={{textAlign:"right"}}>Net</span>
               </div>
               {bankActivity.map(b => (
                 <div key={b.key} className="dept-row">
@@ -879,10 +879,10 @@ function FinanceContent() {
           )}
 
           <div className="card">
-            <div className="card-title" style={{marginBottom:2}}>Pecahan Department</div>
-            <div className="text-xs text-muted" style={{marginBottom:12}}>Untuk tempoh P&amp;L di atas</div>
+            <div className="card-title" style={{marginBottom:2}}>Department Breakdown</div>
+            <div className="text-xs text-muted" style={{marginBottom:12}}>For the P&amp;L period above</div>
             <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
-              <span>Department</span><span style={{textAlign:"right"}}>Revenue</span><span style={{textAlign:"right"}}>Kos</span><span style={{textAlign:"right"}}>Untung Kasar</span>
+              <span>Department</span><span style={{textAlign:"right"}}>Revenue</span><span style={{textAlign:"right"}}>Cost</span><span style={{textAlign:"right"}}>Gross Profit</span>
             </div>
             {deptBreakdown.map(d => (
               <div key={d.key} className="dept-row">
@@ -900,27 +900,27 @@ function FinanceContent() {
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {(!visDepts || visDepts.length > 1) && (
                   <select className="fs" style={{width:170}} value={fDept} onChange={e=>setFDept(e.target.value)}>
-                    <option value="all">Semua Department</option>
+                    <option value="all">All Departments</option>
                     {deptKeys.map(k => <option key={k} value={k}>{DEPT[k].label}</option>)}
                   </select>
                 )}
                 <select className="fs" style={{width:150}} value={fBank} onChange={e=>setFBank(e.target.value)}>
-                  <option value="all">Semua Bank</option>
+                  <option value="all">All Banks</option>
                   {Object.keys(BANK).map(k => <option key={k} value={k}>{BANK[k].label}</option>)}
                 </select>
               </div>
             </div>
             <div style={{overflowX:"auto"}}>
               <table>
-                <thead><tr><th>Tarikh</th><th>Keterangan</th><th>Debit</th><th>Credit</th><th>Department</th><th>Bank</th><th>Jenis</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Debit</th><th>Credit</th><th>Department</th><th>Bank</th><th>Type</th><th style={{textAlign:"right"}}>Amount</th></tr></thead>
                 <tbody>
-                  {filteredEntries.length === 0 && <tr><td colSpan={8} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada entry lagi.</td></tr>}
+                  {filteredEntries.length === 0 && <tr><td colSpan={8} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries yet.</td></tr>}
                   {filteredEntries.map(e => {
                     const meta = TYPE_META[e.type] || { label: e.type, color: "#9B93A8", sign: "" };
                     return (
                       <tr key={e.id} style={e.reversed ? { opacity: .5 } : undefined}>
                         <td className="text-sm">{formatDate(e.date)}</td>
-                        <td className="text-sm">{e.description}{e.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+                        <td className="text-sm">{e.description}{e.reversed && <span className="text-xs text-muted"> (reversed)</span>}</td>
                         <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(e.debit_account)}</td>
                         <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(e.credit_account)}</td>
                         <td>{e.department ? <span className="dept-tag" style={{color:DEPT[e.department]?.color,background:(DEPT[e.department]?.color||'#6B7280')+"15"}}>{DEPT[e.department]?.code}</span> : <span className="text-xs text-muted">—</span>}</td>
@@ -939,52 +939,52 @@ function FinanceContent() {
 
         {showExpense && (
           <Modal width={440} onClose={closeExpense}>
-            <div className="fmodal-head">Tambah Expense<button className="fmodal-close" onClick={closeExpense}>×</button></div>
+            <div className="fmodal-head">Add Expense<button className="fmodal-close" onClick={closeExpense}>×</button></div>
             <div className="fmodal-body">
-              <div className="fg"><label className="fl">Kategori *</label>
+              <div className="fg"><label className="fl">Category *</label>
                 <select className="fs" value={expForm.category} onChange={e=>setExpForm(p=>({...p,category:e.target.value}))}>
                   {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
               </div>
-              <div className="fg"><label className="fl">Department <span className="text-xs text-muted">(kosongkan untuk expense company-wide, cth sewa/utiliti)</span></label>
+              <div className="fg"><label className="fl">Department <span className="text-xs text-muted">(leave blank for a company-wide expense, e.g. rent/utilities)</span></label>
                 <select className="fs" value={expForm.department} onChange={e=>setExpForm(p=>({...p,department:e.target.value,jobId:''}))}>
                   <option value="">— Company-wide —</option>
                   {(visDepts || Object.keys(DEPT)).map(k => <option key={k} value={k}>{DEPT[k].label}</option>)}
                 </select>
               </div>
               {expForm.department && jobsForExpenseDept.length > 0 && (
-                <div className="fg"><label className="fl">Job berkaitan (optional)</label>
+                <div className="fg"><label className="fl">Related Job (optional)</label>
                   <select className="fs" value={expForm.jobId} onChange={e=>setExpForm(p=>({...p,jobId:e.target.value}))}>
-                    <option value="">— Tiada job spesifik —</option>
+                    <option value="">— No specific job —</option>
                     {jobsForExpenseDept.map(j => <option key={j.job_id} value={j.job_id}>{j.job_id} · {j.job_type}</option>)}
                   </select>
                 </div>
               )}
-              <div className="fg"><label className="fl">Jumlah (RM) *</label><input type="number" className="fi" value={expForm.amount} onChange={e=>setExpForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" /></div>
+              <div className="fg"><label className="fl">Amount (RM) *</label><input type="number" className="fi" value={expForm.amount} onChange={e=>setExpForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" /></div>
               <div className="fg"><label className="fl">Bank *</label>
                 <select className="fs" value={expForm.bank} onChange={e=>setExpForm(p=>({...p,bank:e.target.value}))}>
                   {Object.entries(BANK).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </div>
-              <div className="fg"><label className="fl">Tarikh</label><input type="date" className="fi" value={expForm.date} onChange={e=>setExpForm(p=>({...p,date:e.target.value}))} /></div>
-              <div className="fg"><label className="fl">Nota</label><input className="fi" value={expForm.notes} onChange={e=>setExpForm(p=>({...p,notes:e.target.value}))} placeholder="cth: Bayaran designer freelance" /></div>
+              <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={expForm.date} onChange={e=>setExpForm(p=>({...p,date:e.target.value}))} /></div>
+              <div className="fg"><label className="fl">Notes</label><input className="fi" value={expForm.notes} onChange={e=>setExpForm(p=>({...p,notes:e.target.value}))} placeholder="e.g. Payment to freelance designer" /></div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Batal</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Simpan</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Cancel</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Save</button></div>
           </Modal>
         )}
 
         {showOpening && (
           <Modal width={400} onClose={closeOpening}>
-            <div className="fmodal-head">Selaraskan Baki Bank<button className="fmodal-close" onClick={closeOpening}>×</button></div>
+            <div className="fmodal-head">Adjust Bank Balance<button className="fmodal-close" onClick={closeOpening}>×</button></div>
             <div className="fmodal-body">
               <div className="fg"><label className="fl">Bank *</label>
                 <select className="fs" value={openForm.bank} onChange={e=>setOpenForm(p=>({...p,bank:e.target.value}))}>
                   {Object.entries(BANK).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
               </div>
-              <div className="fg"><label className="fl">Jumlah Pelarasan (RM) <span className="text-xs text-muted">— boleh negatif untuk kurangkan</span></label><input type="number" className="fi" value={openForm.amount} onChange={e=>setOpenForm(p=>({...p,amount:e.target.value}))} placeholder="cth: 15000" /></div>
+              <div className="fg"><label className="fl">Adjustment Amount (RM) <span className="text-xs text-muted">— can be negative to reduce</span></label><input type="number" className="fi" value={openForm.amount} onChange={e=>setOpenForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 15000" /></div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeOpening}>Batal</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Simpan</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeOpening}>Cancel</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Save</button></div>
           </Modal>
         )}
 

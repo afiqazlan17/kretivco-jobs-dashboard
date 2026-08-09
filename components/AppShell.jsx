@@ -10,9 +10,9 @@ const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
   { key:'jobs', label:'Job', path:'/jobs', icon:'📋' },
   { key:'customers', label:'Customers', path:'/customers', icon:'👥' },
-  { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
-  { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
   { key:'finance', label:'Finance', path:'/finance', icon:'💰', roles:['bod','dept_head'] },
+  { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
+  { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
   { key:'settings', label:'Settings', path:'/settings', icon:'⚙️', roles:['bod'] },
 ]
 
@@ -41,7 +41,7 @@ function FinanceSubmenu({ isMobile, collapsed, onNav }) {
 }
 
 // Same pattern as FinanceSubmenu — the active view comes from ?view=, and the
-// "Job Baru" entry is an action (opens the create-job modal) rather than a link.
+// "New Job" entry is an action (opens the create-job modal) rather than a link.
 function JobSubmenu({ isMobile, collapsed, onNav, onNewJob }) {
   const searchParams = useSearchParams()
   const activeView = searchParams.get('view') || 'queue'
@@ -178,7 +178,7 @@ export default function AppShell({ children }) {
           {!isMobile && (
             <div onClick={()=>setCollapsed(!collapsed)}
               style={{ padding:'10px 20px', cursor:'pointer', color:'rgba(255,255,255,.25)', fontSize:11, borderTop:'1px solid rgba(255,255,255,.06)', textAlign:collapsed?'center':'left' }}>
-              {collapsed?'→':'← Kecilkan'}
+              {collapsed?'→':'← Collapse'}
             </div>
           )}
 
@@ -196,7 +196,7 @@ export default function AppShell({ children }) {
               </div>
               <button onClick={async()=>{await signOut();router.push('/login')}}
                 style={{ marginTop:10, width:'100%', padding:'6px 0', fontSize:11, fontWeight:500, color:'rgba(255,255,255,.4)', background:'transparent', border:'1px solid rgba(255,255,255,.1)', borderRadius:6, cursor:'pointer', fontFamily:'inherit' }}>
-                Log Keluar
+                Log Out
               </button>
             </div>
           )}

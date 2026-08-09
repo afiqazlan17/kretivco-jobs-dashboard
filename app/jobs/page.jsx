@@ -9,10 +9,10 @@ import { StatusBadge, DTag, JID, DLBadge, Modal, Toast, GlobalJobStyles } from '
 // boundary (see AppShell's FinanceSubmenu/JobSubmenu for the same pattern)
 // so only the jobs route needs to opt into dynamic rendering.
 const VIEW_META = {
-  queue: { title: 'Ticket Queue', sub: 'Semua ticket, disusun ikut yang terkini disentuh' },
-  aging: { title: 'Aging Ticket', sub: 'Ticket paling lama tidak disentuh' },
-  hold: { title: 'Pending / Suspended', sub: 'Ticket yang sedang pending atau suspended' },
-  mine: { title: 'My Tickets', sub: 'Ticket di bawah tanggungjawab anda' },
+  queue: { title: 'Ticket Queue', sub: 'All tickets, sorted by most recently changed' },
+  aging: { title: 'Aging Ticket', sub: 'Tickets untouched for the longest' },
+  hold: { title: 'Pending / Suspended', sub: 'Tickets currently pending or suspended' },
+  mine: { title: 'My Tickets', sub: 'Tickets under your responsibility' },
 };
 
 export default function JobMonitor() {
@@ -87,7 +87,7 @@ function JobMonitorContent() {
   });
   const setDeptField = (dept, key, val) => setNewJob(p => ({ ...p, perDept: { ...p.perDept, [dept]: { ...p.perDept[dept], [key]: val } } }));
 
-  // Deadline defaults to 3 working days after Tarikh Mula (skips Sat/Sun) —
+  // Deadline defaults to 3 working days after Start Date (skips Sat/Sun) —
   // staff can still override it manually afterward.
   const addWorkingDays = (dateStr, days) => {
     const d = new Date(dateStr + 'T00:00:00');
@@ -110,7 +110,7 @@ function JobMonitorContent() {
     showInlineCust ||
     JSON.stringify(newCust) !== JSON.stringify({name:'',company:'',phone:'',email:'',source:'referral'});
   const closeCreate = () => {
-    if (isCreateFormDirty() && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return;
+    if (isCreateFormDirty() && !window.confirm('Unsaved changes will be lost. Close this form?')) return;
     setShowCreate(false);
     resetCreateForm();
   };
@@ -132,7 +132,7 @@ function JobMonitorContent() {
     nj('cid', custObj.id);
     setShowInlineCust(false);
     setNewCust({name:'',company:'',phone:'',email:'',source:'referral'});
-    setToast(`Customer ${custId} berjaya ditambah.`);
+    setToast(`Customer ${custId} added successfully.`);
   };
 
   // Each selected department gets its own full set of job fields — a print
@@ -211,10 +211,10 @@ function JobMonitorContent() {
     resetCreateForm();
     setToast({
       msg: isMulti
-        ? `${createdIds.length} job dicipta dalam Project ${projectId} (${createdIds.join(', ')}).`
-        : `Job ${createdIds[0]} berjaya dicipta.`,
+        ? `${createdIds.length} jobs created under Project ${projectId} (${createdIds.join(', ')}).`
+        : `Job ${createdIds[0]} created successfully.`,
       action: cid ? {
-        label: '+ Tambah Department Lain',
+        label: '+ Add Another Department',
         onClick: () => { setNewJob(p=>({...p, cid})); setShowCreate(true); setToast(null); },
       } : null,
     });
@@ -259,7 +259,7 @@ function JobMonitorContent() {
     router.push(`/jobs/${jobId}`);
   }, [router]);
 
-  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" },{ k:"touched", l:"Disentuh", w:"150px" }];
+  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Job Name", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" },{ k:"touched", l:"Last Changed", w:"150px" }];
   const grid = cols.map(c=>c.w).join(" ");
 
   return (
@@ -267,24 +267,24 @@ function JobMonitorContent() {
       <GlobalJobStyles />
 
       <div className="page">
-        <div className="header"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><div><div className="h-title">{VIEW_META[view].title}</div><div className="h-sub">{filtered.length} job ditunjukkan · {VIEW_META[view].sub}</div></div><button onClick={()=>setShowCreate(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> Job Baru</button></div></div>
+        <div className="header"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><div><div className="h-title">{VIEW_META[view].title}</div><div className="h-sub">{filtered.length} jobs shown · {VIEW_META[view].sub}</div></div><button onClick={()=>setShowCreate(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> New Job</button></div></div>
         <div className="content">
           {/* Filters */}
           <div className="card filter-bar">
             <div className="search-wrap">
               <span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-              <input className="field-input" style={{ paddingLeft: 36 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Cari job, customer, PIC..." />
+              <input className="field-input" style={{ paddingLeft: 36 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search job, customer, PIC..." />
             </div>
             {(!visDepts || visDepts.length > 1) ? (
               <select className="field-select" style={{ width: 160 }} value={fDept} onChange={e=>setFDept(e.target.value)}>
-                <option value="all">Semua Department</option>
+                <option value="all">All Departments</option>
                 {Object.entries(DEPT).filter(([k])=>!visDepts||visDepts.includes(k)).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
               </select>
             ) : visDepts?.length === 1 ? (
               <div style={{padding:'0 14px',height:40,display:'flex',alignItems:'center',fontSize:13,fontWeight:600,color:DEPT[visDepts[0]]?.color||'#1A1025',background:(DEPT[visDepts[0]]?.color||'#6B7280')+'12',borderRadius:8}}>{DEPT[visDepts[0]]?.label||visDepts[0]}</div>
             ) : null}
             <select className="field-select" style={{ width: 140 }} value={fStatus} onChange={e=>setFStatus(e.target.value)}>
-              <option value="all">Semua Status</option>
+              <option value="all">All Statuses</option>
               {Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
             </select>
             {(fDept!=="all"||fStatus!=="all"||search) && <button className="btn-reset" onClick={()=>{setFDept("all");setFStatus("all");setSearch("")}}>Reset</button>}
@@ -295,13 +295,13 @@ function JobMonitorContent() {
             <div className="tbl-header" style={{ gridTemplateColumns: grid }}>
               {cols.map((c,i)=><div key={i} className="tbl-col" onClick={c.k?()=>toggleSort(c.k):undefined} style={{ cursor: c.k?"pointer":"default" }}>{c.l}{c.k && sortInd(c.k)}</div>)}
             </div>
-            {filtered.length===0 ? <div className="empty">Tiada job dijumpai.</div> : filtered.map(job=>{
+            {filtered.length===0 ? <div className="empty">No jobs found.</div> : filtered.map(job=>{
               const sibling = job.project_id ? jobs.find(j => j.project_id === job.project_id && j.id !== job.id) : null;
               return (
                 <div key={job.id} className="tbl-row" style={{ gridTemplateColumns: grid }} onClick={()=>router.push(`/jobs/${job.job_id}`)}>
                   <div className="tbl-cell">
                     <JID>{job.job_id}</JID>
-                    {sibling && <span className="link-badge" title={`Sebahagian dari Project ${job.project_id} — bersama ${sibling.job_id}`} onClick={(e)=>{e.stopPropagation(); handleJumpToJob(sibling.job_id);}}>🔗</span>}
+                    {sibling && <span className="link-badge" title={`Part of Project ${job.project_id} — together with ${sibling.job_id}`} onClick={(e)=>{e.stopPropagation(); handleJumpToJob(sibling.job_id);}}>🔗</span>}
                   </div>
                   <div className="tbl-cell text-body">{job.customer_name}</div>
                   <div className="tbl-cell"><DTag d={job.department} /></div>
@@ -316,7 +316,7 @@ function JobMonitorContent() {
             })}
           </div>
           <div className="summary-footer">
-            <span>{filtered.length} job</span>
+            <span>{filtered.length} jobs</span>
             <span>Pipeline: {formatRM(filtered.filter(j=>["new","assigned","active"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
           </div>
         </div>
@@ -324,7 +324,7 @@ function JobMonitorContent() {
         {showCreate && <Modal width={640} onClose={closeCreate}>
           <div className="modal-header">
             <div>
-              <div className="modal-title">Job Baru</div>
+              <div className="modal-title">New Job</div>
               <div className="text-sm text-muted" style={{marginTop:4}}>
                 {newJob.depts.length===0 && <>Job ID: <span className="jid" style={{color:'#9B93A8'}}>—</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
                 {newJob.depts.length===1 && <>Job ID: <span className="jid" style={{color:'#1A1025'}}>{genJobId(newJob.depts[0])}</span> <span className="text-xs" style={{color:'#B0A8BC'}}>(auto)</span></>}
@@ -338,34 +338,34 @@ function JobMonitorContent() {
             <div style={{marginBottom:16}}>
               <label className="field-label">Customer *</label>
               <select className={`field-select${fieldErr('cid')?' field-select-err':''}`} style={{width:'100%'}} value={newJob.cid} onChange={e=>nj('cid',e.target.value)}>
-                <option value="">— Pilih Customer —</option>
+                <option value="">— Select Customer —</option>
                 {customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {customerDisplayName(c)}</option>)}
               </select>
-              {fieldErr('cid') && <div className="field-error">Wajib pilih customer.</div>}
+              {fieldErr('cid') && <div className="field-error">Customer is required.</div>}
               {!showInlineCust && (
                 <button
                   onClick={() => setShowInlineCust(true)}
                   style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0 0 0' }}
-                >+ Customer Baru</button>
+                >+ New Customer</button>
               )}
               {showInlineCust && (
                 <div style={{ marginTop: 10, padding: 14, background: '#F9F8FB', borderRadius: 10, border: '1px solid #F0ECF4' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span className="field-label" style={{ margin: 0, fontWeight: 600 }}>Customer Baru</span>
+                    <span className="field-label" style={{ margin: 0, fontWeight: 600 }}>New Customer</span>
                     <button onClick={() => { setShowInlineCust(false); setNewCust({name:'',company:'',phone:'',email:'',source:'referral'}); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9B93A8', fontSize: 16 }}>×</button>
                   </div>
                   <div style={{ marginBottom: 8 }}>
-                    <label className="field-label">Nama *</label>
-                    <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.name} onChange={e => setNewCust(p => ({...p, name: e.target.value}))} placeholder="Nama customer" />
+                    <label className="field-label">Name *</label>
+                    <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.name} onChange={e => setNewCust(p => ({...p, name: e.target.value}))} placeholder="Customer name" />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                     <div>
                       <label className="field-label">Company</label>
-                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.company} onChange={e => setNewCust(p => ({...p, company: e.target.value}))} placeholder="Nama syarikat" />
+                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.company} onChange={e => setNewCust(p => ({...p, company: e.target.value}))} placeholder="Company name" />
                     </div>
                     <div>
                       <label className="field-label">Phone</label>
-                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.phone} onChange={e => setNewCust(p => ({...p, phone: e.target.value}))} placeholder="No. telefon" />
+                      <input className="field-input" style={{ height: 36, fontSize: 12 }} value={newCust.phone} onChange={e => setNewCust(p => ({...p, phone: e.target.value}))} placeholder="Phone number" />
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -383,14 +383,14 @@ function JobMonitorContent() {
                   <button
                     onClick={handleSaveInlineCustomer}
                     style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '7px 16px', borderRadius: 8, border: 'none', cursor: newCust.name.trim() ? 'pointer' : 'not-allowed', background: newCust.name.trim() ? '#E91E63' : '#E8E4ED', color: newCust.name.trim() ? '#fff' : '#9B93A8' }}
-                  >Simpan Customer</button>
+                  >Save Customer</button>
                 </div>
               )}
             </div>
 
             {/* Department — multi-select: pick more than one when the same customer request spans departments */}
             <div style={{marginBottom:16}}>
-              <label className="field-label">Department * <span style={{fontWeight:400,color:'#9B93A8'}}>— boleh pilih lebih dari satu</span></label>
+              <label className="field-label">Department * <span style={{fontWeight:400,color:'#9B93A8'}}>— you can select more than one</span></label>
               <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:8}}>
                 {DEPT_LIST.map(d=>{
                   const on = newJob.depts.includes(d.key);
@@ -404,14 +404,14 @@ function JobMonitorContent() {
               </div>
               {newJob.depts.length>1 && (
                 <div style={{marginTop:10,padding:'9px 12px',borderRadius:8,background:'rgba(233,30,99,.08)',border:'1px dashed #E91E63',fontSize:11.5,color:'#1A1025',lineHeight:1.5}}>
-                  {newJob.depts.length} department dipilih — satu <strong>Project ID: <span className="jid">{genProjectId()}</span></strong> akan dijana untuk kumpulkan job-job ni. Setiap department tetap dapat Job ID &amp; status sendiri.
+                  {newJob.depts.length} departments selected — one <strong>Project ID: <span className="jid">{genProjectId()}</span></strong> will be generated to group these jobs together. Each department still gets its own Job ID &amp; status.
                 </div>
               )}
-              {fieldErr('depts') && <div className="field-error">Wajib pilih sekurang-kurangnya satu department.</div>}
+              {fieldErr('depts') && <div className="field-error">Select at least one department.</div>}
             </div>
 
             {/* Each department gets its own full section — a job's Job Type,
-                Bank, Nama Job, PIC, dates, and notes can differ entirely per
+                Bank, Job Name, PIC, dates, and notes can differ entirely per
                 department even when created together under one customer. */}
             {newJob.depts.map(d=>{
               const meta = DEPT[d];
@@ -425,31 +425,31 @@ function JobMonitorContent() {
                   </div>
 
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
-                    <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], jobType: k, productLine:'', segment:'', pkg:'' } } }))}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Wajib pilih job type.</div>}</div>
-                    <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i)=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.bank===k?v.color:(deptFieldErr(d,'bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:f.bank===k?v.color+'15':'#fff',color:f.bank===k?v.color:'#6B6080'}} onClick={()=>set('bank',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'bank')&&<div className="field-error">Wajib pilih bank.</div>}</div>
+                    <div><label className="field-label">Job Type *</label><div style={{display:'flex',gap:0}}>{Object.entries(JOB_TYPE).map(([k,v])=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.jobType===k?v.color:(deptFieldErr(d,'jobType')?'#EF4444':'#E8E4ED')}`,borderRadius:k==='client_project'?'8px 0 0 8px':'0 8px 8px 0',background:f.jobType===k?v.color+'15':'#fff',color:f.jobType===k?v.color:'#6B6080'}} onClick={()=>setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], jobType: k, productLine:'', segment:'', pkg:'' } } }))}>{v.label}</button>)}</div>{deptFieldErr(d,'jobType')&&<div className="field-error">Job type is required.</div>}</div>
+                    <div><label className="field-label">Bank *</label><div style={{display:'flex',gap:0}}>{Object.entries(BANK).map(([k,v],i)=><button key={k} type="button" style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,padding:"8px 14px",cursor:"pointer",border:`1px solid ${f.bank===k?v.color:(deptFieldErr(d,'bank')?'#EF4444':'#E8E4ED')}`,borderRadius:i===0?'8px 0 0 8px':'0 8px 8px 0',background:f.bank===k?v.color+'15':'#fff',color:f.bank===k?v.color:'#6B6080'}} onClick={()=>set('bank',k)}>{v.label}</button>)}</div>{deptFieldErr(d,'bank')&&<div className="field-error">Bank is required.</div>}</div>
                   </div>
 
                   {f.jobType === 'product_sale' && productLinesFor(d).length > 0 && (
                     <div style={{marginBottom:14,padding:12,borderRadius:8,background:'#F7F5FA',border:'1px dashed #D8D2E0'}}>
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
                         <div>
-                          <label className="field-label">Produk</label>
+                          <label className="field-label">Product</label>
                           <select className="field-select" style={{width:'100%'}} value={f.productLine} onChange={e=>{
                             const val = e.target.value;
                             setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], productLine: val, segment:'', pkg:'' } } }));
                           }}>
-                            <option value="">— Job custom (bukan pakej) —</option>
+                            <option value="">— Custom job (not a package) —</option>
                             {productLinesFor(d).map(l=><option key={l.key} value={l.key}>{l.label}</option>)}
                           </select>
                         </div>
                         {f.productLine && (
                           <div>
-                            <label className="field-label">Jenis Customer</label>
+                            <label className="field-label">Customer Type</label>
                             <select className="field-select" style={{width:'100%'}} value={f.segment} onChange={e=>{
                               const val = e.target.value;
                               setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], segment: val, pkg:'' } } }));
                             }}>
-                              <option value="">— Pilih —</option>
+                              <option value="">— Select —</option>
                               {segmentsFor(d, f.productLine).map(s=><option key={s.key} value={s.key}>{s.label}</option>)}
                             </select>
                           </div>
@@ -463,7 +463,7 @@ function JobMonitorContent() {
                             const tier = findPackageTier(d, f.productLine, f.segment, val);
                             setNewJob(p => ({ ...p, perDept: { ...p.perDept, [d]: { ...p.perDept[d], pkg: val, type: tier ? `${tier.pkg.label} (${tier.tier.pcs}pcs)` : p.perDept[d].type } } }));
                           }}>
-                            <option value="">— Pilih package —</option>
+                            <option value="">— Select package —</option>
                             {packageTierOptions(d, f.productLine, f.segment).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                           {f.pkg && (()=>{ const t = findPackageTier(d, f.productLine, f.segment, f.pkg); return t ? (
@@ -477,33 +477,33 @@ function JobMonitorContent() {
                   )}
 
                   <div style={{marginBottom:14}}>
-                    <label className="field-label">Nama Job *</label>
-                    <input className={`field-input${deptFieldErr(d,'type')?' field-input-err':''}`} value={f.type} onChange={e=>set('type',e.target.value)} placeholder="cth: Design & Print Roti Bakar" />
-                    {deptFieldErr(d,'type') && <div className="field-error">Wajib diisi.</div>}
+                    <label className="field-label">Job Name *</label>
+                    <input className={`field-input${deptFieldErr(d,'type')?' field-input-err':''}`} value={f.type} onChange={e=>set('type',e.target.value)} placeholder="e.g: Design & Print Roti Bakar" />
+                    {deptFieldErr(d,'type') && <div className="field-error">Required.</div>}
                   </div>
 
                   <div style={{marginBottom:14}}>
-                    <label className="field-label">PIC <span style={{fontWeight:400,color:'#9B93A8'}}>— pilihan, boleh biar kosong untuk staff department ambil sendiri</span></label>
+                    <label className="field-label">PIC <span style={{fontWeight:400,color:'#9B93A8'}}>— optional, leave blank for department staff to self-assign</span></label>
                     <select className="field-select" style={{width:'100%'}} value={f.pic} onChange={e=>set('pic',e.target.value)}>
-                      <option value="">— Belum assign (dalam queue) —</option>
+                      <option value="">— Not assigned (in queue) —</option>
                       {PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
 
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
-                    <div><label className="field-label">Tarikh Mula *</label><input type="date" className={`field-input${deptFieldErr(d,'start')?' field-input-err':''}`} value={f.start} onChange={e=>{ const v=e.target.value; set('start',v); if(v && !f.deadline) set('deadline', addWorkingDays(v,3)); }} />{deptFieldErr(d,'start')&&<div className="field-error">Wajib diisi.</div>}</div>
-                    <div><label className="field-label">Deadline *</label><input type="date" className={`field-input${deptFieldErr(d,'deadline')?' field-input-err':''}`} value={f.deadline} onChange={e=>set('deadline',e.target.value)} />{deptFieldErr(d,'deadline')&&<div className="field-error">Wajib diisi.</div>}</div>
+                    <div><label className="field-label">Start Date *</label><input type="date" className={`field-input${deptFieldErr(d,'start')?' field-input-err':''}`} value={f.start} onChange={e=>{ const v=e.target.value; set('start',v); if(v && !f.deadline) set('deadline', addWorkingDays(v,3)); }} />{deptFieldErr(d,'start')&&<div className="field-error">Required.</div>}</div>
+                    <div><label className="field-label">Deadline *</label><input type="date" className={`field-input${deptFieldErr(d,'deadline')?' field-input-err':''}`} value={f.deadline} onChange={e=>set('deadline',e.target.value)} />{deptFieldErr(d,'deadline')&&<div className="field-error">Required.</div>}</div>
                   </div>
 
                   <div>
-                    <label className="field-label">Nota</label>
-                    <textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:60,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>set('notes',e.target.value)} placeholder="Maklumat tambahan..." />
+                    <label className="field-label">Notes</label>
+                    <textarea style={{fontFamily:"'Poppins',sans-serif",fontSize:13,border:"1px solid #E8E4ED",borderRadius:8,padding:"10px 12px",width:"100%",minHeight:60,resize:"vertical",outline:"none",boxSizing:"border-box"}} value={f.notes} onChange={e=>set('notes',e.target.value)} placeholder="Additional information..." />
                   </div>
                 </div>
               );
             })}
           </div>
-          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={closeCreate}>Batal</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Simpan Job</button></div>
+          <div className="modal-footer" style={{padding:"16px 24px",borderTop:"1px solid #F0ECF4",display:"flex",justifyContent:"flex-end",gap:8}}><button className="btn-secondary" onClick={closeCreate}>Cancel</button><button className="btn-primary" style={{background:canSaveJob?"#E91E63":"#E8E4ED",color:canSaveJob?"#fff":"#9B93A8",cursor:canSaveJob?"pointer":"not-allowed"}} onClick={handleCreateSave}>Save Job</button></div>
         </Modal>}
         {toast && <Toast msg={typeof toast==='string'?toast:toast.msg} action={typeof toast==='object'?toast.action:null} onDone={()=>setToast(null)} />}
       </div>
