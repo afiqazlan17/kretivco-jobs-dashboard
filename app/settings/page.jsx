@@ -159,7 +159,7 @@ export default function Settings(){
           <div className="card" style={{marginTop:24,padding:"20px 24px",borderLeft:"4px solid #F59E0B"}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <div style={{fontSize:14,fontWeight:700,color:'#F59E0B'}}>Reset Job Monitor</div>
+                <div style={{fontSize:14,fontWeight:700,color:'#F59E0B'}}>Reset Jobs</div>
                 <div className="text-sm text-secondary" style={{marginTop:4}}>Deletes all jobs & activity logs. Customers, users & other data remain unchanged. Dev phase only.</div>
               </div>
               <button className="btn-danger-sm" style={{padding:'9px 20px',fontSize:13,background:'#F59E0B12',color:'#F59E0B',borderColor:'#F59E0B30'}} onClick={()=>setResetJobsModal(true)}>Reset Jobs</button>
@@ -183,7 +183,7 @@ export default function Settings(){
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
         {resetJobsModal&&<Modal w={420} onClose={()=>{setResetJobsModal(false);setResetJobsInput('')}}>
           <div style={{padding:"24px"}}>
-            <div className="mtitle" style={{color:'#F59E0B'}}>⚠️ Reset Job Monitor</div>
+            <div className="mtitle" style={{color:'#F59E0B'}}>⚠️ Reset Jobs</div>
             <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>This will permanently delete all jobs and activity logs. Customers and users will not be affected. This action cannot be undone.</p>
             <div style={{marginTop:16}}>
               <label className="fl">Type &quot;RESET&quot; to confirm</label>

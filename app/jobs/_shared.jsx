@@ -1,6 +1,6 @@
 "use client"
 // ============================================================
-// app/jobs/_shared.jsx — Components shared between the Job Monitor
+// app/jobs/_shared.jsx — Components shared between the Job Queue
 // list page (app/jobs/page.jsx) and the job detail page
 // (app/jobs/[jobId]/page.jsx). Split out so a single job's page
 // doesn't need to load/define the whole list page's code, and vice
@@ -178,9 +178,9 @@ export function Timeline({ jobId, getActivity, job }) {
       case 'cancelled': return <span>cancelled job{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'completed': return <span>marked as completed{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'edited': return l.field === 'pic'
-        ? <span>took over ticket (PIC): {l.old || 'Not assigned'} → <strong>{l.val}</strong></span>
+        ? <span>took over job (PIC): {l.old || 'Not assigned'} → <strong>{l.val}</strong></span>
         : l.field === 'hold_status'
-        ? <span>{l.val ? `put ticket on hold: "${HOLD_STATUS[l.val]?.label || l.val}"` : 'resumed ticket'}{l.detail ? ` — ${l.detail}` : ''}</span>
+        ? <span>{l.val ? `put job on hold: "${HOLD_STATUS[l.val]?.label || l.val}"` : 'resumed job'}{l.detail ? ` — ${l.detail}` : ''}</span>
         : <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
       case 'note': return 'wrote a note';
       case 'document_generated': return <span>generated {l.detail}</span>;
@@ -642,15 +642,15 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
 
   if (docs.length === 0 && documentAttachments.length === 0) return null;
 
-  // A ticket needs to actually be claimed (PIC assigned via Take In Ticket /
+  // A job needs to actually be claimed (PIC assigned via Take In Job /
   // Change Current Responsible) before staff can edit items or generate
-  // documents against it — otherwise anyone could quietly bill a ticket
+  // documents against it — otherwise anyone could quietly bill a job
   // nobody's officially responsible for yet.
-  const ticketClaimed = !!job.pic;
+  const jobClaimed = !!job.pic;
 
   return (
     <div style={{ marginTop: 0 }}>
-      {docs.length > 0 && ticketClaimed && siblings.length > 0 && !showCombine && (
+      {docs.length > 0 && jobClaimed && siblings.length > 0 && !showCombine && (
         <div style={{ marginBottom: 8 }}>
           <button
             onClick={() => setShowCombine(true)}
@@ -664,19 +664,19 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
             {docs.map(d => (
               <button
                 key={d.type}
-                onClick={() => ticketClaimed && setPreviewDoc({ type: d.type, label: d.label })}
-                disabled={!ticketClaimed}
-                style={{ ...btnStyle(d.color), opacity: ticketClaimed ? 1 : 0.45, cursor: ticketClaimed ? 'pointer' : 'not-allowed' }}
+                onClick={() => jobClaimed && setPreviewDoc({ type: d.type, label: d.label })}
+                disabled={!jobClaimed}
+                style={{ ...btnStyle(d.color), opacity: jobClaimed ? 1 : 0.45, cursor: jobClaimed ? 'pointer' : 'not-allowed' }}
               >
                 <span>{d.icon}</span>
                 {d.label}
               </button>
             ))}
           </div>
-          {!ticketClaimed && (
-            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Ticket not yet claimed — use "Take In Ticket" in the Action menu first before generating documents.</div>
+          {!jobClaimed && (
+            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Job not yet claimed — use "Take In Job" in the Action menu first before generating documents.</div>
           )}
-          {ticketClaimed && (!job.line_items || job.line_items.length === 0) && (
+          {jobClaimed && (!job.line_items || job.line_items.length === 0) && (
             <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Click any button to fill in items &amp; generate documents.</div>
           )}
         </>
@@ -803,14 +803,14 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
   );
 }
 
-// ─── Ticket Action Menu — header dropdown ──────────────────────
-// Consolidates ticket-lifecycle actions that used to be scattered (the old
+// ─── Job Action Menu — header dropdown ──────────────────────
+// Consolidates job-lifecycle actions that used to be scattered (the old
 // stepper claim banner, the Complete modal) into one control. Take In
-// Ticket works regardless of who currently holds the ticket — a "new"
-// unclaimed ticket gets claimed AND advanced to "assigned" in one step;
-// an already-assigned/active ticket just hands the PIC over to whoever
+// Job works regardless of who currently holds the job — a "new"
+// unclaimed job gets claimed AND advanced to "assigned" in one step;
+// an already-assigned/active job just hands the PIC over to whoever
 // clicks, no status change (e.g. covering for a staff member on leave).
-export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseTicket, onHold, onResume, onCancel, onArchive }) {
+export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onHold, onResume, onCancel, onArchive }) {
   const [open, setOpen] = useState(false);
   const canClose = !["completed", "cancelled"].includes(job.status);
   const canCancel = !["completed", "cancelled"].includes(job.status);
@@ -834,14 +834,14 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseTicket, 
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
           <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 220, overflow: 'hidden', padding: '4px 0' }}>
-            {!job.pic && item('Take In Ticket', '🙋', onTakeIn)}
+            {!job.pic && item('Take In Job', '🙋', onTakeIn)}
             {item('Change Current Responsible', '🔁', onChangeResponsible)}
-            {!isHeld && item('Pending Ticket', '⏸', () => onHold('pending'), '#F59E0B')}
-            {!isHeld && item('Suspend Ticket', '⛔', () => onHold('suspended'), '#EF4444')}
-            {isHeld && item('Resume Ticket', '▶️', onResume, '#10B981')}
-            {canClose && item('Close Ticket', '✅', onCloseTicket, '#10B981')}
+            {!isHeld && item('Pending Job', '⏸', () => onHold('pending'), '#F59E0B')}
+            {!isHeld && item('Suspend Job', '⛔', () => onHold('suspended'), '#EF4444')}
+            {isHeld && item('Resume Job', '▶️', onResume, '#10B981')}
+            {canClose && item('Close Job', '✅', onCloseJob, '#10B981')}
             {canCancel && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
-            {canCancel && item('Cancel Ticket', '✕', onCancel, '#EF4444')}
+            {canCancel && item('Cancel Job', '✕', onCancel, '#EF4444')}
             {canArchive && item('Archive', '🗄️', onArchive, '#6B7280')}
           </div>
         </>
