@@ -662,8 +662,8 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
 // Doubles as the status control: click an upcoming stage to advance, click
 // a past stage to roll back to it. Cancel/Archive stay as small secondary
 // actions here since they're not part of the forward/back flow itself.
-const PIPELINE_STAGES = ['potential', 'active', 'in_progress', 'completed'];
-export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive }) {
+const PIPELINE_STAGES = ['potential', 'new', 'assigned', 'active', 'completed'];
+export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive, onClaim }) {
   const { status } = job;
   if (status === 'cancelled') {
     return <div className="stepper-cancelled">✕ Job Dibatalkan</div>;
@@ -673,6 +673,10 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
   const rollbackSet = new Set(STATUS_ROLLBACK[status] || []);
   const canCancel = !["completed", "cancelled"].includes(status);
   const canArchive = !job.archived && status !== "cancelled";
+  // A "new" ticket sits unclaimed in its department's queue — anyone there
+  // can pick it up. Claiming sets the PIC and advances the status in one
+  // step, rather than staff having to fill PIC separately first.
+  const canClaim = status === 'new' && !!onClaim;
 
   return (
     <div className="stepper-wrap">
@@ -704,6 +708,12 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
           );
         })}
       </div>
+      {canClaim && (
+        <div style={{marginTop:12,padding:'10px 14px',borderRadius:8,background:'#F59E0B12',border:'1px dashed #F59E0B60',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+          <span style={{fontSize:12.5,color:'#92600A'}}>🎫 Ticket ni belum ada PIC — sesiapa dalam department boleh ambil.</span>
+          <button onClick={() => onClaim(job)} style={{fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:'7px 16px',borderRadius:8,border:'none',background:'#F59E0B',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}}>🙋 Ambil Ticket</button>
+        </div>
+      )}
       {(canCancel || canArchive) && (
         <div className="stepper-actions">
           {canCancel && <button className="stepper-mini-btn cancel" onClick={() => onCancel(job)}>✕ Cancel</button>}
@@ -714,7 +724,7 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
   );
 }
 
-export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
+export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onClaim, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const [noteText, setNoteText] = useState('');
   const [noteFile, setNoteFile] = useState(null);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
@@ -801,7 +811,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onSta
 
   return (
     <div className="detail-panel">
-      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} />
+      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} onClaim={onClaim} />
       <div className="detail-grid">
         <div>
           <div className="card-title mb-4">Maklumat Job</div>
@@ -812,7 +822,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onSta
             <span className="info-label">Job Type</span><span style={{fontSize:12}}>{JOB_TYPE[job.job_type_category]?.label || '—'}</span>
             <span className="info-label">Bank</span><span style={{fontSize:12}}>{BANK[job.bank]?.label || '—'}</span>
             <span className="info-label">Status</span><StatusBadge s={job.status} />
-            <span className="info-label">PIC</span><span>{job.pic}</span>
+            <span className="info-label">PIC</span><span>{job.pic || <span style={{color:'#9B93A8',fontStyle:'italic'}}>Belum assign</span>}</span>
             <span className="info-label">Est. Value</span><span className="font-semibold">{formatRM(job.estimation_value)}</span>
             {job.final_value && <><span className="info-label">Final Value</span><span className="font-semibold text-green">{formatRM(job.final_value)}</span></>}
             <span className="info-label">Mula</span><span>{formatDate(job.start_date)}</span>

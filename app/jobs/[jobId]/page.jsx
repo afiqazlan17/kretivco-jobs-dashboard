@@ -98,6 +98,14 @@ export default function JobDetailPage() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
+  // Claiming a "new" (unclaimed) ticket sets the PIC and advances it to
+  // "assigned" in one step — staff don't fill PIC separately first.
+  const handleClaim = useCallback((job) => {
+    const name = profile?.name || 'Staff';
+    updateJob(job.id, { pic: name, status: 'assigned' }, profile?.name, { action: 'status_change', from: job.status, to: 'assigned', detail: `Ticket diambil oleh ${name}` });
+    setToast(`${job.job_id}: diambil oleh ${name}.`);
+  }, [updateJob, profile]);
+
   if (!job) {
     return (
       <>
@@ -139,6 +147,7 @@ export default function JobDetailPage() {
             onRollback={handleRollback}
             onCancel={handleCancel}
             onArchive={handleArchive}
+            onClaim={handleClaim}
             onToggleInstallment={handleToggleInstallment}
             onUpdateJob={updateJob}
             onUpdateCustomer={updateCustomer}
