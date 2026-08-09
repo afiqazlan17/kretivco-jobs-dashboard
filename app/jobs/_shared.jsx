@@ -105,6 +105,28 @@ export function CancelModal({ job, onConfirm, onClose }) {
   );
 }
 
+// ─── Reassign (Change Current Responsible) Modal ──────────────
+export function ReassignModal({ job, onConfirm, onClose }) {
+  const options = PIC_BY_DEPT[job.department] || PIC_OPTIONS;
+  const [name, setName] = useState(job.pic || options[0] || '');
+  return (
+    <Modal width={400} onClose={onClose}>
+      <div className="modal-header"><span className="modal-title">Tukar Current Responsible</span><button className="modal-close" onClick={onClose}>×</button></div>
+      <div className="modal-body">
+        <div className="summary-box"><JID>{job.job_id}</JID> · Sekarang: {job.pic || 'Belum assign'}</div>
+        <label className="field-label">Staff Baru *</label>
+        <select className="field-select" style={{ width: '100%' }} value={name} onChange={e => setName(e.target.value)}>
+          {options.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={onClose}>Batal</button>
+        <button className="btn-primary" disabled={!name} onClick={() => onConfirm(name)}>Tukar</button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Activity Timeline ────────────────────────────────────────
 // The "created" entry's own persisted detail text is whatever the DB
 // trigger wrote (opaque, not something the client controls) — so the full
@@ -496,7 +518,8 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
               </div>
               <div style={{ borderTop: '0.75px solid #999', margin: '14px 0' }} />
               <div style={{ fontWeight: 700 }}>Customer:</div>
-              <div>{form.customerCompany ? `${form.customerName} (${form.customerCompany})` : (form.customerName || '—')}</div>
+              <div>{form.customerName || '—'}</div>
+              {form.customerCompany && <div>{form.customerCompany}</div>}
               {form.addressLine1 && <div>{form.addressLine1}</div>}
               {form.addressLine2 && <div>{form.addressLine2}</div>}
               <div style={{ marginTop: 15 }}><b>Title:</b> {form.jobTitle || '—'}</div>
@@ -761,7 +784,7 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
 // unclaimed ticket gets claimed AND advanced to "assigned" in one step;
 // an already-assigned/active ticket just hands the PIC over to whoever
 // clicks, no status change (e.g. covering for a staff member on leave).
-export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume, onCancel, onArchive }) {
+export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseTicket, onHold, onResume, onCancel, onArchive }) {
   const [open, setOpen] = useState(false);
   const canClose = !["completed", "cancelled"].includes(job.status);
   const canCancel = !["completed", "cancelled"].includes(job.status);
@@ -784,12 +807,13 @@ export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume, onC
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
-          <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 200, overflow: 'hidden', padding: '4px 0' }}>
+          <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 220, overflow: 'hidden', padding: '4px 0' }}>
             {item('Take In Ticket', '🙋', onTakeIn)}
-            {canClose && item('Close Ticket', '✅', onCloseTicket, '#10B981')}
+            {item('Change Current Responsible', '🔁', onChangeResponsible)}
             {!isHeld && item('Pending Ticket', '⏸', () => onHold('pending'), '#F59E0B')}
             {!isHeld && item('Suspend Ticket', '⛔', () => onHold('suspended'), '#EF4444')}
             {isHeld && item('Resume Ticket', '▶️', onResume, '#10B981')}
+            {canClose && item('Close Ticket', '✅', onCloseTicket, '#10B981')}
             {canCancel && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
             {canCancel && item('Cancel Ticket', '✕', onCancel, '#EF4444')}
             {canArchive && item('Arkib', '🗄️', onArchive, '#6B7280')}
@@ -868,14 +892,11 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
           <Timeline jobId={job.job_id} getActivity={getActivity} job={job} />
         </div>
         <div>
-          <div className="card-title mb-3">Customer</div>
-          <CustMini job={job} customers={customers} />
-
           {/* Document Generation — item editing now happens inside whichever
               doc's preview modal is opened, so there's no separate item
               table here anymore; Simpan there writes straight to
               job.line_items, shared by every doc type. */}
-          <div className="card-title mt-6 mb-3">Dokumen</div>
+          <div className="card-title mb-3">Dokumen</div>
           <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
 
           {/* Final artwork — the print-ready file(s), attached once every
