@@ -2,9 +2,9 @@
 import { useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { STATUS, CANCEL_REASONS, formatRM } from '@/lib/constants';
+import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/constants';
 import { supabase, isMockMode } from '@/lib/supabase';
-import { DetailPanel, CompleteModal, CancelModal, ConfirmModal, Toast, GlobalJobStyles, JID } from '../_shared';
+import { DetailPanel, CancelModal, ConfirmModal, Toast, GlobalJobStyles, JID, ActionMenu } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Monitor, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
@@ -18,20 +18,31 @@ export default function JobDetailPage() {
 
   const { profile } = useAuth() || {};
   const visDepts = useVisibleDepts();
-  const { jobs, customers, updateJob, updateCustomer, getActivity, addLog, postInvoiceEntry, postReceiptEntry, reverseJobLedgerEntries, dataLoading } = useData();
+  const { jobs, customers, updateJob, updateCustomer, getActivity, addLog, ledgerEntries, postInvoiceEntry, postReceiptEntry, reverseJobLedgerEntries, dataLoading } = useData();
 
   const job = jobs.find(j => j.job_id === jobId);
+  const cust = job ? customers.find(c => c.id === job.customer_id) : null;
 
-  const [completeJob, setCompleteJob] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [cancelJob, setCancelJob] = useState(null);
   const [toast, setToast] = useState(null);
 
   const handleStatus = useCallback((job, s) => {
-    if (s === "completed") { setCompleteJob(job); return; }
+    if (s === "completed") {
+      // Final Value used to be a manual pop-up, but everything needed to
+      // compute it is already captured elsewhere by the time a ticket
+      // closes: what was actually billed (latest un-reversed Invoice),
+      // else the item total, else the original estimate.
+      const latestInvoice = (ledgerEntries || []).filter(e => e.job_id === job.job_id && e.type === 'invoice' && !e.reversed).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      const itemsTotal = (job.line_items || []).reduce((s2, li) => s2 + (li.total || (li.qty * li.price) || 0), 0);
+      const finalValue = latestInvoice?.amount || itemsTotal || job.estimation_value || 0;
+      updateJob(job.id, { status: "completed", final_value: finalValue }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(finalValue)}` });
+      setToast(`${job.job_id} selesai. Final: ${formatRM(finalValue)}`);
+      return;
+    }
     updateJob(job.id, { status: s }, profile?.name, { action: 'status_change', from: job.status, to: s });
     setToast(`${job.job_id}: → ${STATUS[s].label}`);
-  }, [updateJob, profile]);
+  }, [updateJob, profile, ledgerEntries]);
 
   const handleRollback = useCallback((job, s) => {
     setConfirm({
@@ -53,7 +64,7 @@ export default function JobDetailPage() {
   }, []);
 
   const handleAddNote = useCallback((jobId, text, jobUuid, attachment) => {
-    addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text, attachmentPath: attachment?.attachmentPath || null, attachmentName: attachment?.attachmentName || null, attachmentUrl: attachment?.attachmentUrl || null }, jobUuid);
+    addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text, attachments: attachment?.attachments || [] }, jobUuid);
   }, [addLog, profile]);
 
   const handleDocGenerated = useCallback(async ({ jobs: involvedJobs, type, label, docNumber, total, blob, filename }) => {
@@ -121,12 +132,26 @@ export default function JobDetailPage() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
-  // Claiming a "new" (unclaimed) ticket sets the PIC and advances it to
-  // "assigned" in one step — staff don't fill PIC separately first.
-  const handleClaim = useCallback((job) => {
+  // Take In Ticket works regardless of who currently holds the ticket. A
+  // "new" unclaimed ticket gets claimed AND advanced to "assigned" in one
+  // step; an already-assigned/active ticket just hands the PIC over to
+  // whoever clicks — no status change (covers e.g. a staff member on leave).
+  const handleTakeIn = useCallback((job) => {
     const name = profile?.name || 'Staff';
-    updateJob(job.id, { pic: name, status: 'assigned' }, profile?.name, { action: 'status_change', from: job.status, to: 'assigned', detail: `Ticket diambil oleh ${name}` });
+    const newStatus = job.status === 'new' ? 'assigned' : job.status;
+    updateJob(job.id, { pic: name, status: newStatus }, profile?.name, { action: 'edited', field: 'pic', old: job.pic || '', val: name });
     setToast(`${job.job_id}: diambil oleh ${name}.`);
+  }, [updateJob, profile]);
+
+  const handleHold = useCallback((job, type) => {
+    const reasonText = window.prompt(`Sebab ${HOLD_STATUS[type]?.label || type} (optional):`) || '';
+    updateJob(job.id, { hold_status: type, hold_reason: reasonText }, profile?.name, { action: 'edited', field: 'hold_status', old: job.hold_status || '', val: type, detail: reasonText || undefined });
+    setToast(`${job.job_id}: ${HOLD_STATUS[type]?.label}.`);
+  }, [updateJob, profile]);
+
+  const handleResume = useCallback((job) => {
+    updateJob(job.id, { hold_status: null, hold_reason: null }, profile?.name, { action: 'edited', field: 'hold_status', old: job.hold_status || '', val: '' });
+    setToast(`${job.job_id}: disambung semula.`);
   }, [updateJob, profile]);
 
   if (!job) {
@@ -146,16 +171,37 @@ export default function JobDetailPage() {
     );
   }
 
+  const heldMeta = job.hold_status ? HOLD_STATUS[job.hold_status] : null;
+
   return (
     <>
       <GlobalJobStyles />
       <div className="page">
         <div className="header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <button onClick={() => router.push('/jobs')} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.4)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer' }}>← Kembali</button>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+            <button onClick={() => router.push('/jobs')} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.4)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}>← Kembali</button>
+          </div>
+          <div className="job-header-row">
             <div>
-              <div className="h-title"><JID>{job.job_id}</JID></div>
-              <div className="h-sub">{job.job_type} · {job.customer_name}</div>
+              <div className="h-title"><JID>{job.job_id}</JID> | {job.job_type}</div>
+              <div className="job-header-line">{cust?.customer_id || job.customer_id || '—'} | {cust?.company || job.customer_name || '—'}</div>
+              <div className="job-header-line">{job.pic || 'Belum assign'} | {cust?.phone || '—'}</div>
+              {job.project_id && <div className="job-header-line">Project ID: {job.project_id}</div>}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="job-header-line" style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Status: {STATUS[job.status]?.label}</div>
+              <div className="job-header-line">Current Responsible: {job.pic || <span style={{ fontStyle: 'italic' }}>Belum assign</span>}</div>
+              <div className="job-header-line">Current Department: {DEPT[job.department]?.label || job.department}</div>
+              {heldMeta && <div className="hold-badge" style={{ background: '#fff', color: heldMeta.color }}>{heldMeta.icon} {heldMeta.label}{job.hold_reason ? `: ${job.hold_reason}` : ''}</div>}
+              <div style={{ marginTop: 10 }}>
+                <ActionMenu
+                  job={job}
+                  onTakeIn={() => handleTakeIn(job)}
+                  onCloseTicket={() => handleStatus(job, 'completed')}
+                  onHold={(type) => handleHold(job, type)}
+                  onResume={() => handleResume(job)}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -165,12 +211,12 @@ export default function JobDetailPage() {
             jobs={jobs}
             customers={customers}
             visDepts={visDepts}
+            ledgerEntries={ledgerEntries}
             getActivity={getActivity}
             onStatus={handleStatus}
             onRollback={handleRollback}
             onCancel={handleCancel}
             onArchive={handleArchive}
-            onClaim={handleClaim}
             onToggleInstallment={handleToggleInstallment}
             onUpdateJob={updateJob}
             onUpdateCustomer={updateCustomer}
@@ -180,7 +226,6 @@ export default function JobDetailPage() {
             userName={profile?.name}
           />
         </div>
-        {completeJob && <CompleteModal job={completeJob} onConfirm={fv => { updateJob(completeJob.id, { status: "completed", final_value: fv }, profile?.name, { action: 'completed', detail: `Final value: ${formatRM(fv)}` }); setCompleteJob(null); setToast(`${completeJob.job_id} selesai. Final: ${formatRM(fv)}`); }} onClose={() => setCompleteJob(null)} />}
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={() => setCancelJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={() => setConfirm(null)} />}
         {toast && <Toast msg={typeof toast === 'string' ? toast : toast.msg} action={typeof toast === 'object' ? toast.action : null} onDone={() => setToast(null)} />}
