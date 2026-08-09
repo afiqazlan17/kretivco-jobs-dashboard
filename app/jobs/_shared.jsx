@@ -683,17 +683,26 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
       )}
       {documentAttachments.length > 0 && (
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {documentAttachments.map(att => {
-            const meta = DOC_TYPE_META[att.doc_type];
-            return (
-              <div key={att.id} onClick={() => handleViewDoc(att)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '6px 10px', borderRadius: 6, background: '#F9F8FB', cursor: 'pointer' }}>
-                <span>{meta?.icon || '📄'}</span>
-                <span style={{ fontWeight: 600, color: meta?.color || '#1A1025' }}>{meta?.label || att.doc_type}</span>
-                <span className="text-secondary">{att.doc_number}</span>
-                <span className="text-xs text-muted" style={{ marginLeft: 'auto' }}>{formatDateTime(att.uploaded_at)} · {att.uploaded_by}</span>
-              </div>
-            );
-          })}
+          {(() => {
+            // documentAttachments is sorted newest-first — the first entry
+            // seen for a given doc_type is the current one; every later
+            // (older) entry of that same type has been superseded.
+            const seenTypes = new Set();
+            return documentAttachments.map(att => {
+              const meta = DOC_TYPE_META[att.doc_type];
+              const superseded = seenTypes.has(att.doc_type);
+              seenTypes.add(att.doc_type);
+              return (
+                <div key={att.id} onClick={() => handleViewDoc(att)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '6px 10px', borderRadius: 6, background: '#F9F8FB', cursor: 'pointer', opacity: superseded ? 0.55 : 1 }}>
+                  <span>{meta?.icon || '📄'}</span>
+                  <span style={{ fontWeight: 600, color: meta?.color || '#1A1025' }}>{meta?.label || att.doc_type}</span>
+                  <span className="text-secondary">{att.doc_number}</span>
+                  {superseded && <span style={{ fontSize: 10, fontStyle: 'italic', color: '#9B93A8' }}>(Superseded)</span>}
+                  <span className="text-xs text-muted" style={{ marginLeft: 'auto' }}>{formatDateTime(att.uploaded_at)} · {att.uploaded_by}</span>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
@@ -845,46 +854,6 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
   const submitRichNote = async ({ note, attachments }) => {
     onAddNote(job.job_id, note, job.id, { attachments });
   };
-  // Final, print-ready artwork — the deliverable staff attach once every
-  // individual item's design has been made and approved, right before
-  // sending the job to the printer/kilang. Reuses the same job-attachments
-  // bucket as per-item artwork, tagged with its own kind so it doesn't mix
-  // with those. Supports multiple files (e.g. separate print-ready files
-  // per material).
-  const attachments = job.attachments || [];
-  const finalArtworkAtts = attachments.filter(a => a.kind === 'final_artwork');
-  const [finalArtBusy, setFinalArtBusy] = useState(false);
-  const handleFinalArtworkUpload = async (file) => {
-    if (!file) return;
-    setFinalArtBusy(true);
-    try {
-      let path = null, url = null;
-      if (isMockMode) {
-        url = URL.createObjectURL(file);
-      } else {
-        path = `${job.job_id}/final_artwork/${Date.now()}_${file.name}`;
-        const { error } = await supabase.storage.from('job-attachments').upload(path, file);
-        if (error) throw error;
-      }
-      const entry = { id: crypto.randomUUID(), kind: 'final_artwork', line_item_id: null, path, url, name: file.name, uploaded_by: userName || 'System', uploaded_at: new Date().toISOString() };
-      onUpdateJob(job.id, { attachments: [...attachments, entry] }, userName, { action: 'edited', field: 'attachments', detail: `Final artwork dimuat naik: ${file.name}` });
-    } catch (err) {
-      alert('Gagal muat naik: ' + (err?.message || err));
-    } finally {
-      setFinalArtBusy(false);
-    }
-  };
-  const handleFinalArtworkView = async (att) => {
-    if (att.url) { window.open(att.url, '_blank'); return; }
-    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
-    if (error) { alert('Gagal buka fail: ' + error.message); return; }
-    window.open(data.signedUrl, '_blank');
-  };
-  const handleFinalArtworkDelete = async (att) => {
-    if (!window.confirm(`Padam "${att.name}"?`)) return;
-    if (att.path && !isMockMode) await supabase.storage.from('job-attachments').remove([att.path]);
-    onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Final artwork dipadam: ${att.name}` });
-  };
   const projectSiblings = job.project_id ? (jobs || []).filter(j => j.project_id === job.project_id && j.id !== job.id) : [];
 
   return (
@@ -915,15 +884,6 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
               job.line_items, shared by every doc type. */}
           <div className="card-title mb-3">Dokumen</div>
           <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
-
-          {/* Final artwork — the print-ready file(s), attached once every
-              item's design is done and approved, right before sending to
-              the printer/kilang. Kept slim (no heavy card) since it's
-              usually empty until the very end of a job. */}
-          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: '#6B6080' }}>
-            🖨️ Final Artwork
-          </div>
-          <UploadCol title="" atts={finalArtworkAtts} busy={finalArtBusy} onUpload={handleFinalArtworkUpload} onView={handleFinalArtworkView} onDelete={handleFinalArtworkDelete} />
 
           {/* Financial Breakdown — only renders for special-arrangement jobs */}
           <div style={{ marginTop: 16 }}>
@@ -964,6 +924,7 @@ export function baseSlotsFor(job) {
 export function AttachmentSlots({ job, onUpdateJob, userName }) {
   const [busyKey, setBusyKey] = useState(null);
   const [extraDesigns, setExtraDesigns] = useState({});
+  const [zipping, setZipping] = useState(false);
   const attachments = job.attachments || [];
   const baseSlots = baseSlotsFor(job);
 
@@ -1017,11 +978,56 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
     onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Attachment dipadam: ${att.name}` });
   };
 
+  // Every artwork file across every item, zipped into one download — the
+  // print-ready set staff hand off to the kilang, without opening each
+  // item's slot one by one.
+  const artworkAtts = attachments.filter(a => a.kind === 'artwork');
+  const handleDownloadZip = async () => {
+    if (!artworkAtts.length) return;
+    setZipping(true);
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      const usedNames = new Set();
+      for (const att of artworkAtts) {
+        let fileUrl = att.url;
+        if (!fileUrl) {
+          const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
+          if (error) continue;
+          fileUrl = data.signedUrl;
+        }
+        const blob = await fetch(fileUrl).then(r => r.blob());
+        let name = att.name || 'fail';
+        while (usedNames.has(name)) name = `dup_${name}`;
+        usedNames.add(name);
+        zip.file(name, blob);
+      }
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${job.job_id}_artwork.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Gagal jana ZIP: ' + (err?.message || err));
+    } finally {
+      setZipping(false);
+    }
+  };
+
   if (!baseSlots.length) return null;
 
   return (
     <div>
-      <div className="section-label" style={{marginBottom:6}}>Artwork</div>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+        <div className="section-label" style={{margin:0}}>Artwork</div>
+        {artworkAtts.length > 0 && (
+          <button onClick={handleDownloadZip} disabled={zipping} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#3A86FF',background:'none',border:'none',cursor:zipping?'default':'pointer',padding:0}}>
+            {zipping ? 'Menjana ZIP...' : '⬇ Muat Turun Semua (ZIP)'}
+          </button>
+        )}
+      </div>
       <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {baseSlots.map(base => {
           const count = instanceCount(base.key);
