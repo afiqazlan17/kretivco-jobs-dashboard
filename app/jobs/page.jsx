@@ -58,6 +58,18 @@ export default function JobMonitor() {
   });
   const setDeptField = (dept, key, val) => setNewJob(p => ({ ...p, perDept: { ...p.perDept, [dept]: { ...p.perDept[dept], [key]: val } } }));
 
+  // Deadline defaults to 3 working days after Tarikh Mula (skips Sat/Sun) —
+  // staff can still override it manually afterward.
+  const addWorkingDays = (dateStr, days) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    let added = 0;
+    while (added < days) {
+      d.setDate(d.getDate() + 1);
+      if (d.getDay() !== 0 && d.getDay() !== 6) added++;
+    }
+    return d.toISOString().slice(0, 10);
+  };
+
   const resetCreateForm = () => {
     setNewJob({depts:[],cid:'',perDept:{}});
     setShowInlineCust(false);
@@ -432,7 +444,7 @@ export default function JobMonitor() {
                   </div>
 
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
-                    <div><label className="field-label">Tarikh Mula *</label><input type="date" className={`field-input${deptFieldErr(d,'start')?' field-input-err':''}`} value={f.start} onChange={e=>set('start',e.target.value)} />{deptFieldErr(d,'start')&&<div className="field-error">Wajib diisi.</div>}</div>
+                    <div><label className="field-label">Tarikh Mula *</label><input type="date" className={`field-input${deptFieldErr(d,'start')?' field-input-err':''}`} value={f.start} onChange={e=>{ const v=e.target.value; set('start',v); if(v && !f.deadline) set('deadline', addWorkingDays(v,3)); }} />{deptFieldErr(d,'start')&&<div className="field-error">Wajib diisi.</div>}</div>
                     <div><label className="field-label">Deadline *</label><input type="date" className={`field-input${deptFieldErr(d,'deadline')?' field-input-err':''}`} value={f.deadline} onChange={e=>set('deadline',e.target.value)} />{deptFieldErr(d,'deadline')&&<div className="field-error">Wajib diisi.</div>}</div>
                   </div>
 

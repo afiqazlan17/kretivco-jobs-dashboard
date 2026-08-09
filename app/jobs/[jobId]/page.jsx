@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/constants';
 import { supabase, isMockMode } from '@/lib/supabase';
-import { DetailPanel, CancelModal, ConfirmModal, Toast, GlobalJobStyles, JID, ActionMenu } from '../_shared';
+import { DetailPanel, CancelModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Monitor, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
@@ -178,14 +178,23 @@ export default function JobDetailPage() {
       <GlobalJobStyles />
       <div className="page">
         <div className="header">
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginBottom: 12 }}>
             <button onClick={() => router.push('/jobs')} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.4)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', flexShrink: 0 }}>← Kembali</button>
+            <ActionMenu
+              job={job}
+              onTakeIn={() => handleTakeIn(job)}
+              onCloseTicket={() => handleStatus(job, 'completed')}
+              onHold={(type) => handleHold(job, type)}
+              onResume={() => handleResume(job)}
+              onCancel={() => handleCancel(job)}
+              onArchive={() => handleArchive(job)}
+            />
           </div>
           <div className="job-header-row">
             <div>
-              <div className="h-title"><JID>{job.job_id}</JID> | {job.job_type}</div>
+              <div className="h-title">{job.job_id} | {job.job_type}</div>
               <div className="job-header-line">{cust?.customer_id || job.customer_id || '—'} | {cust?.company || job.customer_name || '—'}</div>
-              <div className="job-header-line">{job.pic || 'Belum assign'} | {cust?.phone || '—'}</div>
+              <div className="job-header-line">{cust?.name || job.customer_name || '—'} | {cust?.phone || '—'}</div>
               {job.project_id && <div className="job-header-line">Project ID: {job.project_id}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -193,15 +202,6 @@ export default function JobDetailPage() {
               <div className="job-header-line">Current Responsible: {job.pic || <span style={{ fontStyle: 'italic' }}>Belum assign</span>}</div>
               <div className="job-header-line">Current Department: {DEPT[job.department]?.label || job.department}</div>
               {heldMeta && <div className="hold-badge" style={{ background: '#fff', color: heldMeta.color }}>{heldMeta.icon} {heldMeta.label}{job.hold_reason ? `: ${job.hold_reason}` : ''}</div>}
-              <div style={{ marginTop: 10 }}>
-                <ActionMenu
-                  job={job}
-                  onTakeIn={() => handleTakeIn(job)}
-                  onCloseTicket={() => handleStatus(job, 'completed')}
-                  onHold={(type) => handleHold(job, type)}
-                  onResume={() => handleResume(job)}
-                />
-              </div>
             </div>
           </div>
         </div>
@@ -215,8 +215,6 @@ export default function JobDetailPage() {
             getActivity={getActivity}
             onStatus={handleStatus}
             onRollback={handleRollback}
-            onCancel={handleCancel}
-            onArchive={handleArchive}
             onToggleInstallment={handleToggleInstallment}
             onUpdateJob={updateJob}
             onUpdateCustomer={updateCustomer}

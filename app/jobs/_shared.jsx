@@ -230,21 +230,14 @@ export function CustMini({ job, customers }) {
 }
 
 // ─── Financial Breakdown Panel ────────────────────────────────
+// Only special-arrangement jobs (consignment/cost-splits/installments) get
+// a Kewangan card here — the plain Total Value/Baki figures every other job
+// would show are already covered by Dokumen (line items + generated docs),
+// so showing them again here was just empty-feeling duplication.
 export function FinancialBreakdown({ job, onToggleInstallment }) {
-  const estVal = job.estimation_value || job.final_value || 0;
   const displayVal = job.final_value || job.estimation_value;
 
-  if (!job.special_arrangement) {
-    return (
-      <div className="finance-box">
-        <div className="section-label">Kewangan</div>
-        <div className="info-grid" style={{ gridTemplateColumns: "140px 1fr" }}>
-          <span className="info-label">Total Value</span><span className="font-semibold">{formatRM(displayVal)}</span>
-          <span className="info-label">Baki Kretivco</span><span className="font-semibold text-green">{formatRM(displayVal)} (100%)</span>
-        </div>
-      </div>
-    );
-  }
+  if (!job.special_arrangement) return null;
 
   const breakdownTotal = (job.cost_breakdown || []).reduce((s, item) => s + (item.amount || 0), 0);
   const baki = (displayVal || 0) - breakdownTotal;
@@ -719,7 +712,7 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
 // a past stage to roll back to it. Cancel/Archive stay as small secondary
 // actions here since they're not part of the forward/back flow itself.
 const PIPELINE_STAGES = ['potential', 'new', 'assigned', 'active', 'completed'];
-export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive }) {
+export function ProgressStepper({ job, onStatus, onRollback }) {
   const { status } = job;
   if (status === 'cancelled') {
     return <div className="stepper-cancelled">✕ Job Dibatalkan{job.cancel_reason ? ` — ${CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}${job.cancel_reason_text ? `: ${job.cancel_reason_text}` : ''}` : ''}</div>;
@@ -727,14 +720,11 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
   const idx = PIPELINE_STAGES.indexOf(status);
   const forwardSet = new Set(STATUS_FLOW[status] || []);
   const rollbackSet = new Set(STATUS_ROLLBACK[status] || []);
-  const canCancel = !["completed", "cancelled"].includes(status);
-  const canArchive = !job.archived && status !== "cancelled";
 
   return (
     <div className="stepper-wrap">
       <div className="stepper-top">
         <span className="stepper-label">Progress Job</span>
-        <span className="stepper-current" style={{ color: STATUS[status]?.color }}>Peringkat semasa: {STATUS[status]?.label}</span>
       </div>
       <div className="stepper">
         {PIPELINE_STAGES.map((s, i) => {
@@ -760,12 +750,6 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
           );
         })}
       </div>
-      {(canCancel || canArchive) && (
-        <div className="stepper-actions">
-          {canCancel && <button className="stepper-mini-btn cancel" onClick={() => onCancel(job)}>✕ Cancel</button>}
-          {canArchive && <button className="stepper-mini-btn" onClick={() => onArchive(job)}>Arkib</button>}
-        </div>
-      )}
     </div>
   );
 }
@@ -777,9 +761,11 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
 // unclaimed ticket gets claimed AND advanced to "assigned" in one step;
 // an already-assigned/active ticket just hands the PIC over to whoever
 // clicks, no status change (e.g. covering for a staff member on leave).
-export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume }) {
+export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume, onCancel, onArchive }) {
   const [open, setOpen] = useState(false);
   const canClose = !["completed", "cancelled"].includes(job.status);
+  const canCancel = !["completed", "cancelled"].includes(job.status);
+  const canArchive = !job.archived && job.status !== "cancelled";
   const isHeld = !!job.hold_status;
 
   const item = (label, icon, onClick, color) => (
@@ -804,6 +790,9 @@ export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume }) {
             {!isHeld && item('Pending Ticket', '⏸', () => onHold('pending'), '#F59E0B')}
             {!isHeld && item('Suspend Ticket', '⛔', () => onHold('suspended'), '#EF4444')}
             {isHeld && item('Resume Ticket', '▶️', onResume, '#10B981')}
+            {canCancel && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
+            {canCancel && item('Cancel Ticket', '✕', onCancel, '#EF4444')}
+            {canArchive && item('Arkib', '🗄️', onArchive, '#6B7280')}
           </div>
         </>
       )}
@@ -811,7 +800,7 @@ export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume }) {
   );
 }
 
-export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, onStatus, onRollback, onCancel, onArchive, onTakeIn, onCloseTicket, onHold, onResume, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
+export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, onStatus, onRollback, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const submitRichNote = async ({ note, attachments }) => {
     onAddNote(job.job_id, note, job.id, { attachments });
   };
@@ -859,7 +848,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
 
   return (
     <div className="detail-panel">
-      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} />
+      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} />
       {job.project_id && (
         <div className="project-line">
           🔗 Project <span className="jid">{job.project_id}</span>
@@ -889,20 +878,21 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
           <div className="card-title mt-6 mb-3">Dokumen</div>
           <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
 
-          {/* Financial Breakdown */}
+          {/* Final artwork — the print-ready file(s), attached once every
+              item's design is done and approved, right before sending to
+              the printer/kilang. Kept slim (no heavy card) since it's
+              usually empty until the very end of a job. */}
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: '#6B6080' }}>
+            🖨️ Final Artwork
+          </div>
+          <UploadCol title="" atts={finalArtworkAtts} busy={finalArtBusy} onUpload={handleFinalArtworkUpload} onView={handleFinalArtworkView} onDelete={handleFinalArtworkDelete} />
+
+          {/* Financial Breakdown — only renders for special-arrangement jobs */}
           <div style={{ marginTop: 16 }}>
             <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
           </div>
 
-          {/* Final artwork — the print-ready file(s), attached once every
-              item's design is done and approved, right before sending to
-              the printer/kilang. */}
-          <div style={{marginTop:16,border:'1px solid #10B98130',borderRadius:8,padding:'8px 10px',background:'#F0FDF9'}}>
-            <div style={{fontSize:12,fontWeight:600,color:'#10B981',marginBottom:6}}>🖨️ Final Artwork</div>
-            <UploadCol title="" atts={finalArtworkAtts} busy={finalArtBusy} onUpload={handleFinalArtworkUpload} onView={handleFinalArtworkView} onDelete={handleFinalArtworkDelete} />
-          </div>
-
-          {/* Artwork per item + Customer Approval */}
+          {/* Artwork per item */}
           <div style={{marginTop:16}}>
             <AttachmentSlots job={job} onUpdateJob={onUpdateJob} userName={userName} />
           </div>
@@ -912,19 +902,17 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
   );
 }
 
-// ─── Artwork & Customer Approval Attachments ──────────────────
-// Artwork is one slot per item type — each item is genuinely a separate
-// design file. Doesn't auto-split by quantity ("4x Arrow" stays one slot):
-// multiple units of the same item usually share one design in practice.
-// Staff can add more design slots manually under an item for the real edge
-// case (e.g. each arrow pointing somewhere different). Approval is NOT
-// paired 1:1 with artwork — a customer typically approves the whole batch
-// in one reply/screenshot after seeing every design together, so it's one
-// shared section for the job (supports multiple uploads for revision
-// rounds). Files are actual uploads (screenshot, PDF, forwarded email), not
-// just a link, so the proof lives on the job itself — in a private Supabase
-// Storage bucket, viewed via a short-lived signed URL. Mock mode has no
-// real storage, so it falls back to an in-browser blob URL for the session.
+// ─── Artwork Attachments ────────────────────────────────────────
+// One slot per item type — each item is genuinely a separate design file.
+// Doesn't auto-split by quantity ("4x Arrow" stays one slot): multiple
+// units of the same item usually share one design in practice. Staff can
+// add more design slots manually under an item for the real edge case
+// (e.g. each arrow pointing somewhere different). Customer approval proof
+// belongs in the Activity Log note (screenshot/reply attached there)
+// instead of a dedicated slot here. Files are actual uploads (screenshot,
+// PDF, forwarded email), not just a link — in a private Supabase Storage
+// bucket, viewed via a short-lived signed URL. Mock mode has no real
+// storage, so it falls back to an in-browser blob URL for the session.
 export function baseSlotsFor(job) {
   return (job.line_items || []).flatMap((li, i) => {
     const lineItemId = li.id || `idx-${i}`;
@@ -1020,14 +1008,6 @@ export function AttachmentSlots({ job, onUpdateJob, userName }) {
         })}
       </div>
 
-      {/* One shared approval slot for the whole job — a customer typically
-          approves everything together in a single reply, not item by item.
-          Supports multiple uploads for revision rounds (reject -> revise
-          -> re-approve). */}
-      <div style={{marginTop:12,border:'1px solid #E91E6330',borderRadius:8,padding:'8px 10px',background:'#FFF5F8'}}>
-        <div style={{fontSize:12,fontWeight:600,color:'#E91E63',marginBottom:6}}>✅ Approval Customer</div>
-        <UploadCol title="" atts={attsFor('job','approval')} busy={busyKey==='job:approval'} onUpload={f=>handleUpload('job','Approval customer','approval',f)} onView={handleView} onDelete={handleDelete} />
-      </div>
     </div>
   );
 }
