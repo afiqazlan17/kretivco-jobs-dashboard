@@ -9,10 +9,9 @@ import { StatusBadge, DTag, JID, DLBadge, Modal, Toast, GlobalJobStyles } from '
 // boundary (see AppShell's FinanceSubmenu/JobSubmenu for the same pattern)
 // so only the jobs route needs to opt into dynamic rendering.
 const VIEW_META = {
-  queue: { title: 'Ticket Queue', sub: 'All tickets, sorted by most recently changed' },
-  aging: { title: 'Aging Ticket', sub: 'Tickets untouched for the longest' },
-  hold: { title: 'Pending / Suspended', sub: 'Tickets currently pending or suspended' },
-  mine: { title: 'My Tickets', sub: 'Tickets under your responsibility' },
+  queue: { title: 'Job Queue', sub: 'All jobs, sorted by most recently changed' },
+  aging: { title: 'Aging Job', sub: 'Jobs untouched for the longest' },
+  mine: { title: 'My Jobs', sub: 'Jobs under your responsibility' },
 };
 
 export default function JobMonitor() {
@@ -138,9 +137,9 @@ function JobMonitorContent() {
   // Each selected department gets its own full set of job fields — a print
   // job and a tech job created together can have completely different job
   // types, names, PICs, and deadlines. Only Customer is shared across them.
-  // PIC is deliberately optional — a job's ticket sits unclaimed in its
-  // department's queue until a staff member picks it up ("Ambil Ticket"),
-  // rather than the creator having to assign someone up front.
+  // PIC is deliberately optional — a job sits unclaimed in its department's
+  // queue until a staff member picks it up ("Take In Job"), rather than the
+  // creator having to assign someone up front.
   const canSaveJob = !!newJob.cid && newJob.depts.length > 0 && newJob.depts.every(d => {
     const f = newJob.perDept[d] || {};
     return !!f.type?.trim() && !!f.jobType && !!f.bank && !!f.start && !!f.deadline;
@@ -239,8 +238,7 @@ function JobMonitorContent() {
     // Filter by visible departments
     if (visDepts) list = list.filter(j => visDepts.includes(j.department));
     // View-based slice (from the sidebar's Job submenu)
-    if (view === 'hold') list = list.filter(j => !!j.hold_status);
-    else if (view === 'mine') list = list.filter(j => j.pic === profile?.name);
+    if (view === 'mine') list = list.filter(j => j.pic === profile?.name);
     else if (view === 'aging') list = list.filter(j => !['completed','cancelled'].includes(j.status));
     if (fDept !== "all") list = list.filter(j => j.department === fDept);
     if (fStatus !== "all") list = list.filter(j => j.status === fStatus);

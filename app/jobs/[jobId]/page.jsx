@@ -6,7 +6,7 @@ import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/const
 import { supabase, isMockMode } from '@/lib/supabase';
 import { DetailPanel, CancelModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
 
-// A single job's own page — reached by clicking a row in Job Monitor, a
+// A single job's own page — reached by clicking a row in Job Queue, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
 // job-level actions that used to live on the list page (status changes,
 // cancel, archive, notes, document generation) live here now, scoped to
@@ -31,7 +31,7 @@ export default function JobDetailPage() {
   const handleStatus = useCallback((job, s) => {
     if (s === "completed") {
       // Final Value used to be a manual pop-up, but everything needed to
-      // compute it is already captured elsewhere by the time a ticket
+      // compute it is already captured elsewhere by the time a job
       // closes: what was actually billed (latest un-reversed Invoice),
       // else the item total, else the original estimate.
       const latestInvoice = (ledgerEntries || []).filter(e => e.job_id === job.job_id && e.type === 'invoice' && !e.reversed).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
@@ -133,9 +133,9 @@ export default function JobDetailPage() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
-  // Take In Ticket works regardless of who currently holds the ticket. A
-  // "new" unclaimed ticket gets claimed AND advanced to "assigned" in one
-  // step; an already-assigned/active ticket just hands the PIC over to
+  // Take In Job works regardless of who currently holds the job. A
+  // "new" unclaimed job gets claimed AND advanced to "assigned" in one
+  // step; an already-assigned/active job just hands the PIC over to
   // whoever clicks — no status change (covers e.g. a staff member on leave).
   const handleTakeIn = useCallback((job) => {
     const name = profile?.name || 'Staff';
@@ -172,7 +172,7 @@ export default function JobDetailPage() {
             <div className="h-sub">{dataLoading ? '' : `No job found with ID "${jobId}"`}</div>
           </div>
           <div className="content">
-            <button className="btn-secondary" onClick={() => router.push('/jobs')}>← Back to Job Monitor</button>
+            <button className="btn-secondary" onClick={() => router.push('/jobs')}>← Back to Job Queue</button>
           </div>
         </div>
       </>
@@ -192,7 +192,7 @@ export default function JobDetailPage() {
               job={job}
               onTakeIn={() => handleTakeIn(job)}
               onChangeResponsible={() => setReassignJob(job)}
-              onCloseTicket={() => handleStatus(job, 'completed')}
+              onCloseJob={() => handleStatus(job, 'completed')}
               onHold={(type) => handleHold(job, type)}
               onResume={() => handleResume(job)}
               onCancel={() => handleCancel(job)}
