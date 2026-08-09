@@ -29,7 +29,7 @@ export default function Dashboard() {
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
       <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : 'BOD View'}</span>
     </PageHeader>
-    <div style={{ padding:24, maxWidth:1200, margin:'0 auto' }}>
+    <div style={{ padding:24 }}>
       {/* Row 1: Stat Cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:16, marginBottom:24 }}>
         <StatCard icon="💼" label="Total Jobs" value={stats.total_jobs||0} sub={`${stats.completed_jobs||0} completed`} color="#E91E63" />
