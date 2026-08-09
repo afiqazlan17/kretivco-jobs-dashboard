@@ -107,7 +107,7 @@ export function CancelModal({ job, onConfirm, onClose }) {
 
 // ─── Reassign (Change Current Responsible) Modal ──────────────
 export function ReassignModal({ job, onConfirm, onClose }) {
-  const options = PIC_BY_DEPT[job.department] || PIC_OPTIONS;
+  const options = PIC_OPTIONS;
   const [name, setName] = useState(job.pic || options[0] || '');
   return (
     <Modal width={400} onClose={onClose}>
@@ -299,7 +299,7 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
             {job.installments.map((inst, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 90px", padding: "8px 12px", fontSize: 12, alignItems: "center", borderBottom: i < job.installments.length - 1 ? "1px solid #F0ECF4" : "none" }}>
                 <span style={{ fontWeight: 600 }}>{formatRM(inst.amount)}</span>
-                <span>{inst.due_date ? new Date(inst.due_date + "-01").toLocaleDateString("ms-MY", { month: "short", year: "numeric" }) : "—"}</span>
+                <span>{inst.due_date ? new Date(inst.due_date + "-01").toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) : "—"}</span>
                 <span style={{ textAlign: "center" }}>
                   <button
                     onClick={() => onToggleInstallment && onToggleInstallment(job, i)}
@@ -401,13 +401,16 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const [saved, setSaved] = useState(false);
   const handleSave = () => {
     setSaving(true);
+    // Clicking Simpan again with nothing actually edited shouldn't write a
+    // fresh "dikemaskini" entry to the Activity Log every time.
+    const unchanged = JSON.stringify(form) === JSON.stringify(initial);
     const validItems = form.items.filter(it => it.item?.trim()).map(it => ({
       item: it.item.trim(), desc: it.desc?.trim() || '', size: it.size?.trim() || '',
       qty: Number(it.qty) || 1, price: Number(it.price) || 0,
       total: (Number(it.qty) || 1) * (Number(it.price) || 0),
     }));
     const itemsTotal = validItems.reduce((s, li) => s + li.total, 0);
-    if (onUpdateJob) {
+    if (onUpdateJob && !unchanged) {
       onUpdateJob(job.id, {
         line_items: validItems,
         estimation_value: itemsTotal || job.estimation_value,
@@ -639,9 +642,15 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
 
   if (docs.length === 0 && documentAttachments.length === 0) return null;
 
+  // A ticket needs to actually be claimed (PIC assigned via Take In Ticket /
+  // Change Current Responsible) before staff can edit items or generate
+  // documents against it — otherwise anyone could quietly bill a ticket
+  // nobody's officially responsible for yet.
+  const ticketClaimed = !!job.pic;
+
   return (
     <div style={{ marginTop: 0 }}>
-      {docs.length > 0 && siblings.length > 0 && !showCombine && (
+      {docs.length > 0 && ticketClaimed && siblings.length > 0 && !showCombine && (
         <div style={{ marginBottom: 8 }}>
           <button
             onClick={() => setShowCombine(true)}
@@ -653,13 +662,21 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {docs.map(d => (
-              <button key={d.type} onClick={() => setPreviewDoc({ type: d.type, label: d.label })} style={btnStyle(d.color)}>
+              <button
+                key={d.type}
+                onClick={() => ticketClaimed && setPreviewDoc({ type: d.type, label: d.label })}
+                disabled={!ticketClaimed}
+                style={{ ...btnStyle(d.color), opacity: ticketClaimed ? 1 : 0.45, cursor: ticketClaimed ? 'pointer' : 'not-allowed' }}
+              >
                 <span>{d.icon}</span>
                 {d.label}
               </button>
             ))}
           </div>
-          {(!job.line_items || job.line_items.length === 0) && (
+          {!ticketClaimed && (
+            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Ticket belum diambil — guna "Take In Ticket" di Action menu dahulu sebelum jana dokumen.</div>
+          )}
+          {ticketClaimed && (!job.line_items || job.line_items.length === 0) && (
             <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Klik mana-mana butang untuk isi item &amp; jana dokumen.</div>
           )}
         </>
@@ -808,7 +825,7 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseTicket, 
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
           <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 220, overflow: 'hidden', padding: '4px 0' }}>
-            {item('Take In Ticket', '🙋', onTakeIn)}
+            {!job.pic && item('Take In Ticket', '🙋', onTakeIn)}
             {item('Change Current Responsible', '🔁', onChangeResponsible)}
             {!isHeld && item('Pending Ticket', '⏸', () => onHold('pending'), '#F59E0B')}
             {!isHeld && item('Suspend Ticket', '⛔', () => onHold('suspended'), '#EF4444')}

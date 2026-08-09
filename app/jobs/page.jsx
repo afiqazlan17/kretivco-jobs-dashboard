@@ -439,7 +439,7 @@ export default function JobMonitor() {
                     <label className="field-label">PIC <span style={{fontWeight:400,color:'#9B93A8'}}>— pilihan, boleh biar kosong untuk staff department ambil sendiri</span></label>
                     <select className="field-select" style={{width:'100%'}} value={f.pic} onChange={e=>set('pic',e.target.value)}>
                       <option value="">— Belum assign (dalam queue) —</option>
-                      {(PIC_BY_DEPT[d]||PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}
+                      {PIC_OPTIONS.map(p=><option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
 
