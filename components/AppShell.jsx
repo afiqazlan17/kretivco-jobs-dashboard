@@ -27,13 +27,13 @@ function FinanceSubmenu({ isMobile, collapsed, onNav }) {
     <div style={{ padding: '2px 0 6px' }}>
       {REPORT_MENU.map(r => (
         <div key={r.key} onClick={(e) => { e.stopPropagation(); onNav(`/finance?report=${r.key}`) }}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: (isMobile || !collapsed) ? '0 20px 0 52px' : '0 12px', cursor: 'pointer',
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 34, padding: (isMobile || !collapsed) ? '7px 10px 7px 44px' : '7px 12px', cursor: 'pointer',
             background: activeReport === r.key ? 'rgba(255,255,255,.08)' : 'transparent',
             color: activeReport === r.key ? '#fff' : 'rgba(255,255,255,.45)',
-            fontSize: 12, fontWeight: activeReport === r.key ? 600 : 400, whiteSpace: 'nowrap' }}>
-          <span style={{ fontSize: 13 }}>{r.icon}</span>
-          {(isMobile || !collapsed) && <span>{r.label}</span>}
-          {(isMobile || !collapsed) && !r.built && <span style={{ marginLeft: 'auto', fontSize: 8, opacity: .6 }}>●</span>}
+            fontSize: 12, fontWeight: activeReport === r.key ? 600 : 400, lineHeight: 1.3 }}>
+          <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{r.icon}</span>
+          {(isMobile || !collapsed) && <span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.label}</span>}
+          {(isMobile || !collapsed) && !r.built && <span style={{ marginLeft: 'auto', fontSize: 8, opacity: .6, flexShrink: 0, marginTop: 3 }}>●</span>}
         </div>
       ))}
     </div>

@@ -202,12 +202,431 @@ function GeneralLedgerReport({ entries }) {
   );
 }
 
-function ReportComingSoon({ label }) {
+// ── Trial Balance — every account's NET balance as of a date, split into
+// the Debit or Kredit column depending on its normal side (flipped to the
+// other column if a normally-debit account happens to sit credit, or vice
+// versa — real bookkeeping already allows that). Totals must match; if
+// they don't, something's wrong with a posting somewhere.
+function TrialBalanceReport({ entries }) {
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0,10));
+  const upToDate = useMemo(() => entries.filter(e => e.date?.slice(0,10) <= asOf), [entries, asOf]);
+  const rows = useMemo(() => {
+    const accounts = new Set();
+    upToDate.forEach(e => { accounts.add(e.debit_account); accounts.add(e.credit_account); });
+    return Array.from(accounts).map(key => {
+      const meta = ledgerAccountMeta(key);
+      // balanceFor() already flips the sign for credit-normal accounts, so
+      // a positive result sits on the account's own natural side — not
+      // necessarily the Debit column. Only a negative result (an abnormal
+      // balance) crosses over to the other column.
+      const bal = balanceFor(upToDate, key);
+      const isDebitNormal = DEBIT_NORMAL(key);
+      const onDebitSide = bal >= 0 ? isDebitNormal : !isDebitNormal;
+      const magnitude = Math.abs(bal);
+      return { key, ...meta, debit: onDebitSide ? magnitude : 0, credit: onDebitSide ? 0 : magnitude };
+    }).filter(r => r.debit || r.credit).sort((a,b) => a.code.localeCompare(b.code));
+  }, [upToDate]);
+  const totalDebit = rows.reduce((s,r) => s + r.debit, 0);
+  const totalCredit = rows.reduce((s,r) => s + r.credit, 0);
+  const balanced = Math.abs(totalDebit - totalCredit) < 0.01;
+
   return (
-    <div className="card" style={{textAlign:"center",padding:"48px 24px"}}>
-      <div style={{fontSize:32,marginBottom:12}}>🚧</div>
-      <div className="card-title" style={{marginBottom:6}}>{label}</div>
-      <div className="text-sm text-muted">Belum dibina lagi — akan datang.</div>
+    <div className="card">
+      <div className="card-title" style={{marginBottom:14}}>Trial Balance</div>
+      <div style={{marginBottom:16,maxWidth:200}}>
+        <label className="fl">Sebagai Pada (As of)</label>
+        <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Kod</th><th>Nama Akaun</th><th>Jenis</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Kredit</th></tr></thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada baki setakat tarikh ini.</td></tr>}
+            {rows.map(r => (
+              <tr key={r.key}>
+                <td className="text-sm" style={{fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>{r.code}</td>
+                <td className="text-sm">{r.label}</td>
+                <td className="text-sm">{r.type}</td>
+                <td style={{textAlign:"right"}}>{r.debit ? formatRM(r.debit) : '—'}</td>
+                <td style={{textAlign:"right"}}>{r.credit ? formatRM(r.credit) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot>
+              <tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}>
+                <td colSpan={3}>Jumlah</td>
+                <td style={{textAlign:"right"}}>{formatRM(totalDebit)}</td>
+                <td style={{textAlign:"right"}}>{formatRM(totalCredit)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+      {rows.length > 0 && (
+        <div style={{marginTop:12,fontSize:12,fontWeight:600,color:balanced?"#10B981":"#EF4444"}}>
+          {balanced ? "✓ Debit = Kredit, seimbang." : "⚠ Debit ≠ Kredit — semak posting."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Balance Sheet — Assets = Liabilities + Equity, as of a date. No
+// Liability accounts exist in this ledger yet (no AP/loan postings), so
+// Liabilities always shows RM 0 — flagged rather than hidden, since it's
+// a real gap once the business takes on payables, not a bug.
+function BalanceSheetReport({ entries }) {
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0,10));
+  const upToDate = useMemo(() => entries.filter(e => e.date?.slice(0,10) <= asOf), [entries, asOf]);
+  const arBalance = balanceFor(upToDate, 'ar');
+  const bankBalances = Object.keys(BANK).map(b => ({ key: b, label: BANK[b].label, bal: balanceFor(upToDate, `bank_${b}`) }));
+  const totalAssets = arBalance + bankBalances.reduce((s,b) => s + b.bal, 0);
+
+  const deptKeys = Object.keys(DEPT);
+  const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(upToDate, `revenue_${d}`), 0);
+  const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(upToDate, `cogs_${d}`), 0);
+  const totalOpex = EXPENSE_CATEGORIES.reduce((s,c) => s + balanceFor(upToDate, `opex_${c.value}`), 0);
+  const retainedEarnings = totalRevenue - totalCogs - totalOpex;
+  const openingEquity = balanceFor(upToDate, 'equity_opening');
+  const totalEquity = openingEquity + retainedEarnings;
+  const totalLiabilities = 0;
+  const balanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01;
+
+  const Row = ({ label, value, bold }) => (
+    <div className="dept-row" style={{gridTemplateColumns:"1fr 140px",fontWeight:bold?700:400}}>
+      <span>{label}</span><span style={{textAlign:"right"}}>{formatRM(value)}</span>
+    </div>
+  );
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{marginBottom:14}}>Balance Sheet</div>
+      <div style={{marginBottom:16,maxWidth:200}}>
+        <label className="fl">Sebagai Pada (As of)</label>
+        <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
+      </div>
+
+      <div className="section-label" style={{marginBottom:6}}>Aset (Assets)</div>
+      <Row label="Belum Diterima (AR)" value={arBalance} />
+      {bankBalances.map(b => <Row key={b.key} label={b.label} value={b.bal} />)}
+      <Row label="Jumlah Aset" value={totalAssets} bold />
+
+      <div className="section-label" style={{margin:"18px 0 6px"}}>Liabiliti (Liabilities)</div>
+      <div className="text-xs text-muted" style={{marginBottom:6}}>Tiada liability account direkod dalam sistem lagi (cth: AP, pinjaman) — akan ditambah bila diperlukan.</div>
+      <Row label="Jumlah Liabiliti" value={totalLiabilities} bold />
+
+      <div className="section-label" style={{margin:"18px 0 6px"}}>Ekuiti (Equity)</div>
+      <Row label="Baki Permulaan" value={openingEquity} />
+      <Row label="Untung Terkumpul (Retained Earnings)" value={retainedEarnings} />
+      <Row label="Jumlah Ekuiti" value={totalEquity} bold />
+
+      <div style={{marginTop:16,paddingTop:12,borderTop:"2px solid #E8E4ED"}}>
+        <Row label="Aset = Liabiliti + Ekuiti?" value={totalLiabilities + totalEquity} bold />
+      </div>
+      <div style={{marginTop:8,fontSize:12,fontWeight:600,color:balanced?"#10B981":"#EF4444"}}>
+        {balanced ? "✓ Balance sheet seimbang." : "⚠ Tidak seimbang — semak posting."}
+      </div>
+    </div>
+  );
+}
+
+// ── Cash Book Statement — classic Terimaan/Bayaran ledger per bank
+// account, exploded from the same two-sided entries as the General
+// Ledger's Bank/Cash tab, with a running balance.
+function CashBookStatement({ entries }) {
+  const bankKeys = Object.keys(BANK);
+  const [bank, setBank] = useState(bankKeys[0]);
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(String(thisYear));
+  const years = Array.from(new Set(entries.map(e => e.date?.slice(0,4)).filter(Boolean))).sort();
+  if (!years.includes(String(thisYear))) years.push(String(thisYear));
+
+  const accountKey = `bank_${bank}`;
+  const rows = useMemo(() => {
+    const inYear = entries.filter(e => e.date?.slice(0,4) === year && (e.debit_account === accountKey || e.credit_account === accountKey));
+    const exploded = inYear.map(e => ({
+      id: e.id, date: e.date, particular: e.description, ref: e.doc_number,
+      terimaan: e.debit_account === accountKey ? e.amount : 0,
+      bayaran: e.credit_account === accountKey ? e.amount : 0,
+      reversed: e.reversed,
+    })).sort((a,b) => new Date(a.date) - new Date(b.date));
+    let running = 0;
+    return exploded.map(r => { running += r.terimaan - r.bayaran; return { ...r, balance: running }; });
+  }, [entries, year, accountKey]);
+  const totalIn = rows.reduce((s,r) => s + r.terimaan, 0);
+  const totalOut = rows.reduce((s,r) => s + r.bayaran, 0);
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{marginBottom:14}}>Cash Book Statement</div>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+        <div><label className="fl">Bank</label>
+          <select className="fs" style={{width:160}} value={bank} onChange={e=>setBank(e.target.value)}>
+            {bankKeys.map(b => <option key={b} value={b}>{BANK[b].label}</option>)}
+          </select>
+        </div>
+        <div><label className="fl">Tahun</label>
+          <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Tarikh</th><th>Particulars</th><th>Ref No</th><th style={{textAlign:"right"}}>Terimaan</th><th style={{textAlign:"right"}}>Bayaran</th><th style={{textAlign:"right"}}>Baki</th></tr></thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada pergerakan untuk bank/tahun ini.</td></tr>}
+            {rows.map(r => (
+              <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
+                <td className="text-sm">{formatDate(r.date)}</td>
+                <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (dibatalkan)</span>}</td>
+                <td className="text-sm">{r.ref || '—'}</td>
+                <td style={{textAlign:"right",color:"#10B981"}}>{r.terimaan ? formatRM(r.terimaan) : '—'}</td>
+                <td style={{textAlign:"right",color:"#EF4444"}}>{r.bayaran ? formatRM(r.bayaran) : '—'}</td>
+                <td style={{textAlign:"right",fontWeight:600}}>{formatRM(r.balance)}</td>
+              </tr>
+            ))}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot>
+              <tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}>
+                <td colSpan={3}>Jumlah</td>
+                <td style={{textAlign:"right"}}>{formatRM(totalIn)}</td>
+                <td style={{textAlign:"right"}}>{formatRM(totalOut)}</td>
+                <td style={{textAlign:"right"}}>{formatRM(totalIn-totalOut)}</td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Aging Report — outstanding AR per job, bucketed by days since the
+// invoice that created the balance. Uses each job's own ledger entries
+// (job_id is on every entry) rather than a separate invoice/payment
+// matching table, which this system doesn't have.
+function AgingReport({ entries, jobs }) {
+  const rows = useMemo(() => {
+    const byJob = {};
+    entries.forEach(e => { if (e.job_id) { (byJob[e.job_id] ||= []).push(e); } });
+    const today = new Date();
+    return Object.entries(byJob).map(([jobId, jobEntries]) => {
+      const outstanding = balanceFor(jobEntries, 'ar');
+      if (Math.abs(outstanding) < 0.01) return null;
+      const invoices = jobEntries.filter(e => e.type === 'invoice' && !e.reversed).sort((a,b) => new Date(b.date) - new Date(a.date));
+      const invoiceDate = invoices[0]?.date;
+      const job = jobs.find(j => j.job_id === jobId);
+      const days = invoiceDate ? Math.floor((today - new Date(invoiceDate)) / 864e5) : 0;
+      const bucket = days <= 30 ? '0-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+';
+      return { jobId, customer: job?.customer_name || jobId, invoiceDate, days, bucket, outstanding };
+    }).filter(Boolean).sort((a,b) => b.days - a.days);
+  }, [entries, jobs]);
+
+  const buckets = ['0-30','31-60','61-90','90+'];
+  const bucketTotals = buckets.map(b => ({ bucket: b, total: rows.filter(r => r.bucket === b).reduce((s,r) => s + r.outstanding, 0) }));
+  const grandTotal = rows.reduce((s,r) => s + r.outstanding, 0);
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{marginBottom:14}}>Aging Report</div>
+      <div className="sum-grid" style={{marginBottom:20}}>
+        {bucketTotals.map(b => (
+          <div key={b.bucket} className="sum-card" style={{borderLeftColor: b.bucket==='90+'?'#EF4444':b.bucket==='61-90'?'#E85D04':b.bucket==='31-60'?'#F59E0B':'#10B981'}}>
+            <div className="section-label">{b.bucket} hari</div>
+            <div style={{fontSize:20,fontWeight:700,marginTop:6}}>{formatRM(b.total)}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Customer</th><th>Job ID</th><th>Tarikh Invois</th><th style={{textAlign:"center"}}>Hari</th><th>Bucket</th><th style={{textAlign:"right"}}>Outstanding</th></tr></thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada outstanding AR.</td></tr>}
+            {rows.map(r => (
+              <tr key={r.jobId}>
+                <td className="text-sm">{r.customer}</td>
+                <td className="jid text-sm">{r.jobId}</td>
+                <td className="text-sm">{formatDate(r.invoiceDate)}</td>
+                <td style={{textAlign:"center"}}>{r.days}</td>
+                <td><span className="type-badge" style={{color:r.bucket==='90+'?'#EF4444':'#6B7280',background:(r.bucket==='90+'?'#EF4444':'#6B7280')+"15"}}>{r.bucket}</span></td>
+                <td style={{textAlign:"right",fontWeight:600}}>{formatRM(r.outstanding)}</td>
+              </tr>
+            ))}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={5}>Jumlah</td><td style={{textAlign:"right"}}>{formatRM(grandTotal)}</td></tr></tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Bank Reconciliation Report — compares the book balance (from posted
+// ledger entries) against a manually-entered bank statement closing
+// balance. A full reconciliation (matching each transaction against its
+// cleared/uncleared status on the statement) needs a clearing-status field
+// this system doesn't track yet — this is the honest, useful subset:
+// a monthly "do the numbers match" check, not a full itemized reconciliation.
+function BankReconciliationReport({ entries }) {
+  const bankKeys = Object.keys(BANK);
+  const [statementBalances, setStatementBalances] = useState({});
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0,10));
+  const upToDate = useMemo(() => entries.filter(e => e.date?.slice(0,10) <= asOf), [entries, asOf]);
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{marginBottom:6}}>Bank Reconciliation Report</div>
+      <div className="text-xs text-muted" style={{marginBottom:16}}>Bandingkan baki buku (sistem) dengan baki penyata bank sebenar. Masukkan baki penyata bank secara manual untuk setiap akaun.</div>
+      <div style={{marginBottom:16,maxWidth:200}}>
+        <label className="fl">Sebagai Pada (As of)</label>
+        <input type="date" className="fi" value={asOf} onChange={e=>setAsOf(e.target.value)} />
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Bank</th><th style={{textAlign:"right"}}>Baki Buku (Sistem)</th><th style={{textAlign:"right"}}>Baki Penyata Bank</th><th style={{textAlign:"right"}}>Variance</th><th style={{textAlign:"center"}}>Status</th></tr></thead>
+          <tbody>
+            {bankKeys.map(b => {
+              const bookBal = balanceFor(upToDate, `bank_${b}`);
+              const stmt = statementBalances[b];
+              const stmtNum = stmt === undefined || stmt === '' ? null : Number(stmt);
+              const variance = stmtNum == null ? null : stmtNum - bookBal;
+              const reconciled = variance != null && Math.abs(variance) < 0.01;
+              return (
+                <tr key={b}>
+                  <td className="text-sm">{BANK[b].label}</td>
+                  <td style={{textAlign:"right",fontWeight:600}}>{formatRM(bookBal)}</td>
+                  <td style={{textAlign:"right"}}>
+                    <input type="number" className="fi" style={{width:140,marginLeft:"auto",textAlign:"right"}} placeholder="0.00"
+                      value={stmt ?? ''} onChange={e=>setStatementBalances(p=>({...p,[b]:e.target.value}))} />
+                  </td>
+                  <td style={{textAlign:"right",fontWeight:600,color:variance==null?"#9B93A8":reconciled?"#10B981":"#EF4444"}}>{variance==null?'—':formatRM(variance)}</td>
+                  <td style={{textAlign:"center"}}>{variance==null?<span className="text-xs text-muted">—</span>:reconciled?<span style={{color:"#10B981",fontWeight:700}}>✓ Sepadan</span>:<span style={{color:"#EF4444",fontWeight:700}}>⚠ Tak Sepadan</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Sales Report — invoices issued in a period, by customer and department.
+function SalesReport({ entries }) {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(String(thisYear));
+  const years = Array.from(new Set(entries.map(e => e.date?.slice(0,4)).filter(Boolean))).sort();
+  if (!years.includes(String(thisYear))) years.push(String(thisYear));
+
+  const invoices = useMemo(() => entries.filter(e => e.type === 'invoice' && !e.reversed && e.date?.slice(0,4) === year), [entries, year]);
+  const byCustomer = useMemo(() => {
+    const m = {};
+    invoices.forEach(e => {
+      const name = e.description?.split(' — ')[1] || 'Customer';
+      if (!m[name]) m[name] = { name, count: 0, total: 0 };
+      m[name].count++; m[name].total += e.amount;
+    });
+    return Object.values(m).sort((a,b) => b.total - a.total);
+  }, [invoices]);
+  const byDept = useMemo(() => Object.keys(DEPT).map(d => ({
+    key: d, label: DEPT[d].label, color: DEPT[d].color,
+    count: invoices.filter(e => e.department === d).length,
+    total: invoices.filter(e => e.department === d).reduce((s,e) => s + e.amount, 0),
+  })).filter(d => d.count), [invoices]);
+  const grandTotal = invoices.reduce((s,e) => s + e.amount, 0);
+
+  return (
+    <div className="card">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
+        <div className="card-title">Sales Report</div>
+        <div><label className="fl">Tahun</label>
+          <select className="fs" style={{width:110}} value={year} onChange={e=>setYear(e.target.value)}>
+            {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="sum-card" style={{borderLeftColor:"#10B981",marginBottom:20,maxWidth:260}}>
+        <div className="section-label">Jumlah Sales ({year})</div>
+        <div style={{fontSize:24,fontWeight:700,marginTop:6}}>{formatRM(grandTotal)}</div>
+      </div>
+
+      <div className="section-label" style={{marginBottom:8}}>Ikut Department</div>
+      <div className="dept-row" style={{color:"#9B93A8",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:".02em"}}>
+        <span>Department</span><span style={{textAlign:"right"}}>Bil. Invois</span><span style={{textAlign:"right"}}>Jumlah</span>
+      </div>
+      {byDept.length === 0 && <div className="text-sm text-muted" style={{padding:"12px 0"}}>Tiada invois untuk tahun ini.</div>}
+      {byDept.map(d => (
+        <div key={d.key} className="dept-row" style={{gridTemplateColumns:"140px 1fr 1fr"}}>
+          <span><span className="dept-tag" style={{color:d.color,background:d.color+"15"}}>{DEPT[d.key].code}</span> {d.label}</span>
+          <span style={{textAlign:"right"}}>{d.count}</span>
+          <span style={{textAlign:"right",fontWeight:600}}>{formatRM(d.total)}</span>
+        </div>
+      ))}
+
+      <div className="section-label" style={{margin:"20px 0 8px"}}>Ikut Customer</div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Customer</th><th style={{textAlign:"right"}}>Bil. Invois</th><th style={{textAlign:"right"}}>Jumlah</th></tr></thead>
+          <tbody>
+            {byCustomer.length === 0 && <tr><td colSpan={3} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada invois untuk tahun ini.</td></tr>}
+            {byCustomer.map(c => (
+              <tr key={c.name}>
+                <td className="text-sm">{c.name}</td>
+                <td style={{textAlign:"right"}}>{c.count}</td>
+                <td style={{textAlign:"right",fontWeight:600}}>{formatRM(c.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Installment Outstanding — every pending installment across every job
+// with a special-arrangement payment plan, sorted by due date.
+function InstallmentOutstandingReport({ jobs }) {
+  const rows = useMemo(() => {
+    const out = [];
+    jobs.forEach(j => (j.installments || []).forEach((inst, i) => {
+      if (inst.status !== 'paid') out.push({ id: `${j.job_id}-${i}`, jobId: j.job_id, customer: j.customer_name, amount: inst.amount, dueDate: inst.due_date });
+    }));
+    return out.sort((a,b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+  }, [jobs]);
+  const today = new Date().toISOString().slice(0,7);
+  const total = rows.reduce((s,r) => s + (r.amount || 0), 0);
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{marginBottom:6}}>Installment Outstanding</div>
+      <div className="text-xs text-muted" style={{marginBottom:16}}>Semua ansuran belum dibayar merentasi semua job special arrangement</div>
+      <div style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>Job ID</th><th>Customer</th><th>Due Date</th><th style={{textAlign:"right"}}>Amount</th><th style={{textAlign:"center"}}>Status</th></tr></thead>
+          <tbody>
+            {rows.length === 0 && <tr><td colSpan={5} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>Tiada ansuran outstanding.</td></tr>}
+            {rows.map(r => {
+              const overdue = r.dueDate && r.dueDate < today;
+              return (
+                <tr key={r.id}>
+                  <td className="jid text-sm">{r.jobId}</td>
+                  <td className="text-sm">{r.customer}</td>
+                  <td className="text-sm">{r.dueDate ? new Date(r.dueDate + "-01").toLocaleDateString("ms-MY", { month: "long", year: "numeric" }) : "—"}</td>
+                  <td style={{textAlign:"right",fontWeight:600}}>{formatRM(r.amount)}</td>
+                  <td style={{textAlign:"center"}}>{overdue ? <span style={{color:"#EF4444",fontWeight:700,fontSize:11}}>⚠ Lewat</span> : <span style={{color:"#F59E0B",fontWeight:700,fontSize:11}}>Pending</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot><tr style={{fontWeight:700,borderTop:"2px solid #E8E4ED"}}><td colSpan={3}>Jumlah</td><td style={{textAlign:"right"}}>{formatRM(total)}</td><td /></tr></tfoot>
+          )}
+        </table>
+      </div>
     </div>
   );
 }
@@ -382,9 +801,13 @@ function FinanceContent() {
 
         <div className="content">
           {activeReport === 'gl' && <GeneralLedgerReport entries={scopedEntries} />}
-          {activeReport !== 'overview' && activeReport !== 'gl' && (
-            <ReportComingSoon label={REPORT_MENU.find(r => r.key === activeReport)?.label} />
-          )}
+          {activeReport === 'trial_balance' && <TrialBalanceReport entries={scopedEntries} />}
+          {activeReport === 'balance_sheet' && <BalanceSheetReport entries={scopedEntries} />}
+          {activeReport === 'cash_book' && <CashBookStatement entries={scopedEntries} />}
+          {activeReport === 'aging' && <AgingReport entries={scopedEntries} jobs={jobs} />}
+          {activeReport === 'bank_recon' && <BankReconciliationReport entries={scopedEntries} />}
+          {activeReport === 'sales' && <SalesReport entries={scopedEntries} />}
+          {activeReport === 'installment' && <InstallmentOutstandingReport jobs={jobs} />}
           {activeReport === 'overview' && (<>
           <div className="card">
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:10}}>
