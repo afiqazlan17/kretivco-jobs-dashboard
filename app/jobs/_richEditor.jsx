@@ -53,6 +53,26 @@ export function RichNoteComposer({ jobId, onSubmit }) {
     ],
     editorProps: {
       attributes: { class: "rich-note-content" },
+      // Paste a screenshot straight from the clipboard (Ctrl+V) — no need
+      // to save it to disk first just to re-upload it through the toolbar.
+      handlePaste: (view, event) => {
+        const item = Array.from(event.clipboardData?.items || []).find(i => i.type.startsWith("image/"));
+        if (!item) return false;
+        const file = item.getAsFile();
+        if (!file) return false;
+        if (file.size > MAX_IMAGE_BYTES) {
+          alert("Gambar terlalu besar (>4MB). Guna \"+ Fail\" untuk attach sebagai fail biasa.");
+          return true;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const { schema } = view.state;
+          const node = schema.nodes.image.create({ src: reader.result });
+          view.dispatch(view.state.tr.replaceSelectionWith(node));
+        };
+        reader.readAsDataURL(file);
+        return true;
+      },
     },
   });
 

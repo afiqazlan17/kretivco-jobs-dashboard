@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/constants';
 import { supabase, isMockMode } from '@/lib/supabase';
-import { DetailPanel, CancelModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
+import { DetailPanel, CancelModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Monitor, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
@@ -25,6 +25,7 @@ export default function JobDetailPage() {
 
   const [confirm, setConfirm] = useState(null);
   const [cancelJob, setCancelJob] = useState(null);
+  const [reassignJob, setReassignJob] = useState(null);
   const [toast, setToast] = useState(null);
 
   const handleStatus = useCallback((job, s) => {
@@ -154,6 +155,13 @@ export default function JobDetailPage() {
     setToast(`${job.job_id}: disambung semula.`);
   }, [updateJob, profile]);
 
+  const handleReassignConfirm = useCallback((name) => {
+    if (!reassignJob) return;
+    updateJob(reassignJob.id, { pic: name }, profile?.name, { action: 'edited', field: 'pic', old: reassignJob.pic || '', val: name });
+    setToast(`${reassignJob.job_id}: Current Responsible → ${name}.`);
+    setReassignJob(null);
+  }, [reassignJob, updateJob, profile]);
+
   if (!job) {
     return (
       <>
@@ -183,6 +191,7 @@ export default function JobDetailPage() {
             <ActionMenu
               job={job}
               onTakeIn={() => handleTakeIn(job)}
+              onChangeResponsible={() => setReassignJob(job)}
               onCloseTicket={() => handleStatus(job, 'completed')}
               onHold={(type) => handleHold(job, type)}
               onResume={() => handleResume(job)}
@@ -193,8 +202,13 @@ export default function JobDetailPage() {
           <div className="job-header-row">
             <div>
               <div className="h-title">{job.job_id} | {job.job_type}</div>
-              <div className="job-header-line">{cust?.customer_id || job.customer_id || '—'} | {cust?.company || job.customer_name || '—'}</div>
+              <div className="job-header-line">
+                {cust ? (
+                  <a onClick={() => router.push(`/customers?customer=${cust.id}`)} style={{ color: '#fff', textDecoration: 'underline', cursor: 'pointer' }}>{cust.customer_id} | {cust.company || cust.name}</a>
+                ) : (job.customer_name || '—')}
+              </div>
               <div className="job-header-line">{cust?.name || job.customer_name || '—'} | {cust?.phone || '—'}</div>
+              {cust?.email && <div className="job-header-line">{cust.email}</div>}
               {job.project_id && <div className="job-header-line">Project ID: {job.project_id}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
@@ -225,6 +239,7 @@ export default function JobDetailPage() {
           />
         </div>
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={() => setCancelJob(null)} />}
+        {reassignJob && <ReassignModal job={reassignJob} onConfirm={handleReassignConfirm} onClose={() => setReassignJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={() => setConfirm(null)} />}
         {toast && <Toast msg={typeof toast === 'string' ? toast : toast.msg} action={typeof toast === 'object' ? toast.action : null} onDone={() => setToast(null)} />}
       </div>
