@@ -55,11 +55,12 @@ function ConfirmModal({title,msg,label,color,onConfirm,onClose}){
 }
 
 export default function Settings(){
-  const { users, addUser, updateUser, resetAll } = useData();
+  const { users, addUser, updateUser, resetAll, resetJobs } = useData();
   const[toast,setToast]=useState(null);
   const[search,setSearch]=useState("");const[fRole,setFRole]=useState("all");const[showInactive,setShowInactive]=useState(false);
   const[addModal,setAddModal]=useState(false);const[editUser,setEditUser]=useState(null);const[confirm,setConfirm]=useState(null);
   const[resetModal,setResetModal]=useState(false);const[resetInput,setResetInput]=useState('');
+  const[resetJobsModal,setResetJobsModal]=useState(false);const[resetJobsInput,setResetJobsInput]=useState('');
 
   const filtered=useMemo(()=>{let l=[...users];if(!showInactive)l=l.filter(u=>u.active);if(fRole!=="all")l=l.filter(u=>u.role===fRole);if(search.trim()){const q=search.toLowerCase();l=l.filter(u=>u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q))}return l},[users,fRole,search,showInactive]);
 
@@ -154,6 +155,17 @@ export default function Settings(){
             </tbody></table>
           </div>
 
+          {/* Reset Jobs Only — Dev Phase */}
+          <div className="card" style={{marginTop:24,padding:"20px 24px",borderLeft:"4px solid #F59E0B"}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:'#F59E0B'}}>Reset Job Monitor</div>
+                <div className="text-sm text-secondary" style={{marginTop:4}}>Padam semua jobs & activity logs. Customers, users & data lain kekal. Dev phase sahaja.</div>
+              </div>
+              <button className="btn-danger-sm" style={{padding:'9px 20px',fontSize:13,background:'#F59E0B12',color:'#F59E0B',borderColor:'#F59E0B30'}} onClick={()=>setResetJobsModal(true)}>Reset Jobs</button>
+            </div>
+          </div>
+
           {/* Reset All Data — Dev Phase */}
           <div className="card" style={{marginTop:24,padding:"20px 24px",borderLeft:"4px solid #EF4444"}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -169,6 +181,20 @@ export default function Settings(){
         {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} ditambah sebagai ${ROLE[d.role]?.label}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
         {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} dikemaskini.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
+        {resetJobsModal&&<Modal w={420} onClose={()=>{setResetJobsModal(false);setResetJobsInput('')}}>
+          <div style={{padding:"24px"}}>
+            <div className="mtitle" style={{color:'#F59E0B'}}>⚠️ Reset Job Monitor</div>
+            <p className="text-body text-secondary" style={{marginTop:8,lineHeight:1.6}}>Ini akan padam semua jobs dan activity logs. Customer & user tidak akan disentuh. Tindakan ini tidak boleh diundo.</p>
+            <div style={{marginTop:16}}>
+              <label className="fl">Taip &quot;RESET&quot; untuk sahkan</label>
+              <input className="fi" value={resetJobsInput} onChange={e=>setResetJobsInput(e.target.value)} placeholder="RESET" style={{borderColor:resetJobsInput==='RESET'?'#F59E0B':'#E8E4ED'}}/>
+            </div>
+          </div>
+          <div className="mfooter">
+            <button className="btn-secondary" onClick={()=>{setResetJobsModal(false);setResetJobsInput('')}}>Batal</button>
+            <button className="btn-primary" style={{background:resetJobsInput==='RESET'?'#F59E0B':'#E8E4ED',color:resetJobsInput==='RESET'?'#fff':'#9B93A8',cursor:resetJobsInput==='RESET'?'pointer':'not-allowed'}} onClick={()=>{if(resetJobsInput==='RESET'){resetJobs();setResetJobsModal(false);setResetJobsInput('');setToast({msg:'Semua job telah direset.',type:'danger'})}}}>Reset Jobs</button>
+          </div>
+        </Modal>}
         {resetModal&&<Modal w={420} onClose={()=>{setResetModal(false);setResetInput('')}}>
           <div style={{padding:"24px"}}>
             <div className="mtitle" style={{color:'#EF4444'}}>⚠️ Reset Semua Data</div>
