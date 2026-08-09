@@ -1,13 +1,33 @@
 "use client"
-import { useState, useMemo, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useCallback, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, CANCEL_REASONS, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, customerDisplayName, formatRM, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, CANCEL_REASONS, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, customerDisplayName, formatRM, formatDateTime, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { StatusBadge, DTag, JID, DLBadge, Modal, Toast, GlobalJobStyles } from './_shared';
 
-// ─── Main ─────────────────────────────────────────────────────
+// The active view comes from ?view= — isolated behind its own Suspense
+// boundary (see AppShell's FinanceSubmenu/JobSubmenu for the same pattern)
+// so only the jobs route needs to opt into dynamic rendering.
+const VIEW_META = {
+  queue: { title: 'Ticket Queue', sub: 'Semua ticket, disusun ikut yang terkini disentuh' },
+  aging: { title: 'Aging Ticket', sub: 'Ticket paling lama tidak disentuh' },
+  hold: { title: 'Pending / Suspended', sub: 'Ticket yang sedang pending atau suspended' },
+  mine: { title: 'My Tickets', sub: 'Ticket di bawah tanggungjawab anda' },
+};
+
 export default function JobMonitor() {
+  return (
+    <Suspense fallback={null}>
+      <JobMonitorContent />
+    </Suspense>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────
+function JobMonitorContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = VIEW_META[searchParams.get('view')] ? searchParams.get('view') : 'queue';
   // Auth - role based filtering
   const { profile } = useAuth() || {};
   const isBod = profile?.role === 'bod';
@@ -15,15 +35,24 @@ export default function JobMonitor() {
   const visDepts = useVisibleDepts();
 
   // Shared data store
-  const { jobs, customers, addJob, updateCustomer, genJobId, genCustId, genProjectId, addCustomer } = useData();
+  const { jobs, customers, addJob, updateCustomer, genJobId, genCustId, genProjectId, addCustomer, getActivity } = useData();
 
   const DEPT_LIST = Object.entries(DEPT).map(([k,v])=>({key:k,...v}));
 
   const [fDept, setFDept] = useState("all");
   const [fStatus, setFStatus] = useState("all");
   const [search, setSearch] = useState("");
-  const [sortCol, setSortCol] = useState("deadline");
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortCol, setSortCol] = useState("touched");
+  const [sortDir, setSortDir] = useState("desc");
+
+  // Each view has its own natural default sort (queue = most recently
+  // touched first, aging = least recently touched first) — re-applied
+  // whenever the sidebar switches views, but a manual header-click still
+  // overrides it until the next view switch.
+  useEffect(() => {
+    if (view === 'aging') { setSortCol('touched'); setSortDir('asc'); }
+    else { setSortCol('touched'); setSortDir('desc'); }
+  }, [view]);
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const emptyDeptFields = () => ({ type:'', jobType:'client_project', bank:'', pic:'', start:'', deadline:'', notes:'', productLine:'', segment:'', pkg:'' });
@@ -192,16 +221,33 @@ export default function JobMonitor() {
     if(typeof window!=='undefined') window.history.replaceState(null,'','/jobs');
   };
 
+  // "Last touched" = the most recent of the job's own timestamps and every
+  // activity-log entry against it (notes/comments included — addLog() never
+  // bumps job.updated_at, so that field alone would miss them). Recomputed
+  // every render rather than memoized since it reads the activity-log store
+  // through a plain function, not a stable dependency.
+  const lastTouched = {};
+  jobs.forEach(j => {
+    let max = j.created_at || '';
+    if (j.updated_at && j.updated_at > max) max = j.updated_at;
+    getActivity(j.job_id).forEach(l => { if (l.time && l.time > max) max = l.time; });
+    lastTouched[j.job_id] = max;
+  });
+
   const filtered = useMemo(() => {
     let list = jobs.filter(j => !j.archived);
     // Filter by visible departments
     if (visDepts) list = list.filter(j => visDepts.includes(j.department));
+    // View-based slice (from the sidebar's Job submenu)
+    if (view === 'hold') list = list.filter(j => !!j.hold_status);
+    else if (view === 'mine') list = list.filter(j => j.pic === profile?.name);
+    else if (view === 'aging') list = list.filter(j => !['completed','cancelled'].includes(j.status));
     if (fDept !== "all") list = list.filter(j => j.department === fDept);
     if (fStatus !== "all") list = list.filter(j => j.status === fStatus);
     if (search.trim()) { const q = search.toLowerCase(); list = list.filter(j => (j.job_id||'').toLowerCase().includes(q) || (j.customer_name||'').toLowerCase().includes(q) || (j.job_type||'').toLowerCase().includes(q) || (j.pic||'').toLowerCase().includes(q) || (j.project_id||'').toLowerCase().includes(q)); }
-    list.sort((a, b) => { let va, vb; switch (sortCol) { case "id": va=a.job_id||''; vb=b.job_id||''; break; case "customer": va=a.customer_name||""; vb=b.customer_name||""; break; case "dept": va=a.department||''; vb=b.department||''; break; case "status": va=a.status||''; vb=b.status||''; break; case "value": va=a.estimation_value||0; vb=b.estimation_value||0; break; case "deadline": va=a.deadline||"9999"; vb=b.deadline||"9999"; break; default: va=a.job_id||''; vb=b.job_id||''; } if (va<vb) return sortDir==="asc"?-1:1; if (va>vb) return sortDir==="asc"?1:-1; return 0; });
+    list.sort((a, b) => { let va, vb; switch (sortCol) { case "id": va=a.job_id||''; vb=b.job_id||''; break; case "customer": va=a.customer_name||""; vb=b.customer_name||""; break; case "dept": va=a.department||''; vb=b.department||''; break; case "status": va=a.status||''; vb=b.status||''; break; case "value": va=a.estimation_value||0; vb=b.estimation_value||0; break; case "deadline": va=a.deadline||"9999"; vb=b.deadline||"9999"; break; case "touched": va=lastTouched[a.job_id]||''; vb=lastTouched[b.job_id]||''; break; default: va=a.job_id||''; vb=b.job_id||''; } if (va<vb) return sortDir==="asc"?-1:1; if (va>vb) return sortDir==="asc"?1:-1; return 0; });
     return list;
-  }, [jobs, fDept, fStatus, search, sortCol, sortDir, visDepts]);
+  }, [jobs, fDept, fStatus, search, sortCol, sortDir, visDepts, view, profile, getActivity]);
 
   const toggleSort = c => { if (sortCol===c) setSortDir(d=>d==="asc"?"desc":"asc"); else { setSortCol(c); setSortDir("asc"); } };
   const sortInd = c => sortCol!==c ? <span className="sort-idle">⇅</span> : <span className="sort-active">{sortDir==="asc"?"↑":"↓"}</span>;
@@ -213,7 +259,7 @@ export default function JobMonitor() {
     router.push(`/jobs/${jobId}`);
   }, [router]);
 
-  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" }];
+  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Nama Job", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" },{ k:"touched", l:"Disentuh", w:"150px" }];
   const grid = cols.map(c=>c.w).join(" ");
 
   return (
@@ -221,7 +267,7 @@ export default function JobMonitor() {
       <GlobalJobStyles />
 
       <div className="page">
-        <div className="header"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><div><div className="h-title">Job Monitor</div><div className="h-sub">{filtered.length} job ditunjukkan · Kretivco Job Management</div></div><button onClick={()=>setShowCreate(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> Job Baru</button></div></div>
+        <div className="header"><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:12}}><div><div className="h-title">{VIEW_META[view].title}</div><div className="h-sub">{filtered.length} job ditunjukkan · {VIEW_META[view].sub}</div></div><button onClick={()=>setShowCreate(true)} style={{fontFamily:"'Poppins',sans-serif",fontSize:13,fontWeight:600,padding:"9px 20px",borderRadius:8,border:"1px solid rgba(255,255,255,.4)",background:"rgba(255,255,255,.15)",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:16}}>+</span> Job Baru</button></div></div>
         <div className="content">
           {/* Filters */}
           <div className="card filter-bar">
@@ -264,6 +310,7 @@ export default function JobMonitor() {
                   <div className="tbl-cell text-body font-semibold">{formatRM(job.estimation_value)}</div>
                   <div className="tbl-cell text-body text-secondary">{job.pic || '—'}</div>
                   <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
+                  <div className="tbl-cell text-body text-secondary" style={{fontSize:11.5}}>{lastTouched[job.job_id] ? formatDateTime(lastTouched[job.job_id]) : '—'}</div>
                 </div>
               );
             })}

@@ -4,11 +4,11 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks'
 import { signOut } from '@/lib/auth'
 import { isMockMode } from '@/lib/supabase'
-import { REPORT_MENU } from '@/lib/constants'
+import { REPORT_MENU, JOB_MENU } from '@/lib/constants'
 
 const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
-  { key:'jobs', label:'Job Monitor', path:'/jobs', icon:'📋' },
+  { key:'jobs', label:'Job', path:'/jobs', icon:'📋' },
   { key:'customers', label:'Customers', path:'/customers', icon:'👥' },
   { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
   { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
@@ -36,6 +36,30 @@ function FinanceSubmenu({ isMobile, collapsed, onNav }) {
           {(isMobile || !collapsed) && !r.built && <span style={{ marginLeft: 'auto', fontSize: 8, opacity: .6, flexShrink: 0, marginTop: 3 }}>●</span>}
         </div>
       ))}
+    </div>
+  )
+}
+
+// Same pattern as FinanceSubmenu — the active view comes from ?view=, and the
+// "Job Baru" entry is an action (opens the create-job modal) rather than a link.
+function JobSubmenu({ isMobile, collapsed, onNav, onNewJob }) {
+  const searchParams = useSearchParams()
+  const activeView = searchParams.get('view') || 'queue'
+  return (
+    <div style={{ padding: '2px 0 6px' }}>
+      {JOB_MENU.map(j => {
+        const isActive = !j.action && activeView === j.key
+        return (
+          <div key={j.key} onClick={(e) => { e.stopPropagation(); j.action ? onNewJob() : onNav(`/jobs?view=${j.key}`) }}
+            style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 34, padding: (isMobile || !collapsed) ? '7px 10px 7px 44px' : '7px 12px', cursor: 'pointer',
+              background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
+              color: isActive ? '#fff' : (j.action ? '#E91E63' : 'rgba(255,255,255,.45)'),
+              fontSize: 12, fontWeight: isActive ? 600 : 400, lineHeight: 1.3 }}>
+            <span style={{ fontSize: 13, flexShrink: 0, marginTop: 1 }}>{j.icon}</span>
+            {(isMobile || !collapsed) && <span style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{j.label}</span>}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -119,23 +143,12 @@ export default function AppShell({ children }) {
             {isMobile && <button onClick={()=>setMobileOpen(false)} style={{ background:'none', border:'none', color:'rgba(255,255,255,.5)', fontSize:22, cursor:'pointer' }}>×</button>}
           </div>
 
-          {/* Quick Action */}
-          <div style={{ padding:'12px 16px' }}>
-            <button onClick={handleNewJob}
-              style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center',
-                gap:8, height:42, borderRadius:8, border:'none', cursor:'pointer',
-                background:'linear-gradient(135deg,#E91E63,#AD1457)', color:'#fff',
-                fontSize:13, fontWeight:600, fontFamily:'inherit', boxShadow:'0 2px 8px rgba(233,30,99,.3)' }}>
-              <span style={{ fontSize:18, lineHeight:1 }}>+</span>
-              <span>Job Baru</span>
-            </button>
-          </div>
-
           {/* Navigation */}
           <nav style={{ flex:1, padding:'4px 0' }}>
             {nav.map(item => {
               const active = pathname===item.path || (item.path!=='/' && pathname.startsWith(item.path))
               const isFinance = item.key === 'finance'
+              const isJob = item.key === 'jobs'
               return (
                 <div key={item.key}>
                   <div onClick={()=>handleNav(item.path)}
@@ -149,6 +162,11 @@ export default function AppShell({ children }) {
                   {isFinance && active && (
                     <Suspense fallback={null}>
                       <FinanceSubmenu isMobile={isMobile} collapsed={collapsed} onNav={handleNav} />
+                    </Suspense>
+                  )}
+                  {isJob && active && (
+                    <Suspense fallback={null}>
+                      <JobSubmenu isMobile={isMobile} collapsed={collapsed} onNav={handleNav} onNewJob={handleNewJob} />
                     </Suspense>
                   )}
                 </div>
