@@ -10,9 +10,10 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 import { supabase, isMockMode } from '@/lib/supabase';
+import { RichNoteComposer } from './_richEditor';
 
 // ─── Micro Components ─────────────────────────────────────────
 export function StatusBadge({ s }) { const m = STATUS[s]; return m ? <span className="badge-status" style={{ color: m.color, background: m.color + "15" }}>{m.label}</span> : null; }
@@ -49,28 +50,6 @@ export function Toast({ msg, action, onDone }) {
         >{action.label}</button>
       )}
     </div>
-  );
-}
-
-// ─── Complete Job Modal ───────────────────────────────────────
-export function CompleteModal({ job, onConfirm, onClose }) {
-  const initialFv = job.estimation_value || "";
-  const [fv, setFv] = useState(initialFv);
-  const guardedClose = () => { if (fv !== initialFv && !window.confirm('Perubahan belum disimpan akan hilang. Tutup borang ini?')) return; onClose(); };
-  return (
-    <Modal width={480} onClose={guardedClose}>
-      <div className="modal-header"><span className="modal-title">Tandakan Job Selesai</span><button className="modal-close" onClick={guardedClose}>×</button></div>
-      <div className="modal-body">
-        <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}<br /><span className="text-muted">Est: {formatRM(job.estimation_value)}</span></div>
-        <label className="field-label">Final Value (RM) *</label>
-        <input type="number" className="field-input" style={{ fontSize: 16, fontWeight: 600, height: 48 }} value={fv} onChange={e => setFv(e.target.value)} placeholder="Masukkan final value" />
-        {!fv && <div className="field-error">Wajib diisi.</div>}
-      </div>
-      <div className="modal-footer">
-        <button className="btn-secondary" onClick={guardedClose}>Batal</button>
-        <button className="btn-success" disabled={!fv} onClick={() => onConfirm(Number(fv))}>Sahkan Selesai</button>
-      </div>
-    </Modal>
   );
 }
 
@@ -127,7 +106,29 @@ export function CancelModal({ job, onConfirm, onClose }) {
 }
 
 // ─── Activity Timeline ────────────────────────────────────────
-export function Timeline({ jobId, getActivity }) {
+// The "created" entry's own persisted detail text is whatever the DB
+// trigger wrote (opaque, not something the client controls) — so the full
+// creation snapshot shown here is synthesized straight from the job's own
+// fields instead of trusting that log row's text. Since those fields
+// (department, job type, bank, dates) are no longer editable after
+// creation, this stays accurate for the job's whole lifetime, not just a
+// one-time snapshot.
+function creationSnapshot(job) {
+  const lines = [
+    `Customer: ${job.customer_name || job.customer_id || '—'}`,
+    `Department: ${DEPT[job.department]?.label || job.department || '—'}`,
+    `Job Type: ${JOB_TYPE[job.job_type_category]?.label || '—'}`,
+    `Bank: ${BANK[job.bank]?.label || '—'}`,
+    `PIC: ${job.pic || 'Belum assign'}`,
+    `Est. Value: ${formatRM(job.estimation_value)}`,
+    `Mula: ${formatDate(job.start_date)}`,
+    `Deadline: ${formatDate(job.deadline)}`,
+  ];
+  if (job.notes) lines.push(`Nota: ${job.notes}`);
+  return lines.join('\n');
+}
+
+export function Timeline({ jobId, getActivity, job }) {
   const logs = getActivity(jobId);
   if (!logs.length) return <div className="text-sm text-muted" style={{ padding: "12px 0" }}>Tiada activity log.</div>;
 
@@ -154,16 +155,20 @@ export function Timeline({ jobId, getActivity }) {
       case 'rollback': return <><span>rollback status: </span><StatusBadge s={l.from} /> → <StatusBadge s={l.to} /></>;
       case 'cancelled': return <span>batalkan job{l.detail ? ` — ${l.detail}` : ''}</span>;
       case 'completed': return <span>tandakan selesai{l.detail ? ` — ${l.detail}` : ''}</span>;
-      case 'edited': return <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
+      case 'edited': return l.field === 'pic'
+        ? <span>ambil alih ticket (PIC): {l.old || 'Belum assign'} → <strong>{l.val}</strong></span>
+        : l.field === 'hold_status'
+        ? <span>{l.val ? `letak job "${HOLD_STATUS[l.val]?.label || l.val}"` : 'sambung semula job (Resume)'}{l.detail ? ` — ${l.detail}` : ''}</span>
+        : <><span>update {l.field}: {l.old} → <strong>{l.val}</strong></span></>;
       case 'note': return 'menulis catatan';
       case 'document_generated': return <span>menjana {l.detail}</span>;
       default: return l.action;
     }
   };
 
-  const viewLogAttachment = async (l) => {
-    if (l.attachmentUrl) { window.open(l.attachmentUrl, '_blank'); return; }
-    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(l.attachmentPath, 3600);
+  const viewLogAttachment = async (att) => {
+    if (att.url) { window.open(att.url, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(att.path, 3600);
     if (error) { alert('Gagal buka fail: ' + error.message); return; }
     window.open(data.signedUrl, '_blank');
   };
@@ -179,11 +184,23 @@ export function Timeline({ jobId, getActivity }) {
             <strong>{l.user}</strong>{" "}
             {actionText(l)}
           </div>
+          {l.action === 'created' && job && (
+            <pre className="text-sm text-secondary" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: '4px 0 0', background: '#F9F8FB', border: '1px solid #F0ECF4', borderRadius: 6, padding: '8px 10px' }}>{creationSnapshot(job)}</pre>
+          )}
           {l.reason && <div className="text-sm text-secondary">Sebab: "{l.reason}"</div>}
-          {l.note && <div className="text-sm text-secondary">"{l.note}"</div>}
+          {l.note && (l.action === 'note'
+            ? <div className="text-sm text-secondary rich-note-content" style={{ marginTop: 2 }} dangerouslySetInnerHTML={{ __html: l.note }} />
+            : <div className="text-sm text-secondary">"{l.note}"</div>)}
+          {(l.attachments || []).length > 0 && (
+            <div className="text-sm" style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {l.attachments.map((att, ai) => (
+                <a key={ai} onClick={() => viewLogAttachment(att)} style={{ color: '#3A86FF', cursor: 'pointer' }}>📎 {att.name}</a>
+              ))}
+            </div>
+          )}
           {(l.attachmentPath || l.attachmentUrl) && (
             <div className="text-sm" style={{marginTop:2}}>
-              <a onClick={()=>viewLogAttachment(l)} style={{color:'#3A86FF',cursor:'pointer'}}>📎 {l.attachmentName || 'Lihat screenshot'}</a>
+              <a onClick={()=>viewLogAttachment({ path: l.attachmentPath, url: l.attachmentUrl })} style={{color:'#3A86FF',cursor:'pointer'}}>📎 {l.attachmentName || 'Lihat screenshot'}</a>
             </div>
           )}
           <div className="text-xs text-muted">{formatDateTime(l.time)}</div>
@@ -295,12 +312,22 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
 // Staff can adjust customer info, items, delivery/discount (or payment
 // method/amounts for a receipt) and see the layout update instantly. Terms
 // and bank are fixed — bank always follows whatever was set on the job.
-export function DocPreviewModal({ type, label, job, cust, userName, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
+export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntries, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
   const isReceipt = type === 'receipt';
   const cfg = DOC_TYPES[type];
   const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
   const notes = notesFor(type, bank);
   const docNumber = genDocNumber(type, job.job_id);
+
+  // A receipt is proof of payment against a specific invoice, not a fresh
+  // re-derivation from whatever the line items currently say — those may
+  // have moved on to cover a later quotation/invoice. Default to the most
+  // recent un-reversed invoice's amount so Resit always matches what was
+  // actually billed; falls back to the job total only if no invoice exists
+  // yet. Still fully editable for partial/installment payments.
+  const latestInvoice = isReceipt
+    ? (ledgerEntries || []).filter(e => e.job_id === job.job_id && e.type === 'invoice' && !e.reversed).sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+    : null;
 
   const [form, setForm] = useState(() => {
     const initItems = (job.line_items || []).map(li => ({ ...li }));
@@ -314,7 +341,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, onClose, onG
       items: initItems.length ? initItems : [{ item: '', desc: '', size: '', qty: 1, price: 0 }],
       delivery: 0, discount: 0,
       paymentMethod: 'Bank Transfer',
-      amountPaid: job.final_value || job.estimation_value || 0,
+      amountPaid: latestInvoice ? latestInvoice.amount : (job.final_value || job.estimation_value || 0),
       balanceDue: 0,
     };
   });
@@ -447,6 +474,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, onClose, onG
               </select>
               <label style={labelSt}>Amount Paid (RM)</label>
               <input type="number" style={inputSt} value={form.amountPaid} onChange={e => set('amountPaid', e.target.value)} />
+              {latestInvoice && <div style={{ fontSize: 10, color: '#9B93A8', marginTop: 3 }}>Auto dari Invoice {latestInvoice.doc_number}</div>}
               <label style={labelSt}>Balance Due (RM)</label>
               <input type="number" style={inputSt} value={form.balanceDue} onChange={e => set('balanceDue', e.target.value)} />
             </>}
@@ -547,7 +575,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, onClose, onG
   );
 }
 
-export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, userName, onUpdateJob, onUpdateCustomer }) {
+export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDocGenerated, userName, onUpdateJob, onUpdateCustomer }) {
   const [generating, setGenerating] = useState(null);
   const [showCombine, setShowCombine] = useState(false);
   const [combineIds, setCombineIds] = useState(new Set());
@@ -596,16 +624,15 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
   if (docs.length === 0 && documentAttachments.length === 0) return null;
 
   return (
-    <div style={{ marginTop: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
-        <div className="section-label" style={{ marginBottom: 0 }}>Dokumen</div>
-        {docs.length > 0 && siblings.length > 0 && !showCombine && (
+    <div style={{ marginTop: 0 }}>
+      {docs.length > 0 && siblings.length > 0 && !showCombine && (
+        <div style={{ marginBottom: 8 }}>
           <button
             onClick={() => setShowCombine(true)}
             style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11.5, fontWeight: 700, color: '#E91E63', background: '#E91E6312', border: '1px solid #E91E6330', borderRadius: 8, cursor: 'pointer', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
           >🔗 Gabung dengan Job Lain (Customer Sama)</button>
-        )}
-      </div>
+        </div>
+      )}
       {docs.length > 0 && (
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -617,7 +644,7 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
             ))}
           </div>
           {(!job.line_items || job.line_items.length === 0) && (
-            <div style={{ fontSize: 11, color: '#E85D04', marginTop: 6, fontStyle: 'italic' }}>⚠ Tiada item — sila tambah item sebelum menjana dokumen.</div>
+            <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Klik mana-mana butang untuk isi item &amp; jana dokumen.</div>
           )}
         </>
       )}
@@ -676,7 +703,7 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
       )}
       {previewDoc && (
         <DocPreviewModal
-          type={previewDoc.type} label={previewDoc.label} job={job} cust={cust} userName={userName}
+          type={previewDoc.type} label={previewDoc.label} job={job} cust={cust} userName={userName} ledgerEntries={ledgerEntries}
           onClose={() => setPreviewDoc(null)}
           onGenerated={(payload) => { onDocGenerated && onDocGenerated(payload); }}
           onUpdateJob={onUpdateJob}
@@ -692,20 +719,16 @@ export function DocButtons({ job, jobs, customers, visDepts, onDocGenerated, use
 // a past stage to roll back to it. Cancel/Archive stay as small secondary
 // actions here since they're not part of the forward/back flow itself.
 const PIPELINE_STAGES = ['potential', 'new', 'assigned', 'active', 'completed'];
-export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive, onClaim }) {
+export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive }) {
   const { status } = job;
   if (status === 'cancelled') {
-    return <div className="stepper-cancelled">✕ Job Dibatalkan</div>;
+    return <div className="stepper-cancelled">✕ Job Dibatalkan{job.cancel_reason ? ` — ${CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}${job.cancel_reason_text ? `: ${job.cancel_reason_text}` : ''}` : ''}</div>;
   }
   const idx = PIPELINE_STAGES.indexOf(status);
   const forwardSet = new Set(STATUS_FLOW[status] || []);
   const rollbackSet = new Set(STATUS_ROLLBACK[status] || []);
   const canCancel = !["completed", "cancelled"].includes(status);
   const canArchive = !job.archived && status !== "cancelled";
-  // A "new" ticket sits unclaimed in its department's queue — anyone there
-  // can pick it up. Claiming sets the PIC and advances the status in one
-  // step, rather than staff having to fill PIC separately first.
-  const canClaim = status === 'new' && !!onClaim;
 
   return (
     <div className="stepper-wrap">
@@ -737,12 +760,6 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
           );
         })}
       </div>
-      {canClaim && (
-        <div style={{marginTop:12,padding:'10px 14px',borderRadius:8,background:'#F59E0B12',border:'1px dashed #F59E0B60',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-          <span style={{fontSize:12.5,color:'#92600A'}}>🎫 Ticket ni belum ada PIC — sesiapa dalam department boleh ambil.</span>
-          <button onClick={() => onClaim(job)} style={{fontFamily:"'Poppins',sans-serif",fontSize:12,fontWeight:600,padding:'7px 16px',borderRadius:8,border:'none',background:'#F59E0B',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}}>🙋 Ambil Ticket</button>
-        </div>
-      )}
       {(canCancel || canArchive) && (
         <div className="stepper-actions">
           {canCancel && <button className="stepper-mini-btn cancel" onClick={() => onCancel(job)}>✕ Cancel</button>}
@@ -753,34 +770,50 @@ export function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive
   );
 }
 
-export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onClaim, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
-  const [noteText, setNoteText] = useState('');
-  const [noteFile, setNoteFile] = useState(null);
-  const [noteSubmitting, setNoteSubmitting] = useState(false);
-  const submitNote = async () => {
-    if (!noteText.trim()) return;
-    setNoteSubmitting(true);
-    try {
-      let attachmentPath = null, attachmentName = null, attachmentUrl = null;
-      if (noteFile) {
-        if (isMockMode) {
-          attachmentUrl = URL.createObjectURL(noteFile);
-          attachmentName = noteFile.name;
-        } else {
-          attachmentPath = `${job.job_id}/log/${Date.now()}_${noteFile.name}`;
-          const { error } = await supabase.storage.from('job-attachments').upload(attachmentPath, noteFile);
-          if (error) throw error;
-          attachmentName = noteFile.name;
-        }
-      }
-      onAddNote(job.job_id, noteText.trim(), job.id, { attachmentPath, attachmentName, attachmentUrl });
-      setNoteText('');
-      setNoteFile(null);
-    } catch (err) {
-      alert('Gagal upload screenshot: ' + (err?.message || err));
-    } finally {
-      setNoteSubmitting(false);
-    }
+// ─── Ticket Action Menu — header dropdown ──────────────────────
+// Consolidates ticket-lifecycle actions that used to be scattered (the old
+// stepper claim banner, the Complete modal) into one control. Take In
+// Ticket works regardless of who currently holds the ticket — a "new"
+// unclaimed ticket gets claimed AND advanced to "assigned" in one step;
+// an already-assigned/active ticket just hands the PIC over to whoever
+// clicks, no status change (e.g. covering for a staff member on leave).
+export function ActionMenu({ job, onTakeIn, onCloseTicket, onHold, onResume }) {
+  const [open, setOpen] = useState(false);
+  const canClose = !["completed", "cancelled"].includes(job.status);
+  const isHeld = !!job.hold_status;
+
+  const item = (label, icon, onClick, color) => (
+    <button
+      onClick={() => { setOpen(false); onClick(); }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '8px 12px', fontFamily: "'Poppins',sans-serif", fontSize: 12.5, fontWeight: 600, color: color || '#1A1025', background: 'none', border: 'none', cursor: 'pointer' }}
+    >{icon} {label}</button>
+  );
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12.5, fontWeight: 700, padding: '9px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,.5)', background: 'rgba(255,255,255,.15)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+      >Action ▾</button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
+          <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 200, overflow: 'hidden', padding: '4px 0' }}>
+            {item('Take In Ticket', '🙋', onTakeIn)}
+            {canClose && item('Close Ticket', '✅', onCloseTicket, '#10B981')}
+            {!isHeld && item('Pending Ticket', '⏸', () => onHold('pending'), '#F59E0B')}
+            {!isHeld && item('Suspend Ticket', '⛔', () => onHold('suspended'), '#EF4444')}
+            {isHeld && item('Resume Ticket', '▶️', onResume, '#10B981')}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, onStatus, onRollback, onCancel, onArchive, onTakeIn, onCloseTicket, onHold, onResume, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
+  const submitRichNote = async ({ note, attachments }) => {
+    onAddNote(job.job_id, note, job.id, { attachments });
   };
   // Final, print-ready artwork — the deliverable staff attach once every
   // individual item's design has been made and approved, right before
@@ -822,53 +855,44 @@ export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onSta
     if (att.path && !isMockMode) await supabase.storage.from('job-attachments').remove([att.path]);
     onUpdateJob(job.id, { attachments: attachments.filter(a => a.id !== att.id) }, userName, { action: 'edited', field: 'attachments', detail: `Final artwork dipadam: ${att.name}` });
   };
-  const [editingItems, setEditingItems] = useState(false);
-  const [editItems, setEditItems] = useState([]);
-  const eiUpdate = (i,k,v) => setEditItems(p=>p.map((li,idx)=>idx===i?{...li,[k]:v}:li));
-  const eiAdd = () => setEditItems(p=>[...p,{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
-  const eiRemove = (i) => setEditItems(p=>p.length>1?p.filter((_,idx)=>idx!==i):[{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]);
-  const eiTotal = editItems.reduce((s,li)=>s+((Number(li.qty)||0)*(Number(li.price)||0)),0);
-  const startEdit = () => { setEditItems(job.line_items?.length ? job.line_items.map(li=>({id:li.id||crypto.randomUUID(),...li})) : [{id:crypto.randomUUID(),item:'',desc:'',size:'',qty:1,price:0}]); setEditingItems(true); };
-  const saveItems = () => {
-    const valid = editItems.filter(li=>li.item.trim()).map(li=>({item:li.item.trim(),desc:li.desc?.trim()||'',size:li.size?.trim()||'',qty:Number(li.qty)||1,price:Number(li.price)||0,total:(Number(li.qty)||1)*(Number(li.price)||0)}));
-    const total = valid.reduce((s,li)=>s+li.total,0);
-    onUpdateJob(job.id, { line_items: valid, estimation_value: total || job.estimation_value }, userName, { action:'edited', field:'line_items', detail:'Item dikemaskini' });
-    setEditingItems(false);
-  };
-
   const projectSiblings = job.project_id ? (jobs || []).filter(j => j.project_id === job.project_id && j.id !== job.id) : [];
 
   return (
     <div className="detail-panel">
-      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} onClaim={onClaim} />
+      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} onCancel={onCancel} onArchive={onArchive} />
+      {job.project_id && (
+        <div className="project-line">
+          🔗 Project <span className="jid">{job.project_id}</span>
+          {projectSiblings.length > 0 && <>
+            {' '}— bersama {projectSiblings.map((s, i) => (
+              <span key={s.id}>{i > 0 && ', '}<a onClick={() => onJumpToJob(s.job_id)}>{s.job_id} · {DEPT[s.department]?.label}</a></span>
+            ))}
+          </>}
+        </div>
+      )}
       <div className="detail-grid">
         <div>
-          <div className="card-title mb-4">Maklumat Job</div>
-          <div className="info-grid">
-            <span className="info-label">Job ID</span><JID>{job.job_id}</JID>
-            <span className="info-label">Department</span><span><DTag d={job.department} /> <span className="text-secondary ml-1">{DEPT[job.department]?.label}</span></span>
-            <span className="info-label">Nama Job</span><span>{job.job_type}</span>
-            <span className="info-label">Job Type</span><span style={{fontSize:12}}>{JOB_TYPE[job.job_type_category]?.label || '—'}</span>
-            <span className="info-label">Bank</span><span style={{fontSize:12}}>{BANK[job.bank]?.label || '—'}</span>
-            <span className="info-label">Status</span><StatusBadge s={job.status} />
-            <span className="info-label">PIC</span><span>{job.pic || <span style={{color:'#9B93A8',fontStyle:'italic'}}>Belum assign</span>}</span>
-            <span className="info-label">Est. Value</span><span className="font-semibold">{formatRM(job.estimation_value)}</span>
-            {job.final_value && <><span className="info-label">Final Value</span><span className="font-semibold text-green">{formatRM(job.final_value)}</span></>}
-            <span className="info-label">Mula</span><span>{formatDate(job.start_date)}</span>
-            <span className="info-label">Deadline</span><DLBadge deadline={job.deadline} status={job.status} />
-            {job.cancel_reason && <><span className="info-label">Sebab Batal</span><span className="text-body">{CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}{job.cancel_reason_text ? ` — ${job.cancel_reason_text}` : ''}</span></>}
+          <div className="card-title mb-3">Catatan Baru</div>
+          <RichNoteComposer jobId={job.job_id} onSubmit={submitRichNote} />
+
+          <div className="card-title mt-6 mb-3">Activity Log</div>
+          <Timeline jobId={job.job_id} getActivity={getActivity} job={job} />
+        </div>
+        <div>
+          <div className="card-title mb-3">Customer</div>
+          <CustMini job={job} customers={customers} />
+
+          {/* Document Generation — item editing now happens inside whichever
+              doc's preview modal is opened, so there's no separate item
+              table here anymore; Simpan there writes straight to
+              job.line_items, shared by every doc type. */}
+          <div className="card-title mt-6 mb-3">Dokumen</div>
+          <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
+
+          {/* Financial Breakdown */}
+          <div style={{ marginTop: 16 }}>
+            <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
           </div>
-          {job.project_id && (
-            <div className="project-line">
-              🔗 Project <span className="jid">{job.project_id}</span>
-              {projectSiblings.length > 0 && <>
-                {' '}— bersama {projectSiblings.map((s, i) => (
-                  <span key={s.id}>{i > 0 && ', '}<a onClick={() => onJumpToJob(s.job_id)}>{s.job_id} · {DEPT[s.department]?.label}</a></span>
-                ))}
-              </>}
-            </div>
-          )}
-          {job.notes && <div className="notes-box"><div className="section-label">Nota</div><div className="text-body">{job.notes}</div></div>}
 
           {/* Final artwork — the print-ready file(s), attached once every
               item's design is done and approved, right before sending to
@@ -878,107 +902,9 @@ export function DetailPanel({ job, jobs, customers, visDepts, getActivity, onSta
             <UploadCol title="" atts={finalArtworkAtts} busy={finalArtBusy} onUpload={handleFinalArtworkUpload} onView={handleFinalArtworkView} onDelete={handleFinalArtworkDelete} />
           </div>
 
-          {/* Line Items */}
-          <div style={{marginTop:16}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-              <div className="section-label" style={{margin:0}}>Item</div>
-              {!editingItems ? (job.status==='completed'||job.status==='cancelled' ? null : <button onClick={startEdit} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>{job.line_items?.length?'✎ Edit':'+ Tambah Item'}</button>)
-              : <div style={{display:'flex',gap:6}}><button onClick={saveItems} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#fff',background:'#E91E63',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Simpan</button><button onClick={()=>setEditingItems(false)} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#6B6080',background:'#F0ECF4',border:'none',borderRadius:6,padding:'4px 12px',cursor:'pointer'}}>Batal</button></div>}
-            </div>
-            {!editingItems && job.line_items?.length > 0 && (() => {
-              const showSize = !!DEPT[job.department]?.usesSize && job.line_items.some(li => !li.noSize);
-              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 1fr' : '2fr 2fr 0.6fr 1fr 1fr';
-              return (
-              <div style={{border:'1px solid #E8E4ED',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#F9F8FB',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span style={{textAlign:'right'}}>Jumlah</span>
-                </div>
-                {job.line_items.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'7px 10px',borderTop:'1px solid #F0ECF4'}}>
-                    <span style={{fontWeight:600,color:'#1A1025'}}>{li.item}</span>
-                    <span style={{color:'#6B6080',whiteSpace:'pre-line'}}>{li.desc||'—'}</span>
-                    {showSize && <span style={{color:'#6B6080'}}>{li.size||'—'}</span>}
-                    <span>{li.qty}</span>
-                    <span>{formatRM(li.price)}</span>
-                    <span style={{textAlign:'right',fontWeight:600}}>{formatRM(li.total||(li.qty*li.price))}</span>
-                  </div>
-                ))}
-                <div style={{padding:'7px 10px',borderTop:'1px solid #E8E4ED',background:'#F9F8FB',display:'flex',justifyContent:'flex-end',fontWeight:700,fontSize:13}}>
-                  Jumlah: {formatRM(job.line_items.reduce((s,li)=>s+(li.total||(li.qty*li.price)||0),0))}
-                </div>
-              </div>
-              );
-            })()}
-            {editingItems && (() => {
-              const showSize = !!DEPT[job.department]?.usesSize && editItems.some(li => !li.noSize);
-              const cols = showSize ? '2fr 2fr 1fr 0.6fr 1fr 0.8fr 28px' : '2fr 2fr 0.6fr 1fr 0.8fr 28px';
-              return (
-              <div style={{border:'1px solid #E91E6330',borderRadius:8,overflow:'hidden',fontSize:12}}>
-                <div style={{display:'grid',gridTemplateColumns:cols,gap:0,padding:'6px 10px',background:'#FFF5F8',fontSize:10,fontWeight:600,color:'#6B6080',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  <span>Item *</span><span>Keterangan</span>{showSize && <span>Size</span>}<span>Qty</span><span>Harga</span><span>Jumlah</span><span></span>
-                </div>
-                {editItems.map((li,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:cols,gap:4,padding:'5px 10px',borderTop:'1px solid #F0ECF4',alignItems:'center'}}>
-                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.item} onChange={e=>eiUpdate(i,'item',e.target.value)} />
-                    <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.desc||''} onChange={e=>eiUpdate(i,'desc',e.target.value)} />
-                    {showSize && <input className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.size||''} onChange={e=>eiUpdate(i,'size',e.target.value)} />}
-                    <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.qty} onChange={e=>eiUpdate(i,'qty',e.target.value)} min="1" />
-                    <input type="number" className="field-input" style={{height:30,fontSize:11,margin:0}} value={li.price} onChange={e=>eiUpdate(i,'price',e.target.value)} />
-                    <span style={{fontSize:11,fontWeight:600,textAlign:'right'}}>{((Number(li.qty)||0)*(Number(li.price)||0)).toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
-                    <button onClick={()=>eiRemove(i)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:13,padding:0}}>×</button>
-                  </div>
-                ))}
-                <div style={{padding:'6px 10px',borderTop:'1px solid #F0ECF4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <button onClick={eiAdd} style={{fontFamily:"'Poppins',sans-serif",fontSize:11,fontWeight:600,color:'#E91E63',background:'none',border:'none',cursor:'pointer'}}>+ Tambah</button>
-                  <span style={{fontSize:12,fontWeight:700}}>Jumlah: RM {eiTotal.toLocaleString('ms-MY',{minimumFractionDigits:2})}</span>
-                </div>
-              </div>
-              );
-            })()}
-            {!editingItems && (!job.line_items || job.line_items.length===0) && <div style={{fontSize:12,color:'#9B93A8',fontStyle:'italic'}}>Tiada item</div>}
-          </div>
-
           {/* Artwork per item + Customer Approval */}
           <div style={{marginTop:16}}>
             <AttachmentSlots job={job} onUpdateJob={onUpdateJob} userName={userName} />
-          </div>
-
-          {/* Financial Breakdown */}
-          <div style={{ marginTop: 16 }}>
-            <FinancialBreakdown job={job} onToggleInstallment={onToggleInstallment} />
-          </div>
-
-          {/* Document Generation */}
-          <div style={{ marginTop: 16 }}>
-            <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
-          </div>
-        </div>
-        <div>
-          <div className="card-title mb-3">Customer</div>
-          <CustMini job={job} customers={customers} />
-          <div className="card-title mt-6 mb-3">Activity Log</div>
-          <Timeline jobId={job.job_id} getActivity={getActivity} />
-
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <textarea
-              className="field-input"
-              style={{ height: 60, paddingTop: 8, resize: 'vertical', flex: 1 }}
-              value={noteText}
-              onChange={e => setNoteText(e.target.value)}
-              placeholder="Tulis catatan untuk job ini... (cth: bukti approval, screenshot bual dengan customer)"
-            />
-            <button
-              onClick={submitNote}
-              disabled={!noteText.trim() || noteSubmitting}
-              style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: (noteText.trim() && !noteSubmitting) ? 'pointer' : 'not-allowed', background: (noteText.trim() && !noteSubmitting) ? '#E91E63' : '#E8E4ED', color: (noteText.trim() && !noteSubmitting) ? '#fff' : '#9B93A8', whiteSpace: 'nowrap' }}
-            >{noteSubmitting ? '...' : 'Tambah Catatan'}</button>
-          </div>
-          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor:'pointer'}}>
-              📎 {noteFile ? 'Tukar screenshot' : 'Lampir screenshot'}
-              <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} onChange={e=>setNoteFile(e.target.files?.[0]||null)} />
-            </label>
-            {noteFile && <><span style={{fontSize:11,color:'#6B6080'}}>{noteFile.name}</span><button onClick={()=>setNoteFile(null)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:12,padding:0}}>×</button></>}
           </div>
         </div>
       </div>
@@ -1329,6 +1255,14 @@ export function GlobalJobStyles() {
         .toast{position:fixed;bottom:24px;right:24px;z-index:200;background:#1A1025;color:#fff;border-radius:10px;padding:12px 20px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,.2);border-left:4px solid #10B981;animation:slideUp .3s}
         button:hover{filter:brightness(.97)}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}} @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        .rich-note-content{outline:none;line-height:1.5}
+        .rich-note-content p{margin:0 0 6px} .rich-note-content p:last-child{margin-bottom:0}
+        .rich-note-content ul,.rich-note-content ol{padding-left:20px;margin:0 0 6px}
+        .rich-note-content img{max-width:100%;border-radius:6px;margin:4px 0;display:block}
+        .rich-note-content a{color:#3A86FF}
+        .job-header-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px}
+        .job-header-line{font-size:12.5px;color:rgba(255,255,255,.85);margin-top:3px}
+        .hold-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-top:6px}
       `}</style>
   );
 }
