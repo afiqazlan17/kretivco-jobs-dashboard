@@ -14,7 +14,7 @@ function StatCard({ icon, label, value, sub, color }) {
 
 export default function Dashboard() {
   const router = useRouter()
-  const goToJob = (jobId) => router.push(`/jobs?job=${jobId}`)
+  const goToJob = (jobId) => router.push(`/jobs/${jobId}`)
   const { stats, deptBreakdown, alerts, recent } = useDashboard()
   const { jobs: allJobs } = useData()
   const visDepts = useVisibleDepts()
