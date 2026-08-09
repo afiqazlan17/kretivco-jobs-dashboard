@@ -97,9 +97,12 @@ export default function JobMonitor() {
   // Each selected department gets its own full set of job fields — a print
   // job and a tech job created together can have completely different job
   // types, names, PICs, and deadlines. Only Customer is shared across them.
+  // PIC is deliberately optional — a job's ticket sits unclaimed in its
+  // department's queue until a staff member picks it up ("Ambil Ticket"),
+  // rather than the creator having to assign someone up front.
   const canSaveJob = !!newJob.cid && newJob.depts.length > 0 && newJob.depts.every(d => {
     const f = newJob.perDept[d] || {};
-    return !!f.type?.trim() && !!f.jobType && !!f.bank && !!f.pic && !!f.start && !!f.deadline;
+    return !!f.type?.trim() && !!f.jobType && !!f.bank && !!f.start && !!f.deadline;
   });
 
   // Field-level validation for inline error display (fix: all fields mandatory except Notes)
@@ -118,7 +121,6 @@ export default function JobMonitor() {
       case 'jobType': return !f.jobType;
       case 'bank': return !f.bank;
       case 'type': return !f.type?.trim();
-      case 'pic': return !f.pic;
       case 'start': return !f.start;
       case 'deadline': return !f.deadline;
       default: return false;
@@ -248,7 +250,7 @@ export default function JobMonitor() {
                   <div className="tbl-cell text-body text-secondary">{job.job_type}</div>
                   <div className="tbl-cell"><StatusBadge s={job.status} /></div>
                   <div className="tbl-cell text-body font-semibold">{formatRM(job.estimation_value)}</div>
-                  <div className="tbl-cell text-body text-secondary">{job.pic}</div>
+                  <div className="tbl-cell text-body text-secondary">{job.pic || '—'}</div>
                   <div className="tbl-cell"><DLBadge deadline={job.deadline} status={job.status} /></div>
                 </div>
               );
@@ -256,7 +258,7 @@ export default function JobMonitor() {
           </div>
           <div className="summary-footer">
             <span>{filtered.length} job</span>
-            <span>Pipeline: {formatRM(filtered.filter(j=>["active","in_progress"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
+            <span>Pipeline: {formatRM(filtered.filter(j=>["new","assigned","active"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
           </div>
         </div>
 
@@ -422,12 +424,11 @@ export default function JobMonitor() {
                   </div>
 
                   <div style={{marginBottom:14}}>
-                    <label className="field-label">PIC *</label>
-                    <select className={`field-select${deptFieldErr(d,'pic')?' field-select-err':''}`} style={{width:'100%'}} value={f.pic} onChange={e=>set('pic',e.target.value)}>
-                      <option value="">— Pilih PIC {meta.label} —</option>
+                    <label className="field-label">PIC <span style={{fontWeight:400,color:'#9B93A8'}}>— pilihan, boleh biar kosong untuk staff department ambil sendiri</span></label>
+                    <select className="field-select" style={{width:'100%'}} value={f.pic} onChange={e=>set('pic',e.target.value)}>
+                      <option value="">— Belum assign (dalam queue) —</option>
                       {(PIC_BY_DEPT[d]||PIC_OPTIONS).map(p=><option key={p} value={p}>{p}</option>)}
                     </select>
-                    {deptFieldErr(d,'pic') && <div className="field-error">Wajib pilih PIC.</div>}
                   </div>
 
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>

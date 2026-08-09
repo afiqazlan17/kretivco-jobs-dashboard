@@ -3,6 +3,7 @@ import { useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { STATUS, CANCEL_REASONS, formatRM } from '@/lib/constants';
+import { supabase, isMockMode } from '@/lib/supabase';
 import { DetailPanel, CompleteModal, CancelModal, ConfirmModal, Toast, GlobalJobStyles, JID } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Monitor, a
@@ -55,7 +56,7 @@ export default function JobDetailPage() {
     addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text, attachmentPath: attachment?.attachmentPath || null, attachmentName: attachment?.attachmentName || null, attachmentUrl: attachment?.attachmentUrl || null }, jobUuid);
   }, [addLog, profile]);
 
-  const handleDocGenerated = useCallback(({ jobs: involvedJobs, type, label, docNumber, total }) => {
+  const handleDocGenerated = useCallback(async ({ jobs: involvedJobs, type, label, docNumber, total, blob, filename }) => {
     involvedJobs.forEach(j => {
       addLog(j.job_id, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` }, j.id);
     });
@@ -65,7 +66,29 @@ export default function JobDetailPage() {
     const override = involvedJobs.length === 1 ? total : undefined;
     if (type === 'invoice') involvedJobs.forEach(j => postInvoiceEntry(j, docNumber, profile?.name, override));
     if (type === 'receipt') involvedJobs.forEach(j => postReceiptEntry(j, docNumber, profile?.name, override));
-  }, [addLog, postInvoiceEntry, postReceiptEntry, profile]);
+
+    // Archive a copy of the generated PDF on every involved job so other
+    // staff can refer to exactly what was sent, instead of it only ever
+    // existing as a download on whichever PC generated it.
+    if (blob) {
+      for (const j of involvedJobs) {
+        try {
+          let path = null, url = null;
+          if (isMockMode) {
+            url = URL.createObjectURL(blob);
+          } else {
+            path = `${j.job_id}/document/${Date.now()}_${filename}`;
+            const { error } = await supabase.storage.from('job-attachments').upload(path, blob);
+            if (error) throw error;
+          }
+          const entry = { id: crypto.randomUUID(), kind: 'document', doc_type: type, doc_number: docNumber, path, url, name: filename, uploaded_by: profile?.name || 'System', uploaded_at: new Date().toISOString() };
+          updateJob(j.id, { attachments: [...(j.attachments || []), entry] }, profile?.name);
+        } catch (err) {
+          console.error('Failed to archive generated PDF:', err);
+        }
+      }
+    }
+  }, [addLog, postInvoiceEntry, postReceiptEntry, profile, updateJob]);
 
   const handleJumpToJob = useCallback((jobId) => {
     router.push(`/jobs/${jobId}`);
@@ -96,6 +119,14 @@ export default function JobDetailPage() {
     const updated = [...(job.installments || [])];
     updated[installmentIndex] = { ...updated[installmentIndex], status: updated[installmentIndex].status === 'paid' ? 'pending' : 'paid' };
     updateJob(job.id, { installments: updated }, profile?.name);
+  }, [updateJob, profile]);
+
+  // Claiming a "new" (unclaimed) ticket sets the PIC and advances it to
+  // "assigned" in one step — staff don't fill PIC separately first.
+  const handleClaim = useCallback((job) => {
+    const name = profile?.name || 'Staff';
+    updateJob(job.id, { pic: name, status: 'assigned' }, profile?.name, { action: 'status_change', from: job.status, to: 'assigned', detail: `Ticket diambil oleh ${name}` });
+    setToast(`${job.job_id}: diambil oleh ${name}.`);
   }, [updateJob, profile]);
 
   if (!job) {
@@ -139,6 +170,7 @@ export default function JobDetailPage() {
             onRollback={handleRollback}
             onCancel={handleCancel}
             onArchive={handleArchive}
+            onClaim={handleClaim}
             onToggleInstallment={handleToggleInstallment}
             onUpdateJob={updateJob}
             onUpdateCustomer={updateCustomer}
