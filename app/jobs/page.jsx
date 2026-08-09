@@ -153,6 +153,13 @@ function Timeline({ jobId, getActivity }) {
     }
   };
 
+  const viewLogAttachment = async (l) => {
+    if (l.attachmentUrl) { window.open(l.attachmentUrl, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(l.attachmentPath, 3600);
+    if (error) { alert('Gagal buka fail: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
+
   return (
     <div className="timeline">
       <div className="timeline-line" />
@@ -166,6 +173,11 @@ function Timeline({ jobId, getActivity }) {
           </div>
           {l.reason && <div className="text-sm text-secondary">Sebab: "{l.reason}"</div>}
           {l.note && <div className="text-sm text-secondary">"{l.note}"</div>}
+          {(l.attachmentPath || l.attachmentUrl) && (
+            <div className="text-sm" style={{marginTop:2}}>
+              <a onClick={()=>viewLogAttachment(l)} style={{color:'#3A86FF',cursor:'pointer'}}>📎 {l.attachmentName || 'Lihat screenshot'}</a>
+            </div>
+          )}
           <div className="text-xs text-muted">{formatDateTime(l.time)}</div>
         </div>
       ))}
@@ -696,10 +708,32 @@ function ProgressStepper({ job, onStatus, onRollback, onCancel, onArchive }) {
 
 function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, onRollback, onCancel, onArchive, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const [noteText, setNoteText] = useState('');
-  const submitNote = () => {
+  const [noteFile, setNoteFile] = useState(null);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const submitNote = async () => {
     if (!noteText.trim()) return;
-    onAddNote(job.job_id, noteText.trim());
-    setNoteText('');
+    setNoteSubmitting(true);
+    try {
+      let attachmentPath = null, attachmentName = null, attachmentUrl = null;
+      if (noteFile) {
+        if (isMockMode) {
+          attachmentUrl = URL.createObjectURL(noteFile);
+          attachmentName = noteFile.name;
+        } else {
+          attachmentPath = `${job.job_id}/log/${Date.now()}_${noteFile.name}`;
+          const { error } = await supabase.storage.from('job-attachments').upload(attachmentPath, noteFile);
+          if (error) throw error;
+          attachmentName = noteFile.name;
+        }
+      }
+      onAddNote(job.job_id, noteText.trim(), job.id, { attachmentPath, attachmentName, attachmentUrl });
+      setNoteText('');
+      setNoteFile(null);
+    } catch (err) {
+      alert('Gagal upload screenshot: ' + (err?.message || err));
+    } finally {
+      setNoteSubmitting(false);
+    }
   };
   const [editingLink, setEditingLink] = useState(false);
   const [linkVal, setLinkVal] = useState(job.drive_link || '');
@@ -862,13 +896,20 @@ function DetailPanel({ job, jobs, customers, visDepts, getActivity, onStatus, on
               style={{ height: 60, paddingTop: 8, resize: 'vertical', flex: 1 }}
               value={noteText}
               onChange={e => setNoteText(e.target.value)}
-              placeholder="Tulis catatan untuk job ini..."
+              placeholder="Tulis catatan untuk job ini... (cth: bukti approval, screenshot bual dengan customer)"
             />
             <button
               onClick={submitNote}
-              disabled={!noteText.trim()}
-              style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: noteText.trim() ? 'pointer' : 'not-allowed', background: noteText.trim() ? '#E91E63' : '#E8E4ED', color: noteText.trim() ? '#fff' : '#9B93A8', whiteSpace: 'nowrap' }}
-            >Tambah Catatan</button>
+              disabled={!noteText.trim() || noteSubmitting}
+              style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: (noteText.trim() && !noteSubmitting) ? 'pointer' : 'not-allowed', background: (noteText.trim() && !noteSubmitting) ? '#E91E63' : '#E8E4ED', color: (noteText.trim() && !noteSubmitting) ? '#fff' : '#9B93A8', whiteSpace: 'nowrap' }}
+            >{noteSubmitting ? '...' : 'Tambah Catatan'}</button>
+          </div>
+          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{fontSize:11,fontWeight:600,color:'#3A86FF',cursor:'pointer'}}>
+              📎 {noteFile ? 'Tukar screenshot' : 'Lampir screenshot'}
+              <input type="file" accept="image/*,.pdf,.eml,.msg" style={{display:'none'}} onChange={e=>setNoteFile(e.target.files?.[0]||null)} />
+            </label>
+            {noteFile && <><span style={{fontSize:11,color:'#6B6080'}}>{noteFile.name}</span><button onClick={()=>setNoteFile(null)} style={{background:'none',border:'none',cursor:'pointer',color:'#EF4444',fontSize:12,padding:0}}>×</button></>}
           </div>
         </div>
       </div>
@@ -1352,13 +1393,13 @@ export default function JobMonitor() {
     setCancelJob(job);
   }, []);
 
-  const handleAddNote = useCallback((jobId, text) => {
-    addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text });
+  const handleAddNote = useCallback((jobId, text, jobUuid, attachment) => {
+    addLog(jobId, { action: 'note', user: profile?.name || 'System', note: text, attachmentPath: attachment?.attachmentPath || null, attachmentName: attachment?.attachmentName || null, attachmentUrl: attachment?.attachmentUrl || null }, jobUuid);
   }, [addLog, profile]);
 
   const handleDocGenerated = useCallback(({ jobs: involvedJobs, type, label, docNumber, total }) => {
     involvedJobs.forEach(j => {
-      addLog(j.job_id, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` });
+      addLog(j.job_id, { action: 'document_generated', user: profile?.name || 'System', detail: `${label} (${docNumber})` }, j.id);
     });
     // A single-job doc may have been fine-tuned in the live preview (delivery/
     // discount, edited item prices) — post that exact total. Combined docs
