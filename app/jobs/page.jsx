@@ -260,7 +260,7 @@ function JobMonitorContent() {
     router.push(`/jobs/${jobId}`);
   }, [router]);
 
-  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Job Name", w:"1fr" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" },{ k:"touched", l:"Last Changed", w:"150px" }];
+  const cols = [{ k:"id", l:"Job ID", w:"135px" },{ k:"customer", l:"Customer", w:"1fr" },{ k:"dept", l:"Dept", w:"75px" },{ k:null, l:"Job Name", w:"1fr" },{ k:null, l:"Vendor", w:"90px" },{ k:"status", l:"Status", w:"105px" },{ k:"value", l:"Est. Value", w:"105px" },{ k:null, l:"PIC", w:"85px" },{ k:"deadline", l:"Deadline", w:"135px" },{ k:"touched", l:"Last Changed", w:"150px" }];
   const grid = cols.map(c=>c.w).join(" ");
 
   return (
@@ -299,6 +299,7 @@ function JobMonitorContent() {
             </div>
             {filtered.length===0 ? <div className="empty">No jobs found.</div> : filtered.map(job=>{
               const sibling = job.project_id ? jobs.find(j => j.project_id === job.project_id && j.id !== job.id) : null;
+              const unpaidVendor = (job.vendor_costs || []).some(v => v.status === 'unpaid' && (v.estimated_cost || v.actual_cost));
               return (
                 <div key={job.id} className="tbl-row" style={{ gridTemplateColumns: grid }} onClick={()=>router.push(`/jobs/${job.job_id}`)}>
                   <div className="tbl-cell">
@@ -308,6 +309,7 @@ function JobMonitorContent() {
                   <div className="tbl-cell text-body">{job.customer_name}</div>
                   <div className="tbl-cell"><DTag d={job.department} /></div>
                   <div className="tbl-cell text-body text-secondary">{job.job_type}</div>
+                  <div className="tbl-cell">{unpaidVendor && <span className="vendor-unpaid-badge" title="Vendor cost recorded but not yet marked as paid">🏭 Unpaid</span>}</div>
                   <div className="tbl-cell"><StatusBadge s={job.status} /></div>
                   <div className="tbl-cell text-body font-semibold">{formatRM(job.estimation_value)}</div>
                   <div className="tbl-cell text-body text-secondary">{job.pic || '—'}</div>

@@ -1447,6 +1447,7 @@ export function GlobalJobStyles() {
         .project-line a:hover{text-decoration:underline}
         .link-badge{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:#E91E63;background:rgba(233,30,99,.1);padding:1px 6px;border-radius:20px;margin-left:6px;cursor:pointer;vertical-align:middle}
         .link-badge:hover{background:rgba(233,30,99,.18)}
+        .vendor-unpaid-badge{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:700;color:#B45309;background:rgba(245,158,11,.14);padding:2px 8px;border-radius:20px;vertical-align:middle}
         .info-grid{display:grid;grid-template-columns:120px 1fr;gap:10px 12px;font-size:13px}
         .info-label{color:#9B93A8;font-weight:500}
         .card-title{font-size:14px;font-weight:700;color:#1A1025}
