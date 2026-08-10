@@ -18,7 +18,7 @@ export default function JobDetailPage() {
 
   const { profile } = useAuth() || {};
   const visDepts = useVisibleDepts();
-  const { jobs, customers, updateJob, updateCustomer, getActivity, addLog, ledgerEntries, postInvoiceEntry, postReceiptEntry, reverseJobLedgerEntries, dataLoading } = useData();
+  const { jobs, customers, vendors, addVendor, genVendorId, updateJob, updateCustomer, getActivity, addLog, ledgerEntries, postInvoiceEntry, postReceiptEntry, postExpenseEntry, reverseJobLedgerEntries, dataLoading } = useData();
 
   const job = jobs.find(j => j.job_id === jobId);
   const cust = job ? customers.find(c => c.id === job.customer_id) : null;
@@ -227,6 +227,10 @@ export default function JobDetailPage() {
             visDepts={visDepts}
             ledgerEntries={ledgerEntries}
             getActivity={getActivity}
+            vendors={vendors}
+            onAddVendor={addVendor}
+            genVendorId={genVendorId}
+            postExpenseEntry={postExpenseEntry}
             onStatus={handleStatus}
             onRollback={handleRollback}
             onToggleInstallment={handleToggleInstallment}
