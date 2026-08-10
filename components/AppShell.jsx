@@ -10,6 +10,7 @@ const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
   { key:'jobs', label:'Job', path:'/jobs', icon:'📋' },
   { key:'customers', label:'Customers', path:'/customers', icon:'👥' },
+  { key:'vendors', label:'Vendors', path:'/vendors', icon:'🏭' },
   { key:'finance', label:'Finance', path:'/finance', icon:'💰', roles:['bod','dept_head'] },
   { key:'reports', label:'Reports', path:'/reports', icon:'📈', roles:['bod','dept_head'] },
   { key:'departments', label:'Departments', path:'/departments', icon:'🏢' },
