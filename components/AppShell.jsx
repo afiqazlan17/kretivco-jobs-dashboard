@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useAuth } from '@/lib/hooks'
+import { useAuth, SYNC_ERROR_EVENT } from '@/lib/hooks'
 import { signOut } from '@/lib/auth'
 import { isMockMode } from '@/lib/supabase'
 import { REPORT_MENU, JOB_MENU, ROLE } from '@/lib/constants'
@@ -82,6 +82,18 @@ export default function AppShell({ children }) {
 
   // Close mobile sidebar on nav
   useEffect(() => { setMobileOpen(false) }, [pathname])
+
+  // Live-mode writes are fire-and-forget against Supabase — a failed one
+  // (RLS denial, network blip) used to only reach console.error, so a
+  // change could look saved and then silently vanish on the next reload.
+  // Surface it as a dismissible banner instead, visible on every page.
+  const [syncError, setSyncError] = useState(null)
+  useEffect(() => {
+    const handler = (e) => setSyncError(e.detail)
+    window.addEventListener(SYNC_ERROR_EVENT, handler)
+    return () => window.removeEventListener(SYNC_ERROR_EVENT, handler)
+  }, [])
+  useEffect(() => { setSyncError(null) }, [pathname])
 
   // Auth guard
   useEffect(() => {
@@ -204,6 +216,13 @@ export default function AppShell({ children }) {
         </aside>
       )}
       <main style={{ flex:1, marginLeft:isMobile?0:sw, minHeight:'100vh', transition:'margin-left .2s', paddingTop:isMobile?56:0 }}>{children}</main>
+      {syncError && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:200, background:'#EF4444', color:'#fff', padding:'10px 20px', display:'flex', alignItems:'center', gap:12, fontFamily:"'Poppins',sans-serif", fontSize:13, boxShadow:'0 2px 8px rgba(0,0,0,.2)' }}>
+          <span style={{ fontSize:16 }}>⚠</span>
+          <span style={{ flex:1 }}><strong>Failed to save your last change</strong> — {syncError.message || 'please try again.'} If this keeps happening, refresh the page to check whether your change actually went through.</span>
+          <button onClick={() => setSyncError(null)} style={{ background:'rgba(255,255,255,.2)', border:'none', color:'#fff', borderRadius:6, padding:'4px 10px', cursor:'pointer', fontSize:12, fontWeight:600, flexShrink:0 }}>Dismiss</button>
+        </div>
+      )}
     </div>
   )
 }
