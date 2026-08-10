@@ -43,17 +43,19 @@ function CustomerPicker({ customers, value, onChange, error }) {
     <div style={{ position: "relative" }}>
       <input
         className={`field-select${error ? " field-select-err" : ""}`}
-        style={{ width: "100%", cursor: "text" }}
+        style={{ width: "100%", cursor: "text", paddingRight: 30 }}
         value={open ? query : (selected ? `${selected.customer_id || selected.id} · ${customerDisplayName(selected)}` : "")}
         onChange={e => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => { setQuery(""); setOpen(true); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Search Customer ID, company, or PIC name..."
+        placeholder="Search or click to browse customers..."
       />
-      {selected && !open && (
+      {selected && !open ? (
         <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(""); setQuery(""); }}
           style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9B93A8", fontSize: 15 }}
         >×</button>
+      ) : (
+        <span style={{ position: "absolute", right: 12, top: "50%", transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)`, color: "#9B93A8", fontSize: 10, pointerEvents: "none", transition: "transform .15s" }}>▾</span>
       )}
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #E8E4ED", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 20 }}>
