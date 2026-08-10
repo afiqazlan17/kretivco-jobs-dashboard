@@ -1,7 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useDashboard, useData, useVisibleDepts } from '@/lib/hooks'
-import { DEPT, STATUS, formatRM, formatDate, daysUntil } from '@/lib/constants'
+import { useDashboard, useData, useVisibleDepts, useAuth } from '@/lib/hooks'
+import { DEPT, STATUS, ROLE, formatRM, formatDate, daysUntil } from '@/lib/constants'
 import { PageHeader, Card, StatusBadge, DeptTag, JobId, DeadlineBadge } from '@/components/ui/kretivco'
 
 function StatCard({ icon, label, value, sub, color }) {
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const goToJob = (jobId) => router.push(`/jobs/${jobId}`)
   const { stats, deptBreakdown, alerts, recent } = useDashboard()
   const { jobs: allJobs } = useData()
+  const { profile } = useAuth() || {}
   const visDepts = useVisibleDepts()
   const jobs = visDepts ? allJobs.filter(j => visDepts.includes(j.department)) : allJobs
   const today = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
@@ -27,7 +28,7 @@ export default function Dashboard() {
 
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : 'BOD View'}</span>
+      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : `${ROLE[profile?.role]?.label || 'All'} View`}</span>
     </PageHeader>
     <div style={{ padding:24 }}>
       {/* Row 1: Stat Cards */}
