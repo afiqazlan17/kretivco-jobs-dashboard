@@ -26,6 +26,20 @@ function balanceFor(entries, accountKey) {
   return (DEBIT_NORMAL(accountKey) ? raw : -raw) || 0;
 }
 
+// A department's Cost of Service is split across per-category sub-accounts
+// (cogs_<dept>_commission, cogs_<dept>_subcontractor, ...) so those show up
+// as their own line in Trial Balance/General Ledger — this sums all of them
+// (plus any pre-split flat cogs_<dept> entries) back into one department
+// total, by matching the account-key prefix rather than an exact key.
+function cogsForDept(entries, dept) {
+  const keys = new Set();
+  entries.forEach(e => {
+    if (e.debit_account === `cogs_${dept}` || e.debit_account?.startsWith(`cogs_${dept}_`)) keys.add(e.debit_account);
+    if (e.credit_account === `cogs_${dept}` || e.credit_account?.startsWith(`cogs_${dept}_`)) keys.add(e.credit_account);
+  });
+  return Array.from(keys).reduce((s, k) => s + balanceFor(entries, k), 0);
+}
+
 const TYPE_META = {
   invoice: { label: 'Invoice', color: DOC_TYPE_META.invoice.color, sign: '' },
   receipt: { label: 'Receipt', color: DOC_TYPE_META.receipt.color, sign: '+' },
@@ -285,7 +299,7 @@ function BalanceSheetReport({ entries }) {
 
   const deptKeys = Object.keys(DEPT);
   const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(upToDate, `revenue_${d}`), 0);
-  const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(upToDate, `cogs_${d}`), 0);
+  const totalCogs = deptKeys.reduce((s,d) => s + cogsForDept(upToDate, d), 0);
   const totalOpex = EXPENSE_CATEGORIES.reduce((s,c) => s + balanceFor(upToDate, `opex_${c.value}`), 0);
   const retainedEarnings = totalRevenue - totalCogs - totalOpex;
   const openingEquity = balanceFor(upToDate, 'equity_opening');
@@ -696,7 +710,7 @@ function FinanceContent() {
   const plAllEntries = useMemo(() => ledgerEntries.filter(inPeriod), [ledgerEntries, plFrom, plTo]);
 
   const totalRevenue = deptKeys.reduce((s,d) => s + balanceFor(plEntries, `revenue_${d}`), 0);
-  const totalCogs = deptKeys.reduce((s,d) => s + balanceFor(plEntries, `cogs_${d}`), 0);
+  const totalCogs = deptKeys.reduce((s,d) => s + cogsForDept(plEntries, d), 0);
   const opexByCategory = isBod ? EXPENSE_CATEGORIES.map(c => ({ ...c, amount: balanceFor(plAllEntries, `opex_${c.value}`) })).filter(c => c.amount) : [];
   const totalOpex = opexByCategory.reduce((s,c) => s + c.amount, 0);
   const outstanding = balanceFor(scopedEntries, 'ar');
@@ -716,7 +730,7 @@ function FinanceContent() {
   const deptBreakdown = deptKeys.map(d => ({
     key: d, label: DEPT[d].label, color: DEPT[d].color,
     revenue: balanceFor(plEntries, `revenue_${d}`),
-    cogs: balanceFor(plEntries, `cogs_${d}`),
+    cogs: cogsForDept(plEntries, d),
   }));
 
   const jobsForExpenseDept = expForm.department ? jobs.filter(j => j.department === expForm.department && !j.archived) : [];
