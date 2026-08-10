@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/hooks'
 import { signOut } from '@/lib/auth'
 import { isMockMode } from '@/lib/supabase'
-import { REPORT_MENU, JOB_MENU } from '@/lib/constants'
+import { REPORT_MENU, JOB_MENU, ROLE } from '@/lib/constants'
 
 const NAV = [
   { key:'dashboard', label:'Dashboard', path:'/', icon:'📊' },
@@ -190,8 +190,8 @@ export default function AppShell({ children }) {
                 <div style={{ width:32, height:32, borderRadius:'50%', background:'#E91E6330', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'#E91E63', flexShrink:0 }}>{profile.name?.charAt(0)}</div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{profile.name}</div>
-                  <div style={{ fontSize:10, fontWeight:500, color:profile.role==='bod'?'#E91E63':'#3A86FF', letterSpacing:'.02em', marginTop:1 }}>
-                    {profile.role==='bod'?'BOD':'Dept Head'}{profile.title ? ` | ${profile.title}` : ''}
+                  <div style={{ fontSize:10, fontWeight:500, color:ROLE[profile.role]?.color || '#3A86FF', letterSpacing:'.02em', marginTop:1 }}>
+                    {ROLE[profile.role]?.label || profile.role}{profile.title ? ` | ${profile.title}` : ''}
                   </div>
                 </div>
               </div>
