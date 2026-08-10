@@ -648,6 +648,14 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
   // nobody's officially responsible for yet.
   const jobClaimed = !!job.pic;
 
+  // Receipt records cash collected against what was invoiced (Debit Bank /
+  // Credit AR) — it never touches the Revenue account itself, only Invoice
+  // does (Debit AR / Credit Revenue). Generating a receipt with no invoice
+  // ever posted leaves the job's revenue permanently unrecorded even though
+  // cash appears to have come in, which is confusing to catch after the
+  // fact — so require at least one non-reversed invoice first.
+  const hasInvoice = (jobId) => (ledgerEntries || []).some(e => e.job_id === jobId && e.type === 'invoice' && !e.reversed);
+
   return (
     <div style={{ marginTop: 0 }}>
       {docs.length > 0 && jobClaimed && siblings.length > 0 && !showCombine && (
@@ -661,22 +669,30 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
       {docs.length > 0 && (
         <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {docs.map(d => (
-              <button
-                key={d.type}
-                onClick={() => jobClaimed && setPreviewDoc({ type: d.type, label: d.label })}
-                disabled={!jobClaimed}
-                style={{ ...btnStyle(d.color), opacity: jobClaimed ? 1 : 0.45, cursor: jobClaimed ? 'pointer' : 'not-allowed' }}
-              >
-                <span>{d.icon}</span>
-                {d.label}
-              </button>
-            ))}
+            {docs.map(d => {
+              const blockedByInvoice = d.type === 'receipt' && jobClaimed && !hasInvoice(job.job_id);
+              const enabled = jobClaimed && !blockedByInvoice;
+              return (
+                <button
+                  key={d.type}
+                  onClick={() => enabled && setPreviewDoc({ type: d.type, label: d.label })}
+                  disabled={!enabled}
+                  title={blockedByInvoice ? 'Generate an Invoice for this job first — Receipt only records payment against an existing invoice.' : undefined}
+                  style={{ ...btnStyle(d.color), opacity: enabled ? 1 : 0.45, cursor: enabled ? 'pointer' : 'not-allowed' }}
+                >
+                  <span>{d.icon}</span>
+                  {d.label}
+                </button>
+              );
+            })}
           </div>
           {!jobClaimed && (
             <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Job not yet claimed — use "Take In Job" in the Action menu first before generating documents.</div>
           )}
-          {jobClaimed && (!job.line_items || job.line_items.length === 0) && (
+          {jobClaimed && !hasInvoice(job.job_id) && (
+            <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Generate an Invoice before Receipt — Receipt only records payment against an existing invoice, it doesn't create revenue on its own.</div>
+          )}
+          {jobClaimed && hasInvoice(job.job_id) && (!job.line_items || job.line_items.length === 0) && (
             <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 6, fontStyle: 'italic' }}>Click any button to fill in items &amp; generate documents.</div>
           )}
         </>
@@ -729,13 +745,22 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F0ECF4' }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#6B6080', marginBottom: 6 }}>Generate Combined Document ({combineJobs.length} jobs · {formatRM(combineJobs.reduce((sum,j)=>sum+(j.estimation_value||0),0))}):</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {combineDocs.map(d => (
-                      <button key={d.type} onClick={() => handleGenCombined(d.type, d.label)} disabled={generating === `combined-${d.type}`} style={btnStyle(d.color)}>
-                        <span>{d.icon}</span>
-                        {generating === `combined-${d.type}` ? 'Generating...' : d.label}
-                      </button>
-                    ))}
+                    {combineDocs.map(d => {
+                      const combineBlockedByInvoice = d.type === 'receipt' && combineJobs.some(j => !hasInvoice(j.job_id));
+                      return (
+                        <button key={d.type} onClick={() => !combineBlockedByInvoice && handleGenCombined(d.type, d.label)}
+                          disabled={generating === `combined-${d.type}` || combineBlockedByInvoice}
+                          title={combineBlockedByInvoice ? 'Every job in this combined document needs an Invoice generated first.' : undefined}
+                          style={{ ...btnStyle(d.color), opacity: combineBlockedByInvoice ? 0.45 : 1, cursor: combineBlockedByInvoice ? 'not-allowed' : 'pointer' }}>
+                          <span>{d.icon}</span>
+                          {generating === `combined-${d.type}` ? 'Generating...' : d.label}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {combineJobs.some(j => !hasInvoice(j.job_id)) && (
+                    <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6, fontStyle: 'italic' }}>⚠ Receipt disabled — one or more selected jobs don't have an Invoice generated yet.</div>
+                  )}
                 </div>
               )}
               <button onClick={() => { setShowCombine(false); setCombineIds(new Set()); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 500, color: '#9B93A8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 10 }}>Cancel</button>
