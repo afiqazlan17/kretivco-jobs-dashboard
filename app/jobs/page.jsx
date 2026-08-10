@@ -22,6 +22,63 @@ export default function JobMonitor() {
   );
 }
 
+// Searchable customer combobox — matches on Customer ID, company name, or
+// PIC/contact name, since the plain <select> this replaced becomes hard to
+// scan once there are more than a handful of customers.
+function CustomerPicker({ customers, value, onChange, error }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = customers.find(c => c.id === value);
+
+  const filtered = query.trim()
+    ? customers.filter(c => {
+        const q = query.trim().toLowerCase();
+        return (c.customer_id || "").toLowerCase().includes(q)
+          || (c.company || "").toLowerCase().includes(q)
+          || (c.name || "").toLowerCase().includes(q);
+      })
+    : customers;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        className={`field-select${error ? " field-select-err" : ""}`}
+        style={{ width: "100%", cursor: "text" }}
+        value={open ? query : (selected ? `${selected.customer_id || selected.id} · ${customerDisplayName(selected)}` : "")}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Search Customer ID, company, or PIC name..."
+      />
+      {selected && !open && (
+        <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(""); setQuery(""); }}
+          style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9B93A8", fontSize: 15 }}
+        >×</button>
+      )}
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #E8E4ED", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 20 }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "12px 14px", fontSize: 12.5, color: "#9B93A8" }}>No customers found.</div>
+          ) : filtered.map(c => (
+            <div key={c.id} onMouseDown={() => { onChange(c.id); setQuery(""); setOpen(false); }}
+              style={{ padding: "10px 14px", cursor: "pointer", fontSize: 12.5, borderBottom: "1px solid #F5F3F7" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#FBF7FA"}
+              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+            >
+              <div style={{ fontWeight: 600, color: "#1A1025" }}>{c.customer_id || c.id} · {customerDisplayName(c)}</div>
+              {c.customer_type === "company" && (c.name || c.company) && (
+                <div style={{ fontSize: 11, color: "#9B93A8", marginTop: 1 }}>
+                  {c.name ? `PIC: ${c.name}` : ""}{c.name && c.company ? " · " : ""}{c.company || ""}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────
 function JobMonitorContent() {
   const router = useRouter();
@@ -341,10 +398,7 @@ function JobMonitorContent() {
             {/* Customer dropdown + inline create */}
             <div style={{marginBottom:16}}>
               <label className="field-label">Customer *</label>
-              <select className={`field-select${fieldErr('cid')?' field-select-err':''}`} style={{width:'100%'}} value={newJob.cid} onChange={e=>nj('cid',e.target.value)}>
-                <option value="">— Select Customer —</option>
-                {customers.map(c=><option key={c.id} value={c.id}>{c.customer_id || c.id} · {customerDisplayName(c)}</option>)}
-              </select>
+              <CustomerPicker customers={customers} value={newJob.cid} onChange={v => nj('cid', v)} error={fieldErr('cid')} />
               {fieldErr('cid') && <div className="field-error">Customer is required.</div>}
               {!showInlineCust && (
                 <button
