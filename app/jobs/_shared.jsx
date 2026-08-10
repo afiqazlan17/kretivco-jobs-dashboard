@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, VENDOR_CATEGORY, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 import { supabase, isMockMode } from '@/lib/supabase';
 import { RichNoteComposer } from './_richEditor';
@@ -850,7 +850,206 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onH
   );
 }
 
-export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, onStatus, onRollback, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
+// ─── Vendor Cost ────────────────────────────────────────────
+// Two-stage cost lock, matching how the team actually prices a job: an
+// Estimated cost as soon as a vendor quote comes in (drives both the
+// suggested customer price at 3x and an instant Estimated Margin), and
+// an Actual cost locked once the real bill is known. Actual cost doesn't
+// touch the real Finance ledger until it's marked Paid — postExpenseEntry
+// only fires at that point, so bookkeeping stays cash-basis like every
+// other ledger entry, while the job's own margin view can still show the
+// actual cost the moment it's locked in, before it's actually paid.
+function VendorCostModal({ item, vendors, onAddVendor, genVendorId, onSave, onClose }) {
+  const [vendorId, setVendorId] = useState(item?.vendor_id || '');
+  const [estimated, setEstimated] = useState(item?.estimated_cost ?? '');
+  const [actual, setActual] = useState(item?.actual_cost ?? '');
+  const [notes, setNotes] = useState(item?.notes || '');
+  const [showNewVendor, setShowNewVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newVendorCategory, setNewVendorCategory] = useState('printing');
+
+  const handleCreateVendor = () => {
+    if (!newVendorName.trim()) return;
+    const vendorObj = { id: crypto.randomUUID(), vendor_id: genVendorId(), name: newVendorName.trim(), category: newVendorCategory, created_at: new Date().toISOString() };
+    onAddVendor(vendorObj);
+    setVendorId(vendorObj.id);
+    setShowNewVendor(false);
+    setNewVendorName('');
+  };
+
+  const valid = !!vendorId && (estimated !== '' || actual !== '');
+
+  return (
+    <Modal width={440} onClose={onClose}>
+      <div className="modal-header"><span className="modal-title">{item ? 'Edit Vendor Cost' : 'Add Vendor Cost'}</span><button className="modal-close" onClick={onClose}>×</button></div>
+      <div className="modal-body">
+        <label className="field-label">Vendor *</label>
+        <select className="field-select" style={{ width: '100%' }} value={vendorId} onChange={e => setVendorId(e.target.value)}>
+          <option value="">— Select Vendor —</option>
+          {vendors.map(v => <option key={v.id} value={v.id}>{v.vendor_id} · {v.name}</option>)}
+        </select>
+        {!showNewVendor ? (
+          <button onClick={() => setShowNewVendor(true)} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11.5, fontWeight: 600, color: '#E91E63', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0 14px' }}>+ New Vendor</button>
+        ) : (
+          <div style={{ marginTop: 8, marginBottom: 14, padding: 12, background: '#F9F8FB', borderRadius: 8, border: '1px solid #F0ECF4' }}>
+            <input className="field-input" style={{ marginBottom: 8 }} value={newVendorName} onChange={e => setNewVendorName(e.target.value)} placeholder="Vendor name" />
+            <select className="field-select" style={{ width: '100%', marginBottom: 8 }} value={newVendorCategory} onChange={e => setNewVendorCategory(e.target.value)}>
+              {VENDOR_CATEGORY.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <button onClick={handleCreateVendor} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11.5, fontWeight: 600, padding: '6px 14px', borderRadius: 6, border: 'none', background: newVendorName.trim() ? '#E91E63' : '#E8E4ED', color: newVendorName.trim() ? '#fff' : '#9B93A8', cursor: newVendorName.trim() ? 'pointer' : 'not-allowed' }}>Save Vendor</button>
+          </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+          <div><label className="field-label">Estimated Cost (RM)</label><input type="number" className="field-input" value={estimated} onChange={e => setEstimated(e.target.value)} placeholder="0.00" /></div>
+          <div><label className="field-label">Actual Cost (RM)</label><input type="number" className="field-input" value={actual} onChange={e => setActual(e.target.value)} placeholder="0.00" /></div>
+        </div>
+        <label className="field-label">Notes</label>
+        <input className="field-input" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. includes delivery" />
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" style={{ background: valid ? '#E91E63' : '#E8E4ED', color: valid ? '#fff' : '#9B93A8', cursor: valid ? 'pointer' : 'not-allowed' }} onClick={() => { if (valid) onSave({ vendor_id: vendorId, estimated_cost: estimated !== '' ? Number(estimated) : null, actual_cost: actual !== '' ? Number(actual) : null, notes }); }}>Save</button>
+      </div>
+    </Modal>
+  );
+}
+
+function MarkPaidModal({ item, onConfirm, onClose }) {
+  const [bank, setBank] = useState('mbb');
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  return (
+    <Modal width={380} onClose={onClose}>
+      <div className="modal-header"><span className="modal-title">Mark as Paid</span><button className="modal-close" onClick={onClose}>×</button></div>
+      <div className="modal-body">
+        <div className="summary-box">Actual cost: <strong>{formatRM(item.actual_cost)}</strong></div>
+        <label className="field-label">Bank *</label>
+        <select className="field-select" style={{ width: '100%', marginBottom: 12 }} value={bank} onChange={e => setBank(e.target.value)}>
+          {Object.entries(BANK).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <label className="field-label">Date Paid</label>
+        <input type="date" className="field-input" value={date} onChange={e => setDate(e.target.value)} />
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => onConfirm(bank, date)}>Confirm Paid</button>
+      </div>
+    </Modal>
+  );
+}
+
+export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, postExpenseEntry, onUpdateJob, userName }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [payingItem, setPayingItem] = useState(null);
+
+  const items = job.vendor_costs || [];
+  const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_cost) || 0), 0);
+  const totalActual = items.reduce((s, i) => s + (Number(i.actual_cost) || 0), 0);
+  const customerPrice = job.final_value || job.estimation_value || 0;
+  const estimatedMargin = customerPrice - totalEstimated;
+  const actualMargin = totalActual > 0 ? customerPrice - totalActual : null;
+  const suggestedPrice = totalEstimated * 3;
+
+  const vendorLabel = (id) => vendors.find(v => v.id === id);
+
+  const saveItem = (data) => {
+    const vendorName = vendorLabel(data.vendor_id)?.name || '';
+    let updated;
+    if (editingItem) {
+      updated = items.map(i => i.id === editingItem.id ? { ...i, ...data } : i);
+    } else {
+      updated = [...items, { id: crypto.randomUUID(), status: 'unpaid', ...data }];
+    }
+    onUpdateJob(job.id, { vendor_costs: updated }, userName, { action: 'edited', field: 'vendor_costs', detail: `Vendor cost ${editingItem ? 'updated' : 'added'}: ${vendorName}` });
+    setShowForm(false);
+    setEditingItem(null);
+  };
+
+  const removeItem = (item) => {
+    if (!window.confirm('Remove this vendor cost entry?')) return;
+    onUpdateJob(job.id, { vendor_costs: items.filter(i => i.id !== item.id) }, userName, { action: 'edited', field: 'vendor_costs', detail: `Vendor cost removed: ${vendorLabel(item.vendor_id)?.name || ''}` });
+  };
+
+  const applySuggestedPrice = () => {
+    onUpdateJob(job.id, { estimation_value: suggestedPrice }, userName, { action: 'edited', field: 'estimation_value', old: job.estimation_value || '', val: suggestedPrice });
+  };
+
+  const confirmPaid = (bank, date) => {
+    const item = payingItem;
+    const vendorName = vendorLabel(item.vendor_id)?.name || 'Unknown';
+    postExpenseEntry({
+      category: 'subcontractor', department: job.department, jobId: job.job_id,
+      amount: item.actual_cost, bank, date: new Date(date).toISOString(),
+      notes: `Vendor: ${vendorName}${item.notes ? ' — ' + item.notes : ''}`,
+    }, userName);
+    const updated = items.map(i => i.id === item.id ? { ...i, status: 'paid', paid_date: date, paid_bank: bank } : i);
+    onUpdateJob(job.id, { vendor_costs: updated }, userName, { action: 'edited', field: 'vendor_costs', detail: `Marked vendor cost paid: ${vendorName} (${formatRM(item.actual_cost)})` });
+    setPayingItem(null);
+  };
+
+  const smallBtn = (color) => ({ fontFamily: "'Poppins',sans-serif", fontSize: 10.5, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: `1px solid ${color}30`, background: `${color}10`, color, cursor: 'pointer' });
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div className="card-title">Vendor Cost</div>
+        <button onClick={() => { setEditingItem(null); setShowForm(true); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: '1px solid #E8E4ED', background: '#fff', color: '#E91E63', cursor: 'pointer' }}>+ Add Vendor Cost</button>
+      </div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#9B93A8', fontStyle: 'italic', padding: '8px 0' }}>No vendor cost recorded yet — leave blank if this job is done in-house.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {items.map(item => {
+            const vendor = vendorLabel(item.vendor_id);
+            return (
+              <div key={item.id} style={{ border: '1px solid #F0ECF4', borderRadius: 8, padding: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{vendor?.name || 'Unknown vendor'}</span>
+                    {vendor?.vendor_id && <span className="jid" style={{ marginLeft: 6, fontSize: 10.5, color: '#9B93A8' }}>{vendor.vendor_id}</span>}
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 10, color: item.status === 'paid' ? '#10B981' : '#F59E0B', background: item.status === 'paid' ? '#10B98115' : '#F59E0B15' }}>
+                    {item.status === 'paid' ? '✓ Paid' : '⏸ Unpaid'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 11.5, color: '#6B6080' }}>
+                  <span>Estimated: <strong style={{ color: '#1A1025' }}>{item.estimated_cost ? formatRM(item.estimated_cost) : '—'}</strong></span>
+                  <span>Actual: <strong style={{ color: '#1A1025' }}>{item.actual_cost ? formatRM(item.actual_cost) : '—'}</strong></span>
+                </div>
+                {item.notes && <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 4, fontStyle: 'italic' }}>{item.notes}</div>}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button onClick={() => { setEditingItem(item); setShowForm(true); }} style={smallBtn('#3A86FF')}>Edit</button>
+                  {item.actual_cost > 0 && item.status === 'unpaid' && <button onClick={() => setPayingItem(item)} style={smallBtn('#10B981')}>Mark as Paid</button>}
+                  <button onClick={() => removeItem(item)} style={smallBtn('#EF4444')}>Remove</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {items.length > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F0ECF4', fontSize: 11.5 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total Estimated</span><strong>{formatRM(totalEstimated)}</strong></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}><span>Estimated Margin</span><strong style={{ color: estimatedMargin >= 0 ? '#10B981' : '#EF4444' }}>{formatRM(estimatedMargin)}</strong></div>
+          {totalActual > 0 && <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}><span>Total Actual</span><strong>{formatRM(totalActual)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}><span>Actual Margin</span><strong style={{ color: actualMargin >= 0 ? '#10B981' : '#EF4444' }}>{formatRM(actualMargin)}</strong></div>
+          </>}
+          {suggestedPrice > 0 && suggestedPrice !== job.estimation_value && (
+            <div style={{ marginTop: 8, padding: '7px 10px', borderRadius: 6, background: 'rgba(99,102,241,.06)', border: '1px dashed #6366F1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11 }}>Suggested customer price (3× vendor cost): <strong>{formatRM(suggestedPrice)}</strong></span>
+              <button onClick={applySuggestedPrice} style={smallBtn('#6366F1')}>Apply</button>
+            </div>
+          )}
+        </div>
+      )}
+      {showForm && <VendorCostModal item={editingItem} vendors={vendors} onAddVendor={onAddVendor} genVendorId={genVendorId} onSave={saveItem} onClose={() => { setShowForm(false); setEditingItem(null); }} />}
+      {payingItem && <MarkPaidModal item={payingItem} onConfirm={confirmPaid} onClose={() => setPayingItem(null)} />}
+    </div>
+  );
+}
+
+export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, vendors, onAddVendor, genVendorId, postExpenseEntry, onStatus, onRollback, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const submitRichNote = async ({ note, attachments }) => {
     onAddNote(job.job_id, note, job.id, { attachments });
   };
@@ -884,6 +1083,10 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
               job.line_items, shared by every doc type. */}
           <div className="card-title mb-3">Documents</div>
           <DocButtons job={job} jobs={jobs} customers={customers} visDepts={visDepts} ledgerEntries={ledgerEntries} onDocGenerated={onDocGenerated} userName={userName} onUpdateJob={onUpdateJob} onUpdateCustomer={onUpdateCustomer} />
+
+          <div style={{ marginTop: 16 }}>
+            <VendorCostSection job={job} vendors={vendors} onAddVendor={onAddVendor} genVendorId={genVendorId} postExpenseEntry={postExpenseEntry} onUpdateJob={onUpdateJob} userName={userName} />
+          </div>
 
           {/* Financial Breakdown — only renders for special-arrangement jobs */}
           <div style={{ marginTop: 16 }}>
