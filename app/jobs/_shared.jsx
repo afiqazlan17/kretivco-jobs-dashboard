@@ -428,10 +428,16 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   };
 
   // WhatsApp can only attach the actual PDF via the OS share sheet (Web
-  // Share API with files) — mainly a mobile-browser capability. Where that's
-  // not available (most desktop browsers), fall back to downloading the PDF
-  // and opening the customer's chat pre-filled with a note, so staff still
-  // just need to attach the file that was just downloaded.
+  // Share API with files). That API also exists on desktop Safari/Chrome
+  // (macOS), but there it opens the OS's general Share panel (AirDrop,
+  // Mail, Notes, ...) — WhatsApp only shows up there if the WhatsApp
+  // Desktop app happens to be installed, which is uncommon (most desktop
+  // users have WhatsApp Web instead). So the native share path is gated to
+  // actual mobile devices, where the OS share sheet reliably includes the
+  // WhatsApp mobile app. Desktop always falls back to downloading the PDF
+  // and opening the customer's (or any chosen) chat pre-filled with a
+  // note, so staff just need to attach the file that was just downloaded.
+  const isMobileDevice = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [sharing, setSharing] = useState(false);
   const handleWhatsApp = async () => {
     setSharing(true);
@@ -439,7 +445,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
       const result = await generateDocument(type, job, cust, buildOverrides('share'));
       const text = `${cfg.title} ${result.docNumber} — ${job.job_id}`;
       const file = new File([result.blob], result.filename, { type: 'application/pdf' });
-      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (isMobileDevice && typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: cfg.title, text });
       } else {
         const url = URL.createObjectURL(result.blob);
