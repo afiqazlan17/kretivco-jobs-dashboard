@@ -43,6 +43,12 @@ export function RichNoteComposer({ jobId, onSubmit }) {
 
   const editor = useEditor({
     immediatelyRender: false,
+    // Tiptap v3 stopped re-rendering the component on every keystroke by
+    // default (a v2->v3 breaking change) — without this, `editor.isEmpty`
+    // and the toolbar's `editor.isActive(...)` checks below only ever see
+    // the editor's state from the moment it first mounted, so "Add Note"
+    // stayed permanently disabled no matter how much was typed.
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit,
       Underline,
