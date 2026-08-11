@@ -477,10 +477,15 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         job_type: form.jobTitle || job.job_type,
       }, userName, { action: 'edited', field: `${label}`, detail: `${label} updated (Save)` });
     }
-    // Capture the customer's address for next time, if it wasn't already saved
-    if (onUpdateCustomer && cust?.id && (form.addressLine1 || form.addressLine2) &&
-        (form.addressLine1 !== (cust.address_line_1 || '') || form.addressLine2 !== (cust.address_line_2 || ''))) {
-      onUpdateCustomer(cust.id, { address_line_1: form.addressLine1 || null, address_line_2: form.addressLine2 || null });
+    // Capture the customer's street address for next time, if it wasn't
+    // already saved. Address Line 2 here is a presentational join of the
+    // customer's own address_line_2 + postcode/city + state (built above),
+    // not a raw field — writing it back into address_line_2 would re-append
+    // postcode/city/state on top of what's already there every time this
+    // form is saved again, compounding a little further each round. Only
+    // address_line_1 is a straight passthrough, safe to write back as-is.
+    if (onUpdateCustomer && cust?.id && form.addressLine1 && form.addressLine1 !== (cust.address_line_1 || '')) {
+      onUpdateCustomer(cust.id, { address_line_1: form.addressLine1 });
     }
     setSaving(false);
     setSaved(true);
