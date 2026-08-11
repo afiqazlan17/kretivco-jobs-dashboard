@@ -133,13 +133,13 @@ export default function JobDetailPage() {
     updateJob(job.id, { installments: updated }, profile?.name);
   }, [updateJob, profile]);
 
-  // Take In Job works regardless of who currently holds the job. A
-  // "new" unclaimed job gets claimed AND advanced to "assigned" in one
-  // step; an already-assigned/active job just hands the PIC over to
+  // Take In Job works regardless of who currently holds the job. An
+  // unclaimed "potential" job gets claimed AND advanced to "in_progress" in
+  // one step; an already-in-progress job just hands the PIC over to
   // whoever clicks — no status change (covers e.g. a staff member on leave).
   const handleTakeIn = useCallback((job) => {
     const name = profile?.name || 'Staff';
-    const newStatus = job.status === 'new' ? 'assigned' : job.status;
+    const newStatus = job.status === 'potential' ? 'in_progress' : job.status;
     updateJob(job.id, { pic: name, status: newStatus }, profile?.name, { action: 'edited', field: 'pic', old: job.pic || '', val: name });
     setToast(`${job.job_id}: claimed by ${name}.`);
   }, [updateJob, profile]);

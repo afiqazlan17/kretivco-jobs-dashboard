@@ -21,10 +21,8 @@ export default function Dashboard() {
   const visDepts = useVisibleDepts()
   const jobs = visDepts ? allJobs.filter(j => visDepts.includes(j.department)) : allJobs
   const today = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
-  const funnelTotal = (stats.potential_jobs||0)+(stats.new_jobs||0)+(stats.assigned_jobs||0)+(stats.active_jobs||0)+(stats.completed_jobs||0)
+  const funnelTotal = (stats.potential_jobs||0)+(stats.in_progress_jobs||0)+(stats.completed_jobs||0)
   const convPct = funnelTotal>0 ? Math.round((stats.completed_jobs||0)/funnelTotal*100) : 0
-  const assignedPipeline = formatRM(jobs.filter(j => !j.archived && ['assigned','active'].includes(j.status)).reduce((s,j) => s + (j.estimation_value||0), 0))
-  const activePipeline = formatRM(jobs.filter(j => !j.archived && j.status === 'active').reduce((s,j) => s + (j.estimation_value||0), 0))
 
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
@@ -35,13 +33,11 @@ export default function Dashboard() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:16, marginBottom:24 }}>
         <StatCard icon="💼" label="Total Jobs" value={stats.total_jobs||0} sub={`${stats.completed_jobs||0} completed`} color="#E91E63" />
         <StatCard icon="🎯" label="Potential" value={stats.potential_jobs||0} sub={formatRM(stats.potential_value)} color="#6366F1" />
-        <StatCard icon="🎫" label="New" value={stats.new_jobs||0} sub="No PIC assigned" color="#F59E0B" />
-        <StatCard icon="🙋" label="Assigned" value={stats.assigned_jobs||0} sub="Claimed, not started" color="#3A86FF" />
-        <StatCard icon="⚡" label="Active" value={stats.active_jobs||0} sub="In progress" color="#10B981" />
+        <StatCard icon="⚡" label="In Progress" value={stats.in_progress_jobs||0} sub="Claimed & working" color="#3A86FF" />
       </div>
       {/* Row 2: Financial Summary */}
       <div style={{ display:'flex', gap:16, marginBottom:24, flexWrap:'wrap' }}>
-        {[{l:'Pipeline Value',v:formatRM(stats.pipeline_value),s:'New + Assigned + Active',c:'#E91E63'},{l:'Potential Value',v:formatRM(stats.potential_value),s:'Not confirmed yet',c:'#6366F1'},{l:'Actual Revenue',v:formatRM(stats.actual_revenue),s:`${stats.completed_jobs||0} jobs completed`,c:'#10B981'}].map((c,i)=>
+        {[{l:'Pipeline Value',v:formatRM(stats.pipeline_value),s:'In Progress',c:'#E91E63'},{l:'Potential Value',v:formatRM(stats.potential_value),s:'Not confirmed yet',c:'#6366F1'},{l:'Actual Revenue',v:formatRM(stats.actual_revenue),s:`${stats.completed_jobs||0} jobs completed`,c:'#10B981'}].map((c,i)=>
           <Card key={i} style={{ flex:'1 1 0', minWidth:180, padding:'20px 24px' }}>
             <div style={{ fontSize:11, fontWeight:500, color:'#9B93A8', textTransform:'uppercase', letterSpacing:'.02em', marginBottom:8 }}>{c.l}</div>
             <div style={{ fontSize:24, fontWeight:700, color:c.c }}>{c.v}</div>
@@ -94,9 +90,9 @@ export default function Dashboard() {
         </Card>
         <Card style={{ padding:'20px 24px' }}>
           <div style={{fontSize:16,fontWeight:700,marginBottom:4}}>Conversion Funnel</div>
-          <p style={{fontSize:12,color:'#6B6080',marginBottom:20}}>Potential → New → Assigned → Active → Completed</p>
+          <p style={{fontSize:12,color:'#6B6080',marginBottom:20}}>Potential → In Progress → Completed</p>
           <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            {[{l:'Potential',n:stats.potential_jobs||0,v:formatRM(stats.potential_value),c:'#6366F1'},{l:'New',n:stats.new_jobs||0,v:formatRM(stats.pipeline_value),c:'#F59E0B'},{l:'Assigned',n:stats.assigned_jobs||0,v:assignedPipeline,c:'#3A86FF'},{l:'Active',n:stats.active_jobs||0,v:activePipeline,c:'#10B981'},{l:'Completed',n:stats.completed_jobs||0,v:formatRM(stats.actual_revenue),c:'#6B7280',last:true}].map((s,i) =>
+            {[{l:'Potential',n:stats.potential_jobs||0,v:formatRM(stats.potential_value),c:'#6366F1'},{l:'In Progress',n:stats.in_progress_jobs||0,v:formatRM(stats.pipeline_value),c:'#3A86FF'},{l:'Completed',n:stats.completed_jobs||0,v:formatRM(stats.actual_revenue),c:'#6B7280',last:true}].map((s,i) =>
               <div key={i} style={{ display:'flex', alignItems:'center', gap:6, flex:'1 1 0' }}>
                 <div style={{ textAlign:'center', width:'100%', padding:'14px 8px', minHeight:100, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', background:s.c+'10', borderRadius:10, border:`1px solid ${s.c}25` }}>
                   <div style={{ fontSize:11, fontWeight:500, color:s.c, textTransform:'uppercase', letterSpacing:'.02em' }}>{s.l}</div>

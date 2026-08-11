@@ -1,7 +1,7 @@
 "use client"
 import { useState, useMemo, useEffect } from "react";
 import { useData } from "@/lib/hooks";
-import { VENDOR_CATEGORY } from "@/lib/constants";
+import { VENDOR_CATEGORY, waLink } from "@/lib/constants";
 
 function CategoryBadge({ c }) {
   const m = VENDOR_CATEGORY.find(v => v.value === c);
@@ -10,7 +10,6 @@ function CategoryBadge({ c }) {
 function Av({ name, sz = 36 }) { const colors = ["#E91E63", "#7209B7", "#3A86FF", "#E85D04", "#10B981"]; const i = (name?.charCodeAt(0) || 0) % colors.length; return <div className="avatar" style={{ width: sz, height: sz, fontSize: sz * .38, background: colors[i] + "18", color: colors[i] }}>{name?.charAt(0) || "?"}</div>; }
 function Modal({ w, children, onClose }) { return <div className="overlay" onClick={onClose}><div className="mbox" style={{ width: w }} onClick={e => e.stopPropagation()}>{children}</div></div>; }
 function Toast({ msg, onDone }) { useEffect(() => { const t = setTimeout(onDone, 2500); return () => clearTimeout(t); }, [onDone]); return <div className="toast">✓ {msg}</div>; }
-function waLink(phone) { if (!phone) return null; let d = phone.replace(/\D/g, ""); if (!d) return null; if (d.startsWith("0")) d = "60" + d.slice(1); else if (!d.startsWith("60")) d = "60" + d; return `https://wa.me/${d}`; }
 
 // ─── Vendor Form Modal (shared by Create + Edit) ─────────────
 function blankVendorForm(v) {
