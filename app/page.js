@@ -28,9 +28,9 @@ export default function Dashboard() {
 
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <div style={{ background:'rgba(255,255,255,.2)', borderRadius:14, padding:'8px 18px', textAlign:'right' }}>
+      <div style={{ textAlign:'right' }}>
         <div style={{ fontSize:14, fontWeight:700 }}>{greeting.big}</div>
-        <div style={{ fontSize:11.5, fontWeight:500, opacity:.85, marginTop:2 }}>{greeting.small}</div>
+        <div style={{ fontSize:11.5, fontWeight:500, fontStyle:'italic', opacity:.85, marginTop:2 }}>{greeting.small}</div>
       </div>
     </PageHeader>
     <div style={{ padding:24 }}>
