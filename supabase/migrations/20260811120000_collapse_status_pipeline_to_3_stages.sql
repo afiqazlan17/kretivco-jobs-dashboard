@@ -1,0 +1,14 @@
+-- Collapses the 5-stage job pipeline (potential/new/assigned/active/
+-- completed) down to 3 (potential/in_progress/completed) — "new" (confirmed
+-- but unclaimed) and "assigned" (claimed but not started) and "active"
+-- (work started) all fold into a single "in_progress" stage, since Take In
+-- Job already claims + advances a job in one step.
+--
+-- Postgres can't use a freshly added enum value in the same transaction as
+-- the ALTER TYPE ... ADD VALUE that created it, so this migration only adds
+-- the value. The data backfill (UPDATE jobs SET status='in_progress' WHERE
+-- status IN ('new','assigned','active')) must run as a separate statement
+-- afterwards — see the companion instructions this migration ships with.
+-- The old enum labels ('new', 'assigned', 'active') are left in place
+-- afterwards (Postgres has no simple DROP VALUE) — harmless, just unused.
+ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'in_progress';

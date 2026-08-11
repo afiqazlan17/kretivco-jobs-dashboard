@@ -848,7 +848,7 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
 // Doubles as the status control: click an upcoming stage to advance, click
 // a past stage to roll back to it. Cancel/Archive stay as small secondary
 // actions here since they're not part of the forward/back flow itself.
-const PIPELINE_STAGES = ['potential', 'new', 'assigned', 'active', 'completed'];
+const PIPELINE_STAGES = ['potential', 'in_progress', 'completed'];
 export function ProgressStepper({ job, onStatus, onRollback }) {
   const { status } = job;
   if (status === 'cancelled') {
@@ -894,10 +894,10 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
 // ─── Job Action Menu — header dropdown ──────────────────────
 // Consolidates job-lifecycle actions that used to be scattered (the old
 // stepper claim banner, the Complete modal) into one control. Take In
-// Job works regardless of who currently holds the job — a "new"
-// unclaimed job gets claimed AND advanced to "assigned" in one step;
-// an already-assigned/active job just hands the PIC over to whoever
-// clicks, no status change (e.g. covering for a staff member on leave).
+// Job works regardless of who currently holds the job — an unclaimed
+// "potential" job gets claimed AND advanced to "in_progress" in one step;
+// an already-in-progress job just hands the PIC over to whoever clicks,
+// no status change (e.g. covering for a staff member on leave).
 export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onHold, onResume, onCancel, onArchive }) {
   const [open, setOpen] = useState(false);
   const canClose = !["completed", "cancelled"].includes(job.status);

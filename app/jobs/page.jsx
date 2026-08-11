@@ -380,7 +380,7 @@ function JobMonitorContent() {
           </div>
           <div className="summary-footer">
             <span>{filtered.length} jobs</span>
-            <span>Pipeline: {formatRM(filtered.filter(j=>["new","assigned","active"].includes(j.status)).reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
+            <span>Pipeline: {formatRM(filtered.filter(j=>j.status==="in_progress").reduce((s,j)=>s+(j.estimation_value||0),0))}</span>
           </div>
         </div>
 
