@@ -1,7 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useDashboard, useData, useVisibleDepts, useAuth } from '@/lib/hooks'
-import { DEPT, STATUS, ROLE, formatRM, formatDate, daysUntil } from '@/lib/constants'
+import { DEPT, STATUS, formatRM, formatDate, daysUntil, greetingFor } from '@/lib/constants'
 import { PageHeader, Card, StatusBadge, DeptTag, JobId, DeadlineBadge } from '@/components/ui/kretivco'
 
 function StatCard({ icon, label, value, sub, color }) {
@@ -26,7 +26,7 @@ export default function Dashboard() {
 
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : `${ROLE[profile?.role]?.label || 'All'} View`}</span>
+      <span style={{ fontSize:13, fontWeight:600, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{greetingFor(profile?.name)}</span>
     </PageHeader>
     <div style={{ padding:24 }}>
       {/* Row 1: Stat Cards */}

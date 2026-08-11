@@ -45,21 +45,6 @@ export default function JobDetailPage() {
     setToast(`${job.job_id}: → ${STATUS[s].label}`);
   }, [updateJob, profile, ledgerEntries]);
 
-  const handleRollback = useCallback((job, s) => {
-    setConfirm({
-      title: "Rollback Status?",
-      msg: `Are you sure you want to roll back ${job.job_id} from ${STATUS[job.status]?.label} to ${STATUS[s]?.label}?`,
-      label: `← ${STATUS[s]?.label}`,
-      color: "#F59E0B",
-      showReasonField: true,
-      onConfirm: (reasonText) => {
-        updateJob(job.id, { status: s }, profile?.name, { action: 'rollback', from: job.status, to: s, reason: reasonText || undefined });
-        setConfirm(null);
-        setToast(`${job.job_id}: ← ${STATUS[s].label}`);
-      }
-    });
-  }, [updateJob, profile]);
-
   const handleCancel = useCallback((job) => {
     setCancelJob(job);
   }, []);
@@ -231,8 +216,6 @@ export default function JobDetailPage() {
             onAddVendor={addVendor}
             genVendorId={genVendorId}
             postExpenseEntry={postExpenseEntry}
-            onStatus={handleStatus}
-            onRollback={handleRollback}
             onToggleInstallment={handleToggleInstallment}
             onUpdateJob={updateJob}
             onUpdateCustomer={updateCustomer}
