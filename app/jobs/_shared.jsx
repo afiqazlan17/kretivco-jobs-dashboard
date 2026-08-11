@@ -330,11 +330,55 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
 
 // ─── Job Detail Panel ─────────────────────────────────────────
 // ─── Document Generation Buttons ─────────────────────────────
+// Search-first item picker backed by the per-department item library —
+// staff search for an existing item (e.g. "business card"), pick it to
+// fill in name+description, or just type a new one (saved to the library
+// automatically once the document is generated). No price field here —
+// pricing always varies per job.
+function ItemPicker({ library, department, value, onChangeText, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const deptItems = (library || []).filter(it => it.department === department);
+  const q = (value || '').trim().toLowerCase();
+  const filtered = q ? deptItems.filter(it => it.item_name.toLowerCase().includes(q)) : deptItems.slice(0, 8);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <textarea
+        rows={2}
+        style={{ fontFamily: "'Poppins',sans-serif", fontSize: 12, border: '1px solid #E8E4ED', borderRadius: 6, padding: '6px 8px', width: '100%', boxSizing: 'border-box', marginBottom: 4, resize: 'vertical' }}
+        placeholder="Search or type item name..."
+        value={value}
+        onChange={e => onChangeText(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, maxHeight: 180, overflowY: 'auto', background: '#fff', border: '1px solid #E8E4ED', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 20 }}>
+          {filtered.map(it => (
+            <div
+              key={it.id}
+              onMouseDown={() => { onSelect(it); setOpen(false); }}
+              style={{ padding: '8px 10px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid #F5F3F7' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#FBF7FA'}
+              onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+            >
+              <div style={{ fontWeight: 600, color: '#1A1025' }}>{it.item_name}</div>
+              {it.description && <div style={{ fontSize: 10.5, color: '#9B93A8', marginTop: 1 }}>{it.description}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Document Preview — live edit + live preview before generating ──
 // Staff can adjust customer info, items, delivery/discount (or payment
 // method/amounts for a receipt) and see the layout update instantly. Terms
 // and bank are fixed — bank always follows whatever was set on the job.
 export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntries, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
+  const { itemLibrary, saveLibraryItem } = useData();
+  const { profile } = useAuth();
   const isReceipt = type === 'receipt';
   // Once a job is closed (Completed/Cancelled), its record shouldn't
   // change anymore — staff can still generate a document off it (e.g. a
@@ -402,10 +446,15 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
     action,
   });
 
+  const persistItemsToLibrary = () => {
+    form.items.filter(it => it.item?.trim()).forEach(it => saveLibraryItem(job.department, it.item, it.desc, profile?.id));
+  };
+
   const handleGenerate = async () => {
     setGenerating(true);
     try {
       const result = await generateDocument(type, job, cust, buildOverrides());
+      persistItemsToLibrary();
       onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
       onClose();
     } catch (err) {
@@ -419,6 +468,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
     setPrinting(true);
     try {
       const result = await generateDocument(type, job, cust, buildOverrides('print'));
+      persistItemsToLibrary();
       onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
       onClose();
     } catch (err) {
@@ -443,6 +493,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
     setSharing(true);
     try {
       const result = await generateDocument(type, job, cust, buildOverrides('share'));
+      persistItemsToLibrary();
       const text = `${cfg.title} ${result.docNumber} — ${job.job_id}`;
       const file = new File([result.blob], result.filename, { type: 'application/pdf' });
       if (isMobileDevice && typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -487,6 +538,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         estimation_value: itemsTotal || job.estimation_value,
         job_type: form.jobTitle || job.job_type,
       }, userName, { action: 'edited', field: `${label}`, detail: `${label} updated (Save)` });
+      persistItemsToLibrary();
     }
     // Capture the customer's street address for next time, if it wasn't
     // already saved. Address Line 2 here is a presentational join of the
@@ -537,7 +589,13 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
             {form.items.map((it, i) => (
               <div key={i} style={{ border: '1px solid #F0ECF4', borderRadius: 8, padding: 8, marginBottom: 6 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Item Name</div>
-                <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Item name" value={it.item} onChange={e => setItem(i, 'item', e.target.value)} />
+                <ItemPicker
+                  library={itemLibrary}
+                  department={job.department}
+                  value={it.item}
+                  onChangeText={v => setItem(i, 'item', v)}
+                  onSelect={libItem => { setItem(i, 'item', libItem.item_name); setItem(i, 'desc', libItem.description || ''); }}
+                />
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Description</div>
                 <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Description (optional)" value={it.desc || ''} onChange={e => setItem(i, 'desc', e.target.value)} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 24px', gap: 4 }}>
