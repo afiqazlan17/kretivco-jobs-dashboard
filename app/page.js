@@ -1,7 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useDashboard, useData, useVisibleDepts, useAuth } from '@/lib/hooks'
-import { DEPT, STATUS, ROLE, formatRM, formatDate, daysUntil } from '@/lib/constants'
+import { DEPT, STATUS, formatRM, formatDate, daysUntil, greetingFor } from '@/lib/constants'
 import { PageHeader, Card, StatusBadge, DeptTag, JobId, DeadlineBadge } from '@/components/ui/kretivco'
 
 function StatCard({ icon, label, value, sub, color }) {
@@ -24,9 +24,14 @@ export default function Dashboard() {
   const funnelTotal = (stats.potential_jobs||0)+(stats.in_progress_jobs||0)+(stats.completed_jobs||0)
   const convPct = funnelTotal>0 ? Math.round((stats.completed_jobs||0)/funnelTotal*100) : 0
 
+  const greeting = greetingFor(profile?.name)
+
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <span style={{ fontSize:12, fontWeight:500, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{visDepts ? `${visDepts.length} Dept View` : `${ROLE[profile?.role]?.label || 'All'} View`}</span>
+      <div style={{ textAlign:'right' }}>
+        <div style={{ fontSize:14, fontWeight:700 }}>{greeting.big}</div>
+        <div style={{ fontSize:11.5, fontWeight:500, fontStyle:'italic', opacity:.85, marginTop:2 }}>{greeting.small}</div>
+      </div>
     </PageHeader>
     <div style={{ padding:24 }}>
       {/* Row 1: Stat Cards */}

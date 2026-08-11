@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, VENDOR_CATEGORY, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor, waLink } from '@/lib/constants';
+import { DEPT, STATUS, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, VENDOR_CATEGORY, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor, waLink } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 import { supabase, isMockMode } from '@/lib/supabase';
 import { RichNoteComposer } from './_richEditor';
@@ -336,6 +336,11 @@ export function FinancialBreakdown({ job, onToggleInstallment }) {
 // and bank are fixed — bank always follows whatever was set on the job.
 export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntries, onClose, onGenerated, onUpdateJob, onUpdateCustomer }) {
   const isReceipt = type === 'receipt';
+  // Once a job is closed (Completed/Cancelled), its record shouldn't
+  // change anymore — staff can still generate a document off it (e.g. a
+  // final Receipt after work wraps up), just not persist edits back onto
+  // the job itself via Save.
+  const jobLocked = ["completed", "cancelled"].includes(job.status);
   const cfg = DOC_TYPES[type];
   const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
   const docNumber = genDocNumber(type, job.job_id);
@@ -380,7 +385,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
   const addItem = () => setForm(p => ({ ...p, items: [...p.items, { id: crypto.randomUUID(), item: '', desc: '', size: '', qty: 1, price: 0 }] }));
   const removeItem = (i) => setForm(p => ({ ...p, items: p.items.length > 1 ? p.items.filter((_, idx) => idx !== i) : p.items }));
-  const guardedClose = () => { if (JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
+  const guardedClose = () => { if (!jobLocked && JSON.stringify(form) !== JSON.stringify(initial) && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
 
   const subtotal = form.items.reduce((s, it) => s + ((Number(it.qty) || 0) * (Number(it.price) || 0)), 0);
   const total = subtotal + (Number(form.delivery) || 0) - (Number(form.discount) || 0);
@@ -454,6 +459,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const handleSave = () => {
+    if (jobLocked) return;
     setSaving(true);
     // Clicking Save again with nothing actually edited shouldn't write a
     // fresh "updated" entry to the Activity Log every time.
@@ -647,7 +653,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         <div style={{ padding: '14px 22px', borderTop: '1px solid #F0ECF4', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
           {saved && <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600, marginRight: 'auto' }}>✓ Saved</span>}
           <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
+          {!jobLocked && <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>}
           <button onClick={handlePrint} disabled={printing} title="Open PDF in a new tab with Print ready" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #3A86FF', background: '#fff', color: '#3A86FF', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.7 : 1 }}>{printing ? 'Opening...' : '🖨 Print'}</button>
           <button onClick={handleWhatsApp} disabled={sharing} title="Share the PDF straight to WhatsApp (mobile), or download + open the customer's chat" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? 0.7 : 1 }}>{sharing ? 'Sharing...' : '💬 WhatsApp'}</button>
           <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Download PDF'}</button>
@@ -845,18 +851,18 @@ export function DocButtons({ job, jobs, customers, visDepts, ledgerEntries, onDo
 }
 
 // ─── Progress Stepper — full-width pipeline view at top of job detail ──
-// Doubles as the status control: click an upcoming stage to advance, click
-// a past stage to roll back to it. Cancel/Archive stay as small secondary
-// actions here since they're not part of the forward/back flow itself.
+// Read-only display of where the job sits in the pipeline. Status changes
+// only ever happen through the Action menu (Take In Job, Close Job, Cancel)
+// — the stepper itself isn't clickable, so staff can't jump stages by
+// clicking a dot.
 const PIPELINE_STAGES = ['potential', 'in_progress', 'completed'];
-export function ProgressStepper({ job, onStatus, onRollback }) {
+export function ProgressStepper({ job }) {
   const { status } = job;
   if (status === 'cancelled') {
     return <div className="stepper-cancelled">✕ Job Cancelled{job.cancel_reason ? ` — ${CANCEL_REASONS.find(r => r.value === job.cancel_reason)?.label || job.cancel_reason}${job.cancel_reason_text ? `: ${job.cancel_reason_text}` : ''}` : ''}</div>;
   }
   const idx = PIPELINE_STAGES.indexOf(status);
-  const forwardSet = new Set(STATUS_FLOW[status] || []);
-  const rollbackSet = new Set(STATUS_ROLLBACK[status] || []);
+  const lastIdx = PIPELINE_STAGES.length - 1;
 
   return (
     <div className="stepper-wrap">
@@ -865,21 +871,16 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
       </div>
       <div className="stepper">
         {PIPELINE_STAGES.map((s, i) => {
-          const state = i < idx ? 'done' : i === idx ? 'current' : '';
-          const canForward = i > idx && forwardSet.has(s);
-          const canBack = i < idx && rollbackSet.has(s);
-          const clickable = canForward || canBack;
+          // The final stage has nothing after it to distinguish "current"
+          // from "done" — once a job is Completed, its last dot should
+          // read as fully done (green check), not just "current".
+          const state = i < idx || (i === idx && idx === lastIdx) ? 'done' : i === idx ? 'current' : '';
           const dotStyle = state === 'done' ? { background: '#10B981', borderColor: '#10B981', color: '#fff' }
             : state === 'current' ? { borderColor: STATUS[s].color, color: STATUS[s].color, background: STATUS[s].color + '15' }
             : {};
           const lblStyle = state === 'done' ? { color: '#10B981' } : state === 'current' ? { color: STATUS[s].color } : {};
           return (
-            <div
-              key={s}
-              className={`step ${state} ${clickable ? 'clickable' : ''}`}
-              onClick={clickable ? () => (canForward ? onStatus(job, s) : onRollback(job, s)) : undefined}
-              title={canForward ? `Move to ${STATUS[s].label}` : canBack ? `Roll back to ${STATUS[s].label}` : undefined}
-            >
+            <div key={s} className={`step ${state}`}>
               <div className="line" />
               <div className="dot" style={dotStyle}>{state === 'done' ? '✓' : i + 1}</div>
               <div className="lbl" style={lblStyle}>{STATUS[s].label}</div>
@@ -900,8 +901,12 @@ export function ProgressStepper({ job, onStatus, onRollback }) {
 // no status change (e.g. covering for a staff member on leave).
 export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onHold, onResume, onCancel, onArchive }) {
   const [open, setOpen] = useState(false);
-  const canClose = !["completed", "cancelled"].includes(job.status);
-  const canCancel = !["completed", "cancelled"].includes(job.status);
+  // A Completed/Cancelled job is closed — nothing about who's responsible,
+  // its hold state, or its status should still be adjustable. Archiving
+  // stays available (it's tidying up, not changing the record).
+  const locked = ["completed", "cancelled"].includes(job.status);
+  const canClose = !locked;
+  const canCancel = !locked;
   const canArchive = !job.archived && job.status !== "cancelled";
   const isHeld = !!job.hold_status;
 
@@ -922,15 +927,16 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onH
         <>
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
           <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 31, background: '#fff', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.18)', minWidth: 220, overflow: 'hidden', padding: '4px 0' }}>
-            {!job.pic && item('Take In Job', '🙋', onTakeIn)}
-            {item('Change Current Responsible', '🔁', onChangeResponsible)}
-            {!isHeld && item('Pending Job', '⏸', () => onHold('pending'), '#F59E0B')}
-            {!isHeld && item('Suspend Job', '⛔', () => onHold('suspended'), '#EF4444')}
-            {isHeld && item('Resume Job', '▶️', onResume, '#10B981')}
+            {!locked && !job.pic && item('Take In Job', '🙋', onTakeIn)}
+            {!locked && item('Change Current Responsible', '🔁', onChangeResponsible)}
+            {!locked && !isHeld && item('Pending Job', '⏸', () => onHold('pending'), '#F59E0B')}
+            {!locked && !isHeld && item('Suspend Job', '⛔', () => onHold('suspended'), '#EF4444')}
+            {!locked && isHeld && item('Resume Job', '▶️', onResume, '#10B981')}
             {canClose && item('Close Job', '✅', onCloseJob, '#10B981')}
             {canCancel && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
             {canCancel && item('Cancel Job', '✕', onCancel, '#EF4444')}
             {canArchive && item('Archive', '🗄️', onArchive, '#6B7280')}
+            {locked && <div style={{ padding: '8px 12px', fontSize: 11, color: '#9B93A8', fontStyle: 'italic' }}>Job closed — no further changes.</div>}
           </div>
         </>
       )}
@@ -1030,6 +1036,9 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
   const [editingItem, setEditingItem] = useState(null);
   const [payingItem, setPayingItem] = useState(null);
 
+  // A Completed/Cancelled job is closed — vendor cost is part of the job
+  // record, so it shouldn't still be editable once the job is locked.
+  const locked = ["completed", "cancelled"].includes(job.status);
   const items = job.vendor_costs || [];
   const totalEstimated = items.reduce((s, i) => s + (Number(i.estimated_cost) || 0), 0);
   const totalActual = items.reduce((s, i) => s + (Number(i.actual_cost) || 0), 0);
@@ -1081,7 +1090,7 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div className="card-title">Vendor Cost</div>
-        <button onClick={() => { setEditingItem(null); setShowForm(true); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: '1px solid #E8E4ED', background: '#fff', color: '#E91E63', cursor: 'pointer' }}>+ Add Vendor Cost</button>
+        {!locked && <button onClick={() => { setEditingItem(null); setShowForm(true); }} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6, border: '1px solid #E8E4ED', background: '#fff', color: '#E91E63', cursor: 'pointer' }}>+ Add Vendor Cost</button>}
       </div>
       {items.length === 0 ? (
         <div style={{ fontSize: 12, color: '#9B93A8', fontStyle: 'italic', padding: '8px 0' }}>No vendor cost recorded yet — leave blank if this job is done in-house.</div>
@@ -1105,11 +1114,13 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
                   <span>Actual: <strong style={{ color: '#1A1025' }}>{item.actual_cost ? formatRM(item.actual_cost) : '—'}</strong></span>
                 </div>
                 {item.notes && <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 4, fontStyle: 'italic' }}>{item.notes}</div>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button onClick={() => { setEditingItem(item); setShowForm(true); }} style={smallBtn('#3A86FF')}>Edit</button>
-                  {item.actual_cost > 0 && item.status === 'unpaid' && <button onClick={() => setPayingItem(item)} style={smallBtn('#10B981')}>Mark as Paid</button>}
-                  <button onClick={() => removeItem(item)} style={smallBtn('#EF4444')}>Remove</button>
-                </div>
+                {!locked && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <button onClick={() => { setEditingItem(item); setShowForm(true); }} style={smallBtn('#3A86FF')}>Edit</button>
+                    {item.actual_cost > 0 && item.status === 'unpaid' && <button onClick={() => setPayingItem(item)} style={smallBtn('#10B981')}>Mark as Paid</button>}
+                    <button onClick={() => removeItem(item)} style={smallBtn('#EF4444')}>Remove</button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1123,7 +1134,7 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}><span>Total Actual</span><strong>{formatRM(totalActual)}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}><span>Actual Margin</span><strong style={{ color: actualMargin >= 0 ? '#10B981' : '#EF4444' }}>{formatRM(actualMargin)}</strong></div>
           </>}
-          {suggestedPrice > 0 && suggestedPrice !== job.estimation_value && (
+          {!locked && suggestedPrice > 0 && suggestedPrice !== job.estimation_value && (
             <div style={{ marginTop: 8, padding: '7px 10px', borderRadius: 6, background: 'rgba(99,102,241,.06)', border: '1px dashed #6366F1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 11 }}>Suggested customer price (3× vendor cost): <strong>{formatRM(suggestedPrice)}</strong></span>
               <button onClick={applySuggestedPrice} style={smallBtn('#6366F1')}>Apply</button>
@@ -1137,7 +1148,7 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
   );
 }
 
-export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, vendors, onAddVendor, genVendorId, postExpenseEntry, onStatus, onRollback, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
+export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, getActivity, vendors, onAddVendor, genVendorId, postExpenseEntry, onToggleInstallment, onUpdateJob, onUpdateCustomer, onAddNote, onDocGenerated, onJumpToJob, userName }) {
   const submitRichNote = async ({ note, attachments }) => {
     onAddNote(job.job_id, note, job.id, { attachments });
   };
@@ -1145,7 +1156,7 @@ export function DetailPanel({ job, jobs, customers, visDepts, ledgerEntries, get
 
   return (
     <div className="detail-panel">
-      <ProgressStepper job={job} onStatus={onStatus} onRollback={onRollback} />
+      <ProgressStepper job={job} />
       {job.project_id && (
         <div className="project-line">
           🔗 Project <span className="jid">{job.project_id}</span>
@@ -1522,10 +1533,6 @@ export function GlobalJobStyles() {
         .step .line{position:absolute;top:13px;right:50%;width:100%;height:2px;background:#E8E4ED;z-index:1}
         .step:first-child .line{display:none}
         .step.done .line,.step.current .line{background:#10B981}
-        .step.clickable{cursor:pointer}
-        .step.clickable .dot{border-style:dashed;border-color:#B0A8BC}
-        .step.clickable:hover .dot{transform:scale(1.12);border-color:#E91E63;color:#E91E63;background:#E91E6312}
-        .step.clickable:hover .lbl{color:#E91E63}
         .stepper-cancelled{padding:12px 16px;border-radius:10px;background:#EF444412;border:1px solid #EF444430;color:#EF4444;font-weight:700;font-size:13px;margin-bottom:20px;display:flex;align-items:center;gap:8px}
         .stepper-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
         .stepper-mini-btn{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid #E8E4ED;background:#fff;color:#9B93A8;cursor:pointer}
