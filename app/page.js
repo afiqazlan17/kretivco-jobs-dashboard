@@ -24,9 +24,14 @@ export default function Dashboard() {
   const funnelTotal = (stats.potential_jobs||0)+(stats.in_progress_jobs||0)+(stats.completed_jobs||0)
   const convPct = funnelTotal>0 ? Math.round((stats.completed_jobs||0)/funnelTotal*100) : 0
 
+  const greeting = greetingFor(profile?.name)
+
   return <>
     <PageHeader title="Dashboard" subtitle={`Kretivco Job Management · ${today}`}>
-      <span style={{ fontSize:13, fontWeight:600, background:'rgba(255,255,255,.2)', borderRadius:20, padding:'6px 16px' }}>{greetingFor(profile?.name)}</span>
+      <div style={{ background:'rgba(255,255,255,.2)', borderRadius:14, padding:'8px 18px', textAlign:'right' }}>
+        <div style={{ fontSize:14, fontWeight:700 }}>{greeting.big}</div>
+        <div style={{ fontSize:11.5, fontWeight:500, opacity:.85, marginTop:2 }}>{greeting.small}</div>
+      </div>
     </PageHeader>
     <div style={{ padding:24 }}>
       {/* Row 1: Stat Cards */}
