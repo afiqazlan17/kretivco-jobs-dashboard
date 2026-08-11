@@ -445,8 +445,13 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
         const url = URL.createObjectURL(result.blob);
         const a = document.createElement('a'); a.href = url; a.download = result.filename; a.click();
         URL.revokeObjectURL(url);
-        const link = waLink(cust?.phone) || 'https://wa.me/';
-        window.open(`${link}?text=${encodeURIComponent(`${text} — PDF telah dimuat turun, sila attach fail tersebut.`)}`, '_blank');
+        // Default to the customer's number, but staff can send to anyone —
+        // an internal colleague, a different contact for this order, etc.
+        const target = window.prompt('Send to which WhatsApp number?', cust?.phone || '');
+        if (target !== null) {
+          const link = waLink(target) || 'https://wa.me/';
+          window.open(`${link}?text=${encodeURIComponent(`${text} — PDF telah dimuat turun, sila attach fail tersebut.`)}`, '_blank');
+        }
       }
       onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
       onClose();
@@ -660,7 +665,7 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
           <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Cancel</button>
           {!jobLocked && <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>}
           <button onClick={handlePrint} disabled={printing} title="Open PDF in a new tab with Print ready" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #3A86FF', background: '#fff', color: '#3A86FF', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.7 : 1 }}>{printing ? 'Opening...' : '🖨 Print'}</button>
-          <button onClick={handleWhatsApp} disabled={sharing} title="Share the PDF straight to WhatsApp (mobile), or download + open the customer's chat" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? 0.7 : 1 }}>{sharing ? 'Sharing...' : '💬 WhatsApp'}</button>
+          <button onClick={handleWhatsApp} disabled={sharing} title="Share the PDF straight to WhatsApp (mobile, pick any contact), or download + choose which number to send to" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? 0.7 : 1 }}>{sharing ? 'Sharing...' : '💬 WhatsApp'}</button>
           <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Download PDF'}</button>
         </div>
       </div>
