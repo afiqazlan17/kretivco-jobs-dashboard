@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
-import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, VENDOR_CATEGORY, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor } from '@/lib/constants';
+import { DEPT, STATUS, STATUS_FLOW, STATUS_ROLLBACK, HOLD_STATUS, CANCEL_REASONS, SOURCE, SOURCE_OPTIONS, PIC_OPTIONS, PIC_BY_DEPT, JOB_TYPE, BANK, DOC_TYPE_META, VENDOR_CATEGORY, availableDocTypes, customerDisplayName, formatRM, formatDate, formatDateTime, daysUntil, productLinesFor, segmentsFor, packageTierOptions, findPackageTier, packageItemsFor, waLink } from '@/lib/constants';
 import { generateDocument, generateCombinedDocument, DOC_TYPES, BANK_DETAILS, notesFor, genDocNumber } from '@/lib/pdf-generator';
 import { supabase, isMockMode } from '@/lib/supabase';
 import { RichNoteComposer } from './_richEditor';
@@ -152,9 +152,10 @@ function creationSnapshot(job) {
 
 export function Timeline({ jobId, getActivity, job }) {
   const logs = getActivity(jobId);
+  const [sortDir, setSortDir] = useState('asc');
   if (!logs.length) return <div className="text-sm text-muted" style={{ padding: "12px 0" }}>No activity log.</div>;
 
-  const sorted = [...logs].sort((a, b) => new Date(a.time) - new Date(b.time));
+  const sorted = [...logs].sort((a, b) => sortDir === 'asc' ? new Date(a.time) - new Date(b.time) : new Date(b.time) - new Date(a.time));
 
   const actionIcon = (action) => {
     switch (action) {
@@ -197,6 +198,12 @@ export function Timeline({ jobId, getActivity, job }) {
 
   return (
     <div className="timeline">
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button
+          onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+          style={{ fontFamily: "'Poppins',sans-serif", fontSize: 11, fontWeight: 600, color: '#6B6080', background: '#F9F8FB', border: '1px solid #E8E4ED', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+        >{sortDir === 'asc' ? '↑ Oldest first' : '↓ Newest first'}</button>
+      </div>
       <div className="timeline-line" />
       {sorted.map((l, i) => (
         <div key={i} className="timeline-entry">
@@ -331,8 +338,14 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const isReceipt = type === 'receipt';
   const cfg = DOC_TYPES[type];
   const bank = BANK_DETAILS[job.bank] || BANK_DETAILS.mbb;
-  const notes = notesFor(type, bank);
   const docNumber = genDocNumber(type, job.job_id);
+  // Notes are the fixed terms/wording printed at the bottom of every
+  // document — editable per-generation (e.g. a one-off exception to the
+  // usual payment terms) via the "Edit Notes" toggle, not a permanent
+  // template change.
+  const [notesEditable, setNotesEditable] = useState(false);
+  const [notes, setNotes] = useState(() => notesFor(type, bank));
+  const setNoteLine = (i, v) => setNotes(p => p.map((n, idx) => idx === i ? v : n));
 
   // A receipt is proof of payment against a specific invoice, not a fresh
   // re-derivation from whatever the line items currently say — those may
@@ -362,10 +375,6 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   });
   const [initial, setInitial] = useState(form);
   const [generating, setGenerating] = useState(false);
-  // Package bundles (e.g. Undangan.my) are tagged noSize on every item since
-  // they're never size-based — hide the column unless a non-package item is
-  // present, so staff can still enter a size on genuine custom print jobs.
-  const showSize = !!DEPT[job.department]?.usesSize && form.items.some(it => !it.noSize);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setItem = (i, k, v) => setForm(p => ({ ...p, items: p.items.map((it, idx) => idx === i ? { ...it, [k]: v } : it) }));
@@ -376,25 +385,70 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
   const subtotal = form.items.reduce((s, it) => s + ((Number(it.qty) || 0) * (Number(it.price) || 0)), 0);
   const total = subtotal + (Number(form.delivery) || 0) - (Number(form.discount) || 0);
 
+  const buildOverrides = (action) => ({
+    staffName: form.staffName, customerName: form.customerName, customerCompany: form.customerCompany,
+    addressLine1: form.addressLine1, addressLine2: form.addressLine2, jobTitle: form.jobTitle,
+    items: form.items.filter(it => it.item?.trim()),
+    delivery: form.delivery, discount: form.discount,
+    paymentMethod: form.paymentMethod,
+    amountPaid: isReceipt ? form.amountPaid : undefined,
+    balanceDue: isReceipt ? form.balanceDue : undefined,
+    notes,
+    action,
+  });
+
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const overrides = {
-        staffName: form.staffName, customerName: form.customerName, customerCompany: form.customerCompany,
-        addressLine1: form.addressLine1, addressLine2: form.addressLine2, jobTitle: form.jobTitle,
-        items: form.items.filter(it => it.item?.trim()),
-        delivery: form.delivery, discount: form.discount,
-        paymentMethod: form.paymentMethod,
-        amountPaid: isReceipt ? form.amountPaid : undefined,
-        balanceDue: isReceipt ? form.balanceDue : undefined,
-      };
-      const result = await generateDocument(type, job, cust, overrides);
+      const result = await generateDocument(type, job, cust, buildOverrides());
       onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
       onClose();
     } catch (err) {
       console.error('PDF generation error:', err);
     }
     setGenerating(false);
+  };
+
+  const [printing, setPrinting] = useState(false);
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      const result = await generateDocument(type, job, cust, buildOverrides('print'));
+      onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
+      onClose();
+    } catch (err) {
+      console.error('PDF print error:', err);
+    }
+    setPrinting(false);
+  };
+
+  // WhatsApp can only attach the actual PDF via the OS share sheet (Web
+  // Share API with files) — mainly a mobile-browser capability. Where that's
+  // not available (most desktop browsers), fall back to downloading the PDF
+  // and opening the customer's chat pre-filled with a note, so staff still
+  // just need to attach the file that was just downloaded.
+  const [sharing, setSharing] = useState(false);
+  const handleWhatsApp = async () => {
+    setSharing(true);
+    try {
+      const result = await generateDocument(type, job, cust, buildOverrides('share'));
+      const text = `${cfg.title} ${result.docNumber} — ${job.job_id}`;
+      const file = new File([result.blob], result.filename, { type: 'application/pdf' });
+      if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: cfg.title, text });
+      } else {
+        const url = URL.createObjectURL(result.blob);
+        const a = document.createElement('a'); a.href = url; a.download = result.filename; a.click();
+        URL.revokeObjectURL(url);
+        const link = waLink(cust?.phone) || 'https://wa.me/';
+        window.open(`${link}?text=${encodeURIComponent(`${text} — PDF telah dimuat turun, sila attach fail tersebut.`)}`, '_blank');
+      }
+      onGenerated({ jobs: [job], type, label, docNumber: result.docNumber, total: result.total, blob: result.blob, filename: result.filename });
+      onClose();
+    } catch (err) {
+      if (err?.name !== 'AbortError') console.error('WhatsApp share error:', err);
+    }
+    setSharing(false);
   };
 
   const [saving, setSaving] = useState(false);
@@ -464,7 +518,6 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
                 <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Item name" value={it.item} onChange={e => setItem(i, 'item', e.target.value)} />
                 <div style={{ fontSize: 10, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Description</div>
                 <textarea rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} placeholder="Description (optional)" value={it.desc || ''} onChange={e => setItem(i, 'desc', e.target.value)} />
-                {showSize && <input style={{ ...inputSt, marginBottom: 4 }} placeholder="Size (e.g. A3, 3ft x 6ft)" value={it.size || ''} onChange={e => setItem(i, 'size', e.target.value)} />}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 24px', gap: 4 }}>
                   <div>
                     <div style={{ fontSize: 9.5, fontWeight: 600, color: '#9B93A8', marginBottom: 2 }}>Quantity (Qty)</div>
@@ -496,6 +549,16 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
               <label style={labelSt}>Balance Due (RM)</label>
               <input type="number" style={inputSt} value={form.balanceDue} onChange={e => set('balanceDue', e.target.value)} />
             </>}
+
+            <div style={{ ...labelSt, marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Note</span>
+              <button onClick={() => setNotesEditable(v => !v)} style={{ fontSize: 11, fontWeight: 600, color: notesEditable ? '#10B981' : '#E91E63', background: 'none', border: 'none', cursor: 'pointer' }}>{notesEditable ? '✓ Done editing' : '✏️ Edit Notes'}</button>
+            </div>
+            {notesEditable ? notes.map((n, i) => (
+              <textarea key={i} rows={2} style={{ ...inputSt, marginBottom: 4, resize: 'vertical', fontFamily: "'Poppins',sans-serif" }} value={n} onChange={e => setNoteLine(i, e.target.value)} />
+            )) : (
+              <div style={{ fontSize: 11, color: '#9B93A8' }}>Default wording for {cfg.title.toLowerCase()}s — click "Edit Notes" to adjust for this document.</div>
+            )}
           </div>
 
           {/* Live preview — font/spacing sizes mirror the actual PDF's point
@@ -533,7 +596,6 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
                     <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>No</th>
                     <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Description</th>
                     {isReceipt ? <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Payment Method</th> : <>
-                      {showSize && <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Size</th>}
                       <th style={{ padding: 8, textAlign: 'left', border: '0.5px solid #000' }}>Unit</th>
                       <th style={{ padding: 8, textAlign: 'right', border: '0.5px solid #000' }}>Price</th>
                     </>}
@@ -549,7 +611,6 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
                         {it.desc ? <div style={{ color: '#777', fontSize: 9, whiteSpace: 'pre-wrap', wordWrap: 'break-word', overflowWrap: 'break-word', marginTop: 2 }}>{it.desc}</div> : null}
                       </td>
                       {isReceipt ? <td style={{ padding: 8, border: '0.5px solid #000' }}>{form.paymentMethod}</td> : <>
-                        {showSize && <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.size || '—'}</td>}
                         <td style={{ padding: 8, border: '0.5px solid #000' }}>{it.qty || 1}</td>
                         <td style={{ padding: 8, border: '0.5px solid #000', textAlign: 'right' }}>{formatRM(it.price)}</td>
                       </>}
@@ -587,6 +648,8 @@ export function DocPreviewModal({ type, label, job, cust, userName, ledgerEntrie
           {saved && <span style={{ fontSize: 12, color: '#10B981', fontWeight: 600, marginRight: 'auto' }}>✓ Saved</span>}
           <button onClick={guardedClose} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 500, padding: '9px 18px', borderRadius: 8, border: '1px solid #E8E4ED', background: '#fff', cursor: 'pointer' }}>Cancel</button>
           <button onClick={handleSave} disabled={saving} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1 }}>{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={handlePrint} disabled={printing} title="Open PDF in a new tab with Print ready" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #3A86FF', background: '#fff', color: '#3A86FF', cursor: printing ? 'default' : 'pointer', opacity: printing ? 0.7 : 1 }}>{printing ? 'Opening...' : '🖨 Print'}</button>
+          <button onClick={handleWhatsApp} disabled={sharing} title="Share the PDF straight to WhatsApp (mobile), or download + open the customer's chat" style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 16px', borderRadius: 8, border: '1px solid #10B981', background: '#fff', color: '#10B981', cursor: sharing ? 'default' : 'pointer', opacity: sharing ? 0.7 : 1 }}>{sharing ? 'Sharing...' : '💬 WhatsApp'}</button>
           <button onClick={handleGenerate} disabled={generating} style={{ fontFamily: "'Poppins',sans-serif", fontSize: 13, fontWeight: 600, padding: '9px 20px', borderRadius: 8, border: 'none', background: '#E91E63', color: '#fff', cursor: generating ? 'default' : 'pointer', opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Download PDF'}</button>
         </div>
       </div>

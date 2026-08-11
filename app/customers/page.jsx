@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useData, useVisibleDepts } from "@/lib/hooks";
-import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, CUSTOMER_TYPE, availableDocTypes, formatRM, formatDate } from "@/lib/constants";
+import { DEPT, STATUS, SOURCE, SOURCE_OPTIONS, CUSTOMER_TYPE, availableDocTypes, formatRM, formatDate, waLink } from "@/lib/constants";
 import { lookupPostcode } from "@/lib/postcode";
 import { generateCombinedDocument } from "@/lib/pdf-generator";
 
@@ -13,7 +13,6 @@ function Av({name,sz=36}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04",
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);return<div className="toast">✓ {msg}</div>}
 function CTypeBadge({t}){const m=CUSTOMER_TYPE[t||'individual'];return m?<span className="src-badge" style={{color:m.color,background:m.color+"12"}}>{m.label}</span>:null}
-function waLink(phone){if(!phone)return null;let d=phone.replace(/\D/g,"");if(!d)return null;if(d.startsWith("0"))d="60"+d.slice(1);else if(!d.startsWith("60"))d="60"+d;return`https://wa.me/${d}`}
 
 // ─── Profile Modal (720px) ────────────────────────────────────
 function ProfileModal({cust,jobs,visDepts,onEdit,onClose}){
