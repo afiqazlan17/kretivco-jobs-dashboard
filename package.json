@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "acorn": "^8.18.0",
-    "acorn-jsx": "^5.3.2"
+    "acorn-jsx": "^5.3.2",
+    "vitest": "^4.1.10"
   }
 }
