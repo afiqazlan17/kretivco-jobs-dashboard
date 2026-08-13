@@ -47,6 +47,8 @@ const TYPE_META = {
   job_expense: { label: 'Job Cost', color: '#E85D04', sign: '-' },
   operating_expense: { label: 'Expense', color: '#EF4444', sign: '-' },
   opening_balance: { label: 'Opening Balance', color: '#6B7280', sign: '' },
+  director_loan_in: { label: 'Director Loan In', color: '#8B5CF6', sign: '+' },
+  director_loan_repayment: { label: 'Loan Repayment', color: '#8B5CF6', sign: '-' },
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
 
@@ -307,10 +309,10 @@ function TrialBalanceReport({ entries }) {
   );
 }
 
-// ── Balance Sheet — Assets = Liabilities + Equity, as of a date. No
-// Liability accounts exist in this ledger yet (no AP/loan postings), so
-// Liabilities always shows RM 0 — flagged rather than hidden, since it's
-// a real gap once the business takes on payables, not a bug.
+// ── Balance Sheet — Assets = Liabilities + Equity, as of a date.
+// Liabilities is director loans (loan_<slug> accounts) for now — the only
+// liability type this ledger posts — discovered dynamically from whatever
+// loan_ accounts appear in the entries, same way Trial Balance/GL Summary do.
 function BalanceSheetReport({ entries }) {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0,10));
   const upToDate = useMemo(() => entries.filter(e => e.date?.slice(0,10) <= asOf), [entries, asOf]);
@@ -325,7 +327,9 @@ function BalanceSheetReport({ entries }) {
   const retainedEarnings = totalRevenue - totalCogs - totalOpex;
   const openingEquity = balanceFor(upToDate, 'equity_opening');
   const totalEquity = openingEquity + retainedEarnings;
-  const totalLiabilities = 0;
+  const loanKeys = Array.from(new Set(upToDate.flatMap(e => [e.debit_account, e.credit_account]))).filter(k => k?.startsWith('loan_'));
+  const loanBalances = loanKeys.map(k => ({ key: k, label: ledgerAccountLabel(k), bal: balanceFor(upToDate, k) })).filter(l => l.bal !== 0);
+  const totalLiabilities = loanBalances.reduce((s,l) => s + l.bal, 0);
   const balanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01;
 
   const Row = ({ label, value, bold }) => (
@@ -348,7 +352,8 @@ function BalanceSheetReport({ entries }) {
       <Row label="Total Assets" value={totalAssets} bold />
 
       <div className="section-label" style={{margin:"18px 0 6px"}}>Liabilities</div>
-      <div className="text-xs text-muted" style={{marginBottom:6}}>No liability accounts recorded in the system yet (e.g. AP, loans) — will be added when needed.</div>
+      {loanBalances.length === 0 && <div className="text-xs text-muted" style={{marginBottom:6}}>No liability accounts recorded in the system yet (e.g. AP, director loans) — will be added when needed.</div>}
+      {loanBalances.map(l => <Row key={l.key} label={l.label} value={l.bal} />)}
       <Row label="Total Liabilities" value={totalLiabilities} bold />
 
       <div className="section-label" style={{margin:"18px 0 6px"}}>Equity</div>
@@ -676,7 +681,7 @@ export default function Finance() {
 
 function FinanceContent() {
   const { profile } = useAuth() || {};
-  const { jobs = [], ledgerEntries = [], postExpenseEntry, postOpeningBalanceAdjustment } = useData() || {};
+  const { jobs = [], ledgerEntries = [], users = [], postExpenseEntry, postOpeningBalanceAdjustment, postDirectorLoan } = useData() || {};
   const visDepts = useVisibleDepts();
   const isBod = profile?.role === 'bod';
   const searchParams = useSearchParams();
@@ -687,6 +692,8 @@ function FinanceContent() {
 
   const [showExpense, setShowExpense] = useState(false);
   const [showOpening, setShowOpening] = useState(false);
+  const [showLoan, setShowLoan] = useState(false);
+  const directors = users.filter(u => u.role === 'bod');
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
@@ -701,13 +708,16 @@ function FinanceContent() {
 
   const blankExpForm = () => ({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
+  const blankLoanForm = () => ({ direction: 'in', directorName: directors[0]?.name || '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
   const [openForm, setOpenForm] = useState(blankOpenForm);
+  const [loanForm, setLoanForm] = useState(blankLoanForm);
   const [expReceiptFile, setExpReceiptFile] = useState(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Unsaved changes will be lost. Close this form?')) return; closeFn(); };
   const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()) || !!expReceiptFile, () => { setShowExpense(false); setExpReceiptFile(null); });
   const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
+  const closeLoan = () => confirmDiscard(JSON.stringify(loanForm) !== JSON.stringify(blankLoanForm()), () => setShowLoan(false));
 
   const deptKeys = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k));
 
@@ -804,6 +814,21 @@ function FinanceContent() {
     setToast('Opening balance adjusted.');
   };
 
+  const handleAddLoan = () => {
+    if (!loanForm.amount || !loanForm.directorName.trim()) return;
+    postDirectorLoan({
+      direction: loanForm.direction,
+      directorName: loanForm.directorName,
+      amount: loanForm.amount,
+      bank: loanForm.bank,
+      date: loanForm.date ? new Date(loanForm.date).toISOString() : null,
+      notes: loanForm.notes,
+    }, profile?.name);
+    setShowLoan(false);
+    setLoanForm(blankLoanForm());
+    setToast(loanForm.direction === 'in' ? 'Director loan recorded.' : 'Loan repayment recorded.');
+  };
+
   return (
     <>
       <style>{`
@@ -852,6 +877,7 @@ function FinanceContent() {
             <div><div style={{fontSize:20,fontWeight:700}}>Finance</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>Revenue, expense &amp; ledger</div></div>
             <div style={{display:"flex",gap:8}}>
               {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Adjust Bank Balance</button>}
+              {isBod && <button className="btn-header" onClick={()=>setShowLoan(true)}>+ Director Loan</button>}
               <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Add Expense</button>
             </div>
           </div>
@@ -1047,6 +1073,38 @@ function FinanceContent() {
               <div className="fg"><label className="fl">Adjustment Amount (RM) <span className="text-xs text-muted">— can be negative to reduce</span></label><input type="number" className="fi" value={openForm.amount} onChange={e=>setOpenForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 15000" /></div>
             </div>
             <div className="fmodal-foot"><button className="btn-secondary" onClick={closeOpening}>Cancel</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Save</button></div>
+          </Modal>
+        )}
+
+        {showLoan && (
+          <Modal width={440} onClose={closeLoan}>
+            <div className="fmodal-head">Director Loan<button className="fmodal-close" onClick={closeLoan}>×</button></div>
+            <div className="fmodal-body">
+              <div className="fg"><label className="fl">Direction *</label>
+                <select className="fs" value={loanForm.direction} onChange={e=>setLoanForm(p=>({...p,direction:e.target.value}))}>
+                  <option value="in">Loan In — Director → Company</option>
+                  <option value="repayment">Repayment — Company → Director</option>
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Director *</label>
+                {directors.length > 0 ? (
+                  <select className="fs" value={loanForm.directorName} onChange={e=>setLoanForm(p=>({...p,directorName:e.target.value}))}>
+                    {directors.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                ) : (
+                  <input className="fi" value={loanForm.directorName} onChange={e=>setLoanForm(p=>({...p,directorName:e.target.value}))} placeholder="Director's name" />
+                )}
+              </div>
+              <div className="fg"><label className="fl">Amount (RM) *</label><input type="number" className="fi" value={loanForm.amount} onChange={e=>setLoanForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" /></div>
+              <div className="fg"><label className="fl">Bank *</label>
+                <select className="fs" value={loanForm.bank} onChange={e=>setLoanForm(p=>({...p,bank:e.target.value}))}>
+                  {Object.entries(BANK).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={loanForm.date} onChange={e=>setLoanForm(p=>({...p,date:e.target.value}))} /></div>
+              <div className="fg"><label className="fl">Notes</label><input className="fi" value={loanForm.notes} onChange={e=>setLoanForm(p=>({...p,notes:e.target.value}))} placeholder="Optional" /></div>
+            </div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeLoan}>Cancel</button><button className="btn-primary" onClick={handleAddLoan} disabled={!loanForm.amount || !loanForm.directorName.trim()}>Save</button></div>
           </Modal>
         )}
 
