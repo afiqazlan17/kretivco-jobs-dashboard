@@ -877,7 +877,7 @@ function FinanceContent() {
             <div><div style={{fontSize:20,fontWeight:700}}>Finance</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>Revenue, expense &amp; ledger</div></div>
             <div style={{display:"flex",gap:8}}>
               {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Adjust Bank Balance</button>}
-              {isBod && <button className="btn-header" onClick={()=>setShowLoan(true)}>+ Director Loan</button>}
+              {isBod && <button className="btn-header" onClick={()=>{ setLoanForm(blankLoanForm()); setShowLoan(true); }}>+ Director Loan</button>}
               <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Add Expense</button>
             </div>
           </div>
