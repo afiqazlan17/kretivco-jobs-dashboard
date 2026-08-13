@@ -2,7 +2,8 @@
 import { useState, useMemo, Suspense } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, REPORT_MENU, formatRM, formatDate, ledgerAccountLabel, ledgerAccountMeta } from '@/lib/constants';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { supabase, isMockMode } from '@/lib/supabase';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -57,7 +58,17 @@ const TYPE_META = {
 // row (standard general-ledger presentation) and, once a single account is
 // selected, adds a running balance column.
 function GeneralLedgerReport({ entries }) {
+  const router = useRouter();
   const [tab, setTab] = useState('summary');
+  // In mock mode receiptPath IS the blob URL already (opened directly); in
+  // live mode it's a real storage path needing a signed URL, same pattern
+  // as job attachments elsewhere in the app.
+  const viewReceipt = async (path) => {
+    if (isMockMode) { window.open(path, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(path, 3600);
+    if (error) { alert('Failed to open receipt: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(String(thisYear));
   const [monthFrom, setMonthFrom] = useState('01');
@@ -95,8 +106,8 @@ function GeneralLedgerReport({ entries }) {
   const explodedRows = useMemo(() => {
     const rows = [];
     inRange.forEach(e => {
-      rows.push({ id: e.id + '-d', date: e.date, account: e.debit_account, particular: e.description, ref: e.doc_number, debit: e.amount, credit: 0, reversed: e.reversed });
-      rows.push({ id: e.id + '-c', date: e.date, account: e.credit_account, particular: e.description, ref: e.doc_number, debit: 0, credit: e.amount, reversed: e.reversed });
+      rows.push({ id: e.id + '-d', date: e.date, account: e.debit_account, particular: e.description, ref: e.doc_number, jobId: e.job_id, receiptPath: e.receipt_path, receiptName: e.receipt_name, debit: e.amount, credit: 0, reversed: e.reversed });
+      rows.push({ id: e.id + '-c', date: e.date, account: e.credit_account, particular: e.description, ref: e.doc_number, jobId: e.job_id, receiptPath: e.receipt_path, receiptName: e.receipt_name, debit: 0, credit: e.amount, reversed: e.reversed });
     });
     return rows.sort((a,b) => new Date(a.date) - new Date(b.date));
   }, [inRange]);
@@ -120,15 +131,25 @@ function GeneralLedgerReport({ entries }) {
   const DetailTable = ({ rows }) => (
     <div style={{overflowX:"auto"}}>
       <table>
-        <thead><tr><th>Date</th><th>Account</th><th>Particular</th><th>Ref No</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th><th style={{textAlign:"right"}}>Running Balance</th></tr></thead>
+        <thead><tr><th>Date</th><th>Account</th><th>Particular</th><th>Ref No</th><th>Job ID</th><th>Receipt</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th><th style={{textAlign:"right"}}>Running Balance</th></tr></thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period/account.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={9} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period/account.</td></tr>}
           {rows.map(r => (
             <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
               <td className="text-sm">{formatDate(r.date)}</td>
               <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(r.account)}</td>
               <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (reversed)</span>}</td>
               <td className="text-sm">{r.ref || '—'}</td>
+              <td className="text-sm">
+                {r.jobId
+                  ? <a onClick={() => router.push(`/jobs/${r.jobId}`)} style={{ color: '#3A86FF', cursor: 'pointer', fontWeight: 600 }}>{r.jobId}</a>
+                  : '—'}
+              </td>
+              <td className="text-sm">
+                {r.receiptPath
+                  ? <a onClick={() => viewReceipt(r.receiptPath)} style={{ color: '#3A86FF', cursor: 'pointer' }}>📎 {r.receiptName || 'View'}</a>
+                  : '—'}
+              </td>
               <td style={{textAlign:"right"}}>{r.debit ? formatRM(r.debit) : '—'}</td>
               <td style={{textAlign:"right"}}>{r.credit ? formatRM(r.credit) : '—'}</td>
               <td style={{textAlign:"right",fontWeight:600}}>{r.balance == null ? '—' : formatRM(r.balance)}</td>
@@ -682,8 +703,10 @@ function FinanceContent() {
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
   const [openForm, setOpenForm] = useState(blankOpenForm);
+  const [expReceiptFile, setExpReceiptFile] = useState(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Unsaved changes will be lost. Close this form?')) return; closeFn(); };
-  const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()), () => setShowExpense(false));
+  const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()) || !!expReceiptFile, () => { setShowExpense(false); setExpReceiptFile(null); });
   const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
 
   const deptKeys = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k));
@@ -735,9 +758,28 @@ function FinanceContent() {
 
   const jobsForExpenseDept = expForm.department ? jobs.filter(j => j.department === expForm.department && !j.archived) : [];
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!expForm.amount || !expForm.bank) return;
     if (!expForm.department && !window.confirm('Department left blank — this expense will be recorded as a company-wide cost (not tied to a specific department). Continue?')) return;
+    let receiptPath = null, receiptName = null;
+    if (expReceiptFile) {
+      setUploadingReceipt(true);
+      try {
+        if (isMockMode) {
+          receiptPath = URL.createObjectURL(expReceiptFile);
+        } else {
+          receiptPath = `expenses/${Date.now()}_${expReceiptFile.name}`;
+          const { error } = await supabase.storage.from('job-attachments').upload(receiptPath, expReceiptFile);
+          if (error) throw error;
+        }
+        receiptName = expReceiptFile.name;
+      } catch (err) {
+        setUploadingReceipt(false);
+        alert('Failed to upload receipt: ' + (err?.message || err));
+        return;
+      }
+      setUploadingReceipt(false);
+    }
     postExpenseEntry({
       category: expForm.category,
       department: expForm.department || null,
@@ -746,9 +788,11 @@ function FinanceContent() {
       bank: expForm.bank,
       date: expForm.date ? new Date(expForm.date).toISOString() : null,
       notes: expForm.notes,
+      receiptPath, receiptName,
     }, profile?.name);
     setShowExpense(false);
     setExpForm(blankExpForm());
+    setExpReceiptFile(null);
     setToast('Expense recorded.');
   };
 
@@ -982,8 +1026,12 @@ function FinanceContent() {
               </div>
               <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={expForm.date} onChange={e=>setExpForm(p=>({...p,date:e.target.value}))} /></div>
               <div className="fg"><label className="fl">Notes</label><input className="fi" value={expForm.notes} onChange={e=>setExpForm(p=>({...p,notes:e.target.value}))} placeholder="e.g. Payment to freelance designer" /></div>
+              <div className="fg"><label className="fl">Receipt <span className="text-xs text-muted">(optional)</span></label>
+                <input type="file" accept="image/*,.pdf" className="fi" onChange={e=>setExpReceiptFile(e.target.files?.[0] || null)} />
+                {expReceiptFile && <div className="text-xs text-muted" style={{marginTop:4}}>📎 {expReceiptFile.name}</div>}
+              </div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Cancel</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Save</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Cancel</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount || uploadingReceipt}>{uploadingReceipt ? 'Uploading…' : 'Save'}</button></div>
           </Modal>
         )}
 
