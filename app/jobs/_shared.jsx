@@ -1085,6 +1085,8 @@ function VendorCostModal({ item, vendors, onAddVendor, genVendorId, onSave, onCl
 function MarkPaidModal({ item, onConfirm, onClose }) {
   const [bank, setBank] = useState('mbb');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   return (
     <Modal width={380} onClose={onClose}>
       <div className="modal-header"><span className="modal-title">Mark as Paid</span><button className="modal-close" onClick={onClose}>×</button></div>
@@ -1095,11 +1097,14 @@ function MarkPaidModal({ item, onConfirm, onClose }) {
           {Object.entries(BANK).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
         <label className="field-label">Date Paid</label>
-        <input type="date" className="field-input" value={date} onChange={e => setDate(e.target.value)} />
+        <input type="date" className="field-input" value={date} onChange={e => setDate(e.target.value)} style={{ marginBottom: 12 }} />
+        <label className="field-label">Receipt <span style={{ fontWeight: 400, color: '#9B93A8' }}>(optional)</span></label>
+        <input type="file" accept="image/*,.pdf" className="field-input" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+        {receiptFile && <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 4 }}>📎 {receiptFile.name}</div>}
       </div>
       <div className="modal-footer">
         <button className="btn-secondary" onClick={onClose}>Cancel</button>
-        <button className="btn-primary" style={{ background: '#10B981' }} onClick={() => onConfirm(bank, date)}>Confirm Paid</button>
+        <button className="btn-primary" style={{ background: '#10B981' }} disabled={uploading} onClick={async () => { setUploading(true); await onConfirm(bank, date, receiptFile); setUploading(false); }}>{uploading ? 'Uploading…' : 'Confirm Paid'}</button>
       </div>
     </Modal>
   );
@@ -1145,20 +1150,44 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
     onUpdateJob(job.id, { estimation_value: suggestedPrice }, userName, { action: 'edited', field: 'estimation_value', old: job.estimation_value || '', val: suggestedPrice });
   };
 
-  const confirmPaid = (bank, date) => {
+  const confirmPaid = async (bank, date, receiptFile) => {
     const item = payingItem;
     const vendorName = vendorLabel(item.vendor_id)?.name || 'Unknown';
+    let receiptPath = null, receiptName = null;
+    if (receiptFile) {
+      try {
+        if (isMockMode) {
+          receiptPath = URL.createObjectURL(receiptFile);
+        } else {
+          receiptPath = `${job.job_id}/vendor-receipts/${Date.now()}_${receiptFile.name}`;
+          const { error } = await supabase.storage.from('job-attachments').upload(receiptPath, receiptFile);
+          if (error) throw error;
+        }
+        receiptName = receiptFile.name;
+      } catch (err) {
+        alert('Failed to upload receipt: ' + (err?.message || err));
+        return;
+      }
+    }
     postExpenseEntry({
       category: 'subcontractor', department: job.department, jobId: job.job_id,
       amount: item.actual_cost, bank, date: new Date(date).toISOString(),
       notes: `Vendor: ${vendorName}${item.notes ? ' — ' + item.notes : ''}`,
+      receiptPath, receiptName,
     }, userName);
-    const updated = items.map(i => i.id === item.id ? { ...i, status: 'paid', paid_date: date, paid_bank: bank } : i);
+    const updated = items.map(i => i.id === item.id ? { ...i, status: 'paid', paid_date: date, paid_bank: bank, receipt_path: receiptPath, receipt_name: receiptName } : i);
     onUpdateJob(job.id, { vendor_costs: updated }, userName, { action: 'edited', field: 'vendor_costs', detail: `Marked vendor cost paid: ${vendorName} (${formatRM(item.actual_cost)})` });
     setPayingItem(null);
   };
 
   const smallBtn = (color) => ({ fontFamily: "'Poppins',sans-serif", fontSize: 10.5, fontWeight: 600, padding: '4px 10px', borderRadius: 6, border: `1px solid ${color}30`, background: `${color}10`, color, cursor: 'pointer' });
+
+  const viewVendorReceipt = async (path) => {
+    if (isMockMode) { window.open(path, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(path, 3600);
+    if (error) { alert('Failed to open receipt: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
 
   return (
     <div>
@@ -1188,6 +1217,11 @@ export function VendorCostSection({ job, vendors, onAddVendor, genVendorId, post
                   <span>Actual: <strong style={{ color: '#1A1025' }}>{item.actual_cost ? formatRM(item.actual_cost) : '—'}</strong></span>
                 </div>
                 {item.notes && <div style={{ fontSize: 11, color: '#9B93A8', marginTop: 4, fontStyle: 'italic' }}>{item.notes}</div>}
+                {item.receipt_path && (
+                  <div style={{ marginTop: 4 }}>
+                    <a onClick={() => viewVendorReceipt(item.receipt_path)} style={{ fontSize: 11, color: '#3A86FF', cursor: 'pointer' }}>📎 {item.receipt_name || 'View receipt'}</a>
+                  </div>
+                )}
                 {!locked && (
                   <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                     <button onClick={() => { setEditingItem(item); setShowForm(true); }} style={smallBtn('#3A86FF')}>Edit</button>

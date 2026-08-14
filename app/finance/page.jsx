@@ -2,7 +2,8 @@
 import { useState, useMemo, Suspense } from "react";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { DEPT, BANK, EXPENSE_CATEGORIES, DOC_TYPE_META, REPORT_MENU, formatRM, formatDate, ledgerAccountLabel, ledgerAccountMeta } from '@/lib/constants';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { supabase, isMockMode } from '@/lib/supabase';
 
 function Modal({ width, children, onClose }) {
   return (
@@ -46,6 +47,8 @@ const TYPE_META = {
   job_expense: { label: 'Job Cost', color: '#E85D04', sign: '-' },
   operating_expense: { label: 'Expense', color: '#EF4444', sign: '-' },
   opening_balance: { label: 'Opening Balance', color: '#6B7280', sign: '' },
+  director_loan_in: { label: 'Director Loan In', color: '#8B5CF6', sign: '+' },
+  director_loan_repayment: { label: 'Loan Repayment', color: '#8B5CF6', sign: '-' },
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
 
@@ -57,7 +60,17 @@ const TYPE_META = {
 // row (standard general-ledger presentation) and, once a single account is
 // selected, adds a running balance column.
 function GeneralLedgerReport({ entries }) {
+  const router = useRouter();
   const [tab, setTab] = useState('summary');
+  // In mock mode receiptPath IS the blob URL already (opened directly); in
+  // live mode it's a real storage path needing a signed URL, same pattern
+  // as job attachments elsewhere in the app.
+  const viewReceipt = async (path) => {
+    if (isMockMode) { window.open(path, '_blank'); return; }
+    const { data, error } = await supabase.storage.from('job-attachments').createSignedUrl(path, 3600);
+    if (error) { alert('Failed to open receipt: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  };
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(String(thisYear));
   const [monthFrom, setMonthFrom] = useState('01');
@@ -95,8 +108,8 @@ function GeneralLedgerReport({ entries }) {
   const explodedRows = useMemo(() => {
     const rows = [];
     inRange.forEach(e => {
-      rows.push({ id: e.id + '-d', date: e.date, account: e.debit_account, particular: e.description, ref: e.doc_number, debit: e.amount, credit: 0, reversed: e.reversed });
-      rows.push({ id: e.id + '-c', date: e.date, account: e.credit_account, particular: e.description, ref: e.doc_number, debit: 0, credit: e.amount, reversed: e.reversed });
+      rows.push({ id: e.id + '-d', date: e.date, account: e.debit_account, particular: e.description, ref: e.doc_number, jobId: e.job_id, receiptPath: e.receipt_path, receiptName: e.receipt_name, debit: e.amount, credit: 0, reversed: e.reversed });
+      rows.push({ id: e.id + '-c', date: e.date, account: e.credit_account, particular: e.description, ref: e.doc_number, jobId: e.job_id, receiptPath: e.receipt_path, receiptName: e.receipt_name, debit: 0, credit: e.amount, reversed: e.reversed });
     });
     return rows.sort((a,b) => new Date(a.date) - new Date(b.date));
   }, [inRange]);
@@ -120,15 +133,25 @@ function GeneralLedgerReport({ entries }) {
   const DetailTable = ({ rows }) => (
     <div style={{overflowX:"auto"}}>
       <table>
-        <thead><tr><th>Date</th><th>Account</th><th>Particular</th><th>Ref No</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th><th style={{textAlign:"right"}}>Running Balance</th></tr></thead>
+        <thead><tr><th>Date</th><th>Account</th><th>Particular</th><th>Ref No</th><th>Job ID</th><th>Receipt</th><th style={{textAlign:"right"}}>Debit</th><th style={{textAlign:"right"}}>Credit</th><th style={{textAlign:"right"}}>Running Balance</th></tr></thead>
         <tbody>
-          {rows.length === 0 && <tr><td colSpan={7} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period/account.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={9} style={{textAlign:"center",padding:24,color:"#9B93A8"}}>No entries for this period/account.</td></tr>}
           {rows.map(r => (
             <tr key={r.id} style={r.reversed ? { opacity: .5 } : undefined}>
               <td className="text-sm">{formatDate(r.date)}</td>
               <td className="text-sm" style={{whiteSpace:"nowrap"}}>{ledgerAccountLabel(r.account)}</td>
               <td className="text-sm">{r.particular}{r.reversed && <span className="text-xs text-muted"> (reversed)</span>}</td>
               <td className="text-sm">{r.ref || '—'}</td>
+              <td className="text-sm">
+                {r.jobId
+                  ? <a onClick={() => router.push(`/jobs/${r.jobId}`)} style={{ color: '#3A86FF', cursor: 'pointer', fontWeight: 600 }}>{r.jobId}</a>
+                  : '—'}
+              </td>
+              <td className="text-sm">
+                {r.receiptPath
+                  ? <a onClick={() => viewReceipt(r.receiptPath)} style={{ color: '#3A86FF', cursor: 'pointer' }}>📎 {r.receiptName || 'View'}</a>
+                  : '—'}
+              </td>
               <td style={{textAlign:"right"}}>{r.debit ? formatRM(r.debit) : '—'}</td>
               <td style={{textAlign:"right"}}>{r.credit ? formatRM(r.credit) : '—'}</td>
               <td style={{textAlign:"right",fontWeight:600}}>{r.balance == null ? '—' : formatRM(r.balance)}</td>
@@ -286,10 +309,10 @@ function TrialBalanceReport({ entries }) {
   );
 }
 
-// ── Balance Sheet — Assets = Liabilities + Equity, as of a date. No
-// Liability accounts exist in this ledger yet (no AP/loan postings), so
-// Liabilities always shows RM 0 — flagged rather than hidden, since it's
-// a real gap once the business takes on payables, not a bug.
+// ── Balance Sheet — Assets = Liabilities + Equity, as of a date.
+// Liabilities is director loans (loan_<slug> accounts) for now — the only
+// liability type this ledger posts — discovered dynamically from whatever
+// loan_ accounts appear in the entries, same way Trial Balance/GL Summary do.
 function BalanceSheetReport({ entries }) {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0,10));
   const upToDate = useMemo(() => entries.filter(e => e.date?.slice(0,10) <= asOf), [entries, asOf]);
@@ -304,7 +327,9 @@ function BalanceSheetReport({ entries }) {
   const retainedEarnings = totalRevenue - totalCogs - totalOpex;
   const openingEquity = balanceFor(upToDate, 'equity_opening');
   const totalEquity = openingEquity + retainedEarnings;
-  const totalLiabilities = 0;
+  const loanKeys = Array.from(new Set(upToDate.flatMap(e => [e.debit_account, e.credit_account]))).filter(k => k?.startsWith('loan_'));
+  const loanBalances = loanKeys.map(k => ({ key: k, label: ledgerAccountLabel(k), bal: balanceFor(upToDate, k) })).filter(l => l.bal !== 0);
+  const totalLiabilities = loanBalances.reduce((s,l) => s + l.bal, 0);
   const balanced = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01;
 
   const Row = ({ label, value, bold }) => (
@@ -327,7 +352,8 @@ function BalanceSheetReport({ entries }) {
       <Row label="Total Assets" value={totalAssets} bold />
 
       <div className="section-label" style={{margin:"18px 0 6px"}}>Liabilities</div>
-      <div className="text-xs text-muted" style={{marginBottom:6}}>No liability accounts recorded in the system yet (e.g. AP, loans) — will be added when needed.</div>
+      {loanBalances.length === 0 && <div className="text-xs text-muted" style={{marginBottom:6}}>No liability accounts recorded in the system yet (e.g. AP, director loans) — will be added when needed.</div>}
+      {loanBalances.map(l => <Row key={l.key} label={l.label} value={l.bal} />)}
       <Row label="Total Liabilities" value={totalLiabilities} bold />
 
       <div className="section-label" style={{margin:"18px 0 6px"}}>Equity</div>
@@ -655,7 +681,7 @@ export default function Finance() {
 
 function FinanceContent() {
   const { profile } = useAuth() || {};
-  const { jobs = [], ledgerEntries = [], postExpenseEntry, postOpeningBalanceAdjustment } = useData() || {};
+  const { jobs = [], ledgerEntries = [], users = [], postExpenseEntry, postOpeningBalanceAdjustment, postDirectorLoan } = useData() || {};
   const visDepts = useVisibleDepts();
   const isBod = profile?.role === 'bod';
   const searchParams = useSearchParams();
@@ -666,6 +692,8 @@ function FinanceContent() {
 
   const [showExpense, setShowExpense] = useState(false);
   const [showOpening, setShowOpening] = useState(false);
+  const [showLoan, setShowLoan] = useState(false);
+  const directors = users.filter(u => u.role === 'bod');
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
@@ -680,11 +708,16 @@ function FinanceContent() {
 
   const blankExpForm = () => ({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
+  const blankLoanForm = () => ({ direction: 'in', directorName: directors[0]?.name || '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
   const [openForm, setOpenForm] = useState(blankOpenForm);
+  const [loanForm, setLoanForm] = useState(blankLoanForm);
+  const [expReceiptFile, setExpReceiptFile] = useState(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Unsaved changes will be lost. Close this form?')) return; closeFn(); };
-  const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()), () => setShowExpense(false));
+  const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()) || !!expReceiptFile, () => { setShowExpense(false); setExpReceiptFile(null); });
   const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
+  const closeLoan = () => confirmDiscard(JSON.stringify(loanForm) !== JSON.stringify(blankLoanForm()), () => setShowLoan(false));
 
   const deptKeys = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k));
 
@@ -735,9 +768,28 @@ function FinanceContent() {
 
   const jobsForExpenseDept = expForm.department ? jobs.filter(j => j.department === expForm.department && !j.archived) : [];
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!expForm.amount || !expForm.bank) return;
     if (!expForm.department && !window.confirm('Department left blank — this expense will be recorded as a company-wide cost (not tied to a specific department). Continue?')) return;
+    let receiptPath = null, receiptName = null;
+    if (expReceiptFile) {
+      setUploadingReceipt(true);
+      try {
+        if (isMockMode) {
+          receiptPath = URL.createObjectURL(expReceiptFile);
+        } else {
+          receiptPath = `expenses/${Date.now()}_${expReceiptFile.name}`;
+          const { error } = await supabase.storage.from('job-attachments').upload(receiptPath, expReceiptFile);
+          if (error) throw error;
+        }
+        receiptName = expReceiptFile.name;
+      } catch (err) {
+        setUploadingReceipt(false);
+        alert('Failed to upload receipt: ' + (err?.message || err));
+        return;
+      }
+      setUploadingReceipt(false);
+    }
     postExpenseEntry({
       category: expForm.category,
       department: expForm.department || null,
@@ -746,9 +798,11 @@ function FinanceContent() {
       bank: expForm.bank,
       date: expForm.date ? new Date(expForm.date).toISOString() : null,
       notes: expForm.notes,
+      receiptPath, receiptName,
     }, profile?.name);
     setShowExpense(false);
     setExpForm(blankExpForm());
+    setExpReceiptFile(null);
     setToast('Expense recorded.');
   };
 
@@ -758,6 +812,21 @@ function FinanceContent() {
     setShowOpening(false);
     setOpenForm(blankOpenForm());
     setToast('Opening balance adjusted.');
+  };
+
+  const handleAddLoan = () => {
+    if (!loanForm.amount || !loanForm.directorName.trim()) return;
+    postDirectorLoan({
+      direction: loanForm.direction,
+      directorName: loanForm.directorName,
+      amount: loanForm.amount,
+      bank: loanForm.bank,
+      date: loanForm.date ? new Date(loanForm.date).toISOString() : null,
+      notes: loanForm.notes,
+    }, profile?.name);
+    setShowLoan(false);
+    setLoanForm(blankLoanForm());
+    setToast(loanForm.direction === 'in' ? 'Director loan recorded.' : 'Loan repayment recorded.');
   };
 
   return (
@@ -808,6 +877,7 @@ function FinanceContent() {
             <div><div style={{fontSize:20,fontWeight:700}}>Finance</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>Revenue, expense &amp; ledger</div></div>
             <div style={{display:"flex",gap:8}}>
               {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Adjust Bank Balance</button>}
+              {isBod && <button className="btn-header" onClick={()=>{ setLoanForm(blankLoanForm()); setShowLoan(true); }}>+ Director Loan</button>}
               <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Add Expense</button>
             </div>
           </div>
@@ -982,8 +1052,12 @@ function FinanceContent() {
               </div>
               <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={expForm.date} onChange={e=>setExpForm(p=>({...p,date:e.target.value}))} /></div>
               <div className="fg"><label className="fl">Notes</label><input className="fi" value={expForm.notes} onChange={e=>setExpForm(p=>({...p,notes:e.target.value}))} placeholder="e.g. Payment to freelance designer" /></div>
+              <div className="fg"><label className="fl">Receipt <span className="text-xs text-muted">(optional)</span></label>
+                <input type="file" accept="image/*,.pdf" className="fi" onChange={e=>setExpReceiptFile(e.target.files?.[0] || null)} />
+                {expReceiptFile && <div className="text-xs text-muted" style={{marginTop:4}}>📎 {expReceiptFile.name}</div>}
+              </div>
             </div>
-            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Cancel</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount}>Save</button></div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeExpense}>Cancel</button><button className="btn-primary" onClick={handleAddExpense} disabled={!expForm.amount || uploadingReceipt}>{uploadingReceipt ? 'Uploading…' : 'Save'}</button></div>
           </Modal>
         )}
 
@@ -999,6 +1073,38 @@ function FinanceContent() {
               <div className="fg"><label className="fl">Adjustment Amount (RM) <span className="text-xs text-muted">— can be negative to reduce</span></label><input type="number" className="fi" value={openForm.amount} onChange={e=>setOpenForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 15000" /></div>
             </div>
             <div className="fmodal-foot"><button className="btn-secondary" onClick={closeOpening}>Cancel</button><button className="btn-primary" onClick={handleAddOpening} disabled={!openForm.amount}>Save</button></div>
+          </Modal>
+        )}
+
+        {showLoan && (
+          <Modal width={440} onClose={closeLoan}>
+            <div className="fmodal-head">Director Loan<button className="fmodal-close" onClick={closeLoan}>×</button></div>
+            <div className="fmodal-body">
+              <div className="fg"><label className="fl">Direction *</label>
+                <select className="fs" value={loanForm.direction} onChange={e=>setLoanForm(p=>({...p,direction:e.target.value}))}>
+                  <option value="in">Loan In — Director → Company</option>
+                  <option value="repayment">Repayment — Company → Director</option>
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Director *</label>
+                {directors.length > 0 ? (
+                  <select className="fs" value={loanForm.directorName} onChange={e=>setLoanForm(p=>({...p,directorName:e.target.value}))}>
+                    {directors.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                ) : (
+                  <input className="fi" value={loanForm.directorName} onChange={e=>setLoanForm(p=>({...p,directorName:e.target.value}))} placeholder="Director's name" />
+                )}
+              </div>
+              <div className="fg"><label className="fl">Amount (RM) *</label><input type="number" className="fi" value={loanForm.amount} onChange={e=>setLoanForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" /></div>
+              <div className="fg"><label className="fl">Bank *</label>
+                <select className="fs" value={loanForm.bank} onChange={e=>setLoanForm(p=>({...p,bank:e.target.value}))}>
+                  {Object.entries(BANK).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={loanForm.date} onChange={e=>setLoanForm(p=>({...p,date:e.target.value}))} /></div>
+              <div className="fg"><label className="fl">Notes</label><input className="fi" value={loanForm.notes} onChange={e=>setLoanForm(p=>({...p,notes:e.target.value}))} placeholder="Optional" /></div>
+            </div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeLoan}>Cancel</button><button className="btn-primary" onClick={handleAddLoan} disabled={!loanForm.amount || !loanForm.directorName.trim()}>Save</button></div>
           </Modal>
         )}
 
