@@ -65,11 +65,11 @@ export default function Settings(){
 
   const filtered=useMemo(()=>{let l=[...users];if(!showInactive)l=l.filter(u=>u.active);if(fRole!=="all")l=l.filter(u=>u.role===fRole);if(search.trim()){const q=search.toLowerCase();l=l.filter(u=>u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q))}return l},[users,fRole,search,showInactive]);
 
-  const ac=users.filter(u=>u.active).length;const bc=users.filter(u=>u.role==="bod"&&u.active).length;const adc=users.filter(u=>u.role==="admin"&&u.active).length;const dc=users.filter(u=>u.role==="dept_head"&&u.active).length;const sc=users.filter(u=>u.role==="staff"&&u.active).length;
+  const ac=users.filter(u=>u.active).length;const bc=users.filter(u=>u.role==="bod"&&u.active).length;const adc=users.filter(u=>u.role==="admin"&&u.active).length;const dc=users.filter(u=>u.role==="dept_head"&&u.active).length;const sc=users.filter(u=>u.role==="staff"&&u.active).length;const inc=users.filter(u=>u.role==="intern"&&u.active).length;
 
   const handleToggle=u=>{if(u.active){setConfirm({title:"Deactivate?",msg:`${u.name} will no longer be able to log in. They can be reactivated later.`,label:"Deactivate",color:"#EF4444",onConfirm:()=>{updateUser(u.id,{active:false});setConfirm(null);setToast({msg:`${u.name} has been deactivated.`,type:"danger"})}});}else{updateUser(u.id,{active:true});setToast({msg:`${u.name} has been activated.`,type:"success"});}};
 
-  const caps=[["View all departments",1,1,0,0],["View own department",1,1,1,1],["Create job",1,1,1,1],["Edit job",1,1,1,0],["Change status",1,1,1,0],["Archive/Cancel",1,0,0,0],["Reports",1,0,1,0],["Export",1,0,0,0],["User Management",1,0,0,0],["Settings",1,0,0,0]];
+  const caps=[["View all departments",1,1,0,0,0],["View own department",1,1,1,1,1],["Create job",1,1,1,1,1],["Edit job",1,1,1,0,0],["Change status",1,1,1,0,0],["Archive/Cancel",1,0,0,0,0],["Reports",1,0,1,0,0],["Export",1,0,0,0,0],["User Management",1,0,0,0,0],["Settings",1,0,0,0,0]];
 
   return(
     <>
@@ -124,7 +124,7 @@ export default function Settings(){
         <div className="header"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><div style={{fontSize:20,fontWeight:700}}>Settings</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>User Management</div></div><button className="btn-header" onClick={()=>setAddModal(true)}><span style={{fontSize:16}}>+</span> Add User</button></div></div>
         <div className="content">
           <div className="sum-grid">
-            {[{l:"Total Active",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.color},{l:"Admin",v:adc,s:"All depts",c:ROLE.admin.color},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.color},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.color}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
+            {[{l:"Total Active",v:ac,s:`${users.length} total`,c:"#E91E63"},{l:"BOD",v:bc,s:"Full access",c:ROLE.bod.color},{l:"Admin",v:adc,s:"All depts",c:ROLE.admin.color},{l:"Dept Head",v:dc,s:"Dept access",c:ROLE.dept_head.color},{l:"Staff",v:sc,s:"Limited",c:ROLE.staff.color},{l:"Intern",v:inc,s:"Limited",c:ROLE.intern.color}].map((card,i)=>(<div key={i} className="sum-card" style={{borderLeftColor:card.c}}><div className="section-label">{card.l}</div><div style={{fontSize:24,fontWeight:700,marginTop:4}}>{card.v}</div><div className="text-xs text-secondary" style={{marginTop:2}}>{card.s}</div></div>))}
           </div>
           <div className="card filter-bar">
             <div className="search-wrap"><span className="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input className="fi" style={{paddingLeft:36}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or email..."/></div>
@@ -152,7 +152,7 @@ export default function Settings(){
 
           <div className="card" style={{marginTop:24,padding:"20px 24px"}}><div style={{fontSize:14,fontWeight:700,marginBottom:16}}>Access Reference</div>
             <table className="ref"><thead><tr><th>Capability</th>{Object.entries(ROLE).map(([k,v])=><th key={k} style={{textAlign:"center",color:v.color,fontWeight:600}}>{v.label}</th>)}</tr></thead><tbody>
-              {caps.map(([cap,b,a,d,s],i)=><tr key={i}><td>{cap}</td><td style={{textAlign:"center"}}>{b?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{a?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{d?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td><td style={{textAlign:"center"}}>{s?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td></tr>)}
+              {caps.map(([cap,...vals],i)=><tr key={i}><td>{cap}</td>{vals.map((v,j)=><td key={j} style={{textAlign:"center"}}>{v?<span className="text-green">✓</span>:<span style={{color:"#E8E4ED"}}>—</span>}</td>)}</tr>)}
             </tbody></table>
           </div>
 
