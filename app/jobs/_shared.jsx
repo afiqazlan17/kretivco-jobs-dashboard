@@ -105,6 +105,30 @@ export function CancelModal({ job, onConfirm, onClose }) {
   );
 }
 
+// ─── Delete Job Modal — permanent, unlike Cancel/Archive (a status flag).
+// A reason is mandatory; the deletion + reason gets written to the
+// activity log before the row is removed (see lib/hooks.js deleteJob()).
+export function DeleteJobModal({ job, onConfirm, onClose }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const guardedClose = () => { if (reason.trim() && !window.confirm('Unsaved changes will be lost. Close this form?')) return; onClose(); };
+  return (
+    <Modal width={440} onClose={guardedClose}>
+      <div className="modal-header"><span className="modal-title">Delete Job</span><button className="modal-close" onClick={guardedClose}>×</button></div>
+      <div className="modal-body">
+        <div className="summary-box"><JID>{job.job_id}</JID> · {job.customer_name}</div>
+        <div style={{ fontSize: 12.5, color: '#EF4444', marginBottom: 12, lineHeight: 1.5 }}>⚠ This permanently removes the job — unlike Cancel/Archive, it cannot be undone. Use Cancel or Archive instead if you just want it out of the active list.</div>
+        <label className="field-label">Reason for deletion *</label>
+        <input className="field-input" style={{ width: '100%' }} value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Duplicate entry, created by mistake..." />
+      </div>
+      <div className="modal-footer">
+        <button className="btn-secondary" onClick={guardedClose}>Cancel</button>
+        <button className="btn-primary" style={{ background: '#EF4444' }} disabled={!reason.trim() || busy} onClick={async () => { setBusy(true); await onConfirm(reason.trim()); setBusy(false); }}>{busy ? 'Deleting…' : 'Yes, Delete Permanently'}</button>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Reassign (Change Current Responsible) Modal ──────────────
 export function ReassignModal({ job, onConfirm, onClose }) {
   const options = PIC_OPTIONS;
@@ -973,7 +997,7 @@ export function ProgressStepper({ job }) {
 // "potential" job gets claimed AND advanced to "in_progress" in one step;
 // an already-in-progress job just hands the PIC over to whoever clicks,
 // no status change (e.g. covering for a staff member on leave).
-export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onHold, onResume, onCancel, onArchive }) {
+export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onHold, onResume, onCancel, onArchive, onDelete, canDelete }) {
   const [open, setOpen] = useState(false);
   // A Completed/Cancelled job is closed — nothing about who's responsible,
   // its hold state, or its status should still be adjustable. Archiving
@@ -1011,6 +1035,8 @@ export function ActionMenu({ job, onTakeIn, onChangeResponsible, onCloseJob, onH
             {canCancel && item('Cancel Job', '✕', onCancel, '#EF4444')}
             {canArchive && item('Archive', '🗄️', onArchive, '#6B7280')}
             {locked && <div style={{ padding: '8px 12px', fontSize: 11, color: '#9B93A8', fontStyle: 'italic' }}>Job closed — no further changes.</div>}
+            {canDelete && <div style={{ borderTop: '1px solid #F0ECF4', margin: '4px 0' }} />}
+            {canDelete && item('Delete Job', '🗑️', onDelete, '#EF4444')}
           </div>
         </>
       )}

@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/constants';
 import { supabase, isMockMode } from '@/lib/supabase';
-import { DetailPanel, CancelModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
+import { DetailPanel, CancelModal, DeleteJobModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Queue, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
@@ -18,15 +18,20 @@ export default function JobDetailPage() {
 
   const { profile } = useAuth() || {};
   const visDepts = useVisibleDepts();
-  const { jobs, customers, vendors, addVendor, genVendorId, updateJob, updateCustomer, getActivity, addLog, ledgerEntries, postInvoiceEntry, postReceiptEntry, postExpenseEntry, reverseJobLedgerEntries, dataLoading } = useData();
+  const { jobs, customers, vendors, addVendor, genVendorId, updateJob, deleteJob, updateCustomer, getActivity, addLog, ledgerEntries, postInvoiceEntry, postReceiptEntry, postExpenseEntry, reverseJobLedgerEntries, dataLoading } = useData();
 
   const job = jobs.find(j => j.job_id === jobId);
   const cust = job ? customers.find(c => c.id === job.customer_id) : null;
 
   const [confirm, setConfirm] = useState(null);
   const [cancelJob, setCancelJob] = useState(null);
+  const [deleteJobTarget, setDeleteJobTarget] = useState(null);
   const [reassignJob, setReassignJob] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // BOD deletes anything; Dept Head only within a department they can see
+  // (own, or whatever else BOD granted via Visible Departments).
+  const canDelete = profile?.role === 'bod' || (profile?.role === 'dept_head' && (!visDepts || visDepts.includes(job?.department)));
 
   const handleStatus = useCallback((job, s) => {
     if (s === "completed") {
@@ -112,6 +117,15 @@ export default function JobDetailPage() {
     });
   }, [updateJob, profile]);
 
+  const handleDeleteConfirm = useCallback(async (reason) => {
+    if (!deleteJobTarget) return;
+    const target = deleteJobTarget;
+    const ok = await deleteJob(target.id, reason, profile?.name);
+    setDeleteJobTarget(null);
+    if (ok) router.push('/jobs');
+    else setToast('Failed to delete — please try again.');
+  }, [deleteJobTarget, deleteJob, profile, router]);
+
   const handleToggleInstallment = useCallback((job, installmentIndex) => {
     const updated = [...(job.installments || [])];
     updated[installmentIndex] = { ...updated[installmentIndex], status: updated[installmentIndex].status === 'paid' ? 'pending' : 'paid' };
@@ -182,6 +196,8 @@ export default function JobDetailPage() {
               onResume={() => handleResume(job)}
               onCancel={() => handleCancel(job)}
               onArchive={() => handleArchive(job)}
+              onDelete={() => setDeleteJobTarget(job)}
+              canDelete={canDelete}
             />
           </div>
           <div className="job-header-row">
@@ -226,6 +242,7 @@ export default function JobDetailPage() {
           />
         </div>
         {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={() => setCancelJob(null)} />}
+        {deleteJobTarget && <DeleteJobModal job={deleteJobTarget} onConfirm={handleDeleteConfirm} onClose={() => setDeleteJobTarget(null)} />}
         {reassignJob && <ReassignModal job={reassignJob} onConfirm={handleReassignConfirm} onClose={() => setReassignJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={() => setConfirm(null)} />}
         {toast && <Toast msg={typeof toast === 'string' ? toast : toast.msg} action={typeof toast === 'object' ? toast.action : null} onDone={() => setToast(null)} />}
