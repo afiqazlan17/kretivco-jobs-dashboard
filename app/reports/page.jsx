@@ -37,7 +37,17 @@ export default function Reports(){
   const fTotal=funnel.pot+funnel.prog+funnel.comp;
   const convPct=fTotal>0?Math.round(funnel.comp/fTotal*100):0;
 
-  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metric","Value"],["Total Jobs",totalJobs],["Estimate",totalEst],["Final",totalFinal],["Variance",variance]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Month","Jobs","Est","Final",...deptKeys.map(d=>DEPT[d].code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...deptKeys.map(d=>m.byD[d]?.count||0)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.job_id,j.customer_name||customerDisplayName(customers.find(c=>c.id===j.customer_id))||j.customer_id,DEPT[j.department]?.label,j.job_type,STATUS[j.status]?.label,j.estimation_value,j.final_value,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
+  // Closed Tickets — a job that never reached Completed (customer didn't
+  // proceed after quotation, or work stopped mid-way) still needs
+  // accounting for, distinct from one that finished normally. status
+  // alone can't tell them apart once it flips to "cancelled", so
+  // closed_from_status (snapshotted at Close Ticket time) is what's read
+  // here.
+  const closedPot=filtered.filter(j=>j.status==="cancelled"&&j.closed_from_status==="potential").length;
+  const closedProg=filtered.filter(j=>j.status==="cancelled"&&j.closed_from_status==="in_progress").length;
+  const closedTotal=closedPot+closedProg+comp.length;
+
+  const handleExport=()=>{const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet([["Kretivco Report"],[],[`${df} — ${dt}`],[],["Metric","Value"],["Total Jobs",totalJobs],["Estimate",totalEst],["Final",totalFinal],["Variance",variance],[],["Closed Tickets","Count"],["Closed (Potential)",closedPot],["Closed (In Progress)",closedProg],["Completed",comp.length]]);XLSX.utils.book_append_sheet(wb,s1,"Summary");const s2=XLSX.utils.aoa_to_sheet([["Month","Jobs","Est","Final",...deptKeys.map(d=>DEPT[d].code)],...monthly.map(m=>[m.label,m.total,m.est,m.final,...deptKeys.map(d=>m.byD[d]?.count||0)])]);XLSX.utils.book_append_sheet(wb,s2,"Monthly");const s3=XLSX.utils.aoa_to_sheet([["Job ID","Customer","Dept","Type","Status","Est","Final","PIC"],...filtered.map(j=>[j.job_id,j.customer_name||customerDisplayName(customers.find(c=>c.id===j.customer_id))||j.customer_id,DEPT[j.department]?.label,j.job_type,STATUS[j.status]?.label,j.estimation_value,j.final_value,j.pic])]);XLSX.utils.book_append_sheet(wb,s3,"Jobs");XLSX.writeFile(wb,`Kretivco_Report_${df}_${dt}.xlsx`)};
 
   return(
     <>
@@ -113,6 +123,14 @@ export default function Reports(){
                   <div key={i} className="funnel-step"><div className="funnel-box" style={{backgroundColor:s.c+"10",borderColor:s.c+"25"}}><div className="funnel-lbl" style={{color:s.c}}>{s.l}</div><div className="funnel-val">{s.n}</div><div className="funnel-sub">{s.v}</div>{s.last&&<div className="funnel-pct">{convPct}% conversion</div>}</div>{!s.last&&<div className="funnel-arrow">›</div>}</div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className="card"><div className="card-title">Closed Tickets</div><div className="section-label" style={{marginBottom:16}}>By stage at close — Potential/In Progress never reached Completed</div>
+            <div className="funnel-row">
+              {[{l:"Closed (Potential)",n:closedPot,c:"#6366F1"},{l:"Closed (In Progress)",n:closedProg,c:"#F59E0B"},{l:"Completed",n:comp.length,c:"#10B981",last:true}].map((s,i)=>(
+                <div key={i} className="funnel-step"><div className="funnel-box" style={{backgroundColor:s.c+"10",borderColor:s.c+"25"}}><div className="funnel-lbl" style={{color:s.c}}>{s.l}</div><div className="funnel-val">{s.n}</div>{s.last&&<div className="funnel-pct">{closedTotal>0?Math.round(comp.length/closedTotal*100):0}% completed</div>}</div>{!s.last&&<div className="funnel-arrow">›</div>}</div>
+              ))}
             </div>
           </div>
 
