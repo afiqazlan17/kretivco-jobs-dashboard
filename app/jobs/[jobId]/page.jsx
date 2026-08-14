@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useAuth, useData, useVisibleDepts } from '@/lib/hooks';
 import { STATUS, HOLD_STATUS, CANCEL_REASONS, DEPT, formatRM } from '@/lib/constants';
 import { supabase, isMockMode } from '@/lib/supabase';
-import { DetailPanel, CancelModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
+import { DetailPanel, CloseTicketModal, ReassignModal, ConfirmModal, Toast, GlobalJobStyles, ActionMenu } from '../_shared';
 
 // A single job's own page — reached by clicking a row in Job Queue, a
 // project-sibling link, or a direct link (e.g. from the Dashboard). All the
@@ -24,7 +24,7 @@ export default function JobDetailPage() {
   const cust = job ? customers.find(c => c.id === job.customer_id) : null;
 
   const [confirm, setConfirm] = useState(null);
-  const [cancelJob, setCancelJob] = useState(null);
+  const [closeTicketJob, setCloseTicketJob] = useState(null);
   const [reassignJob, setReassignJob] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -45,8 +45,8 @@ export default function JobDetailPage() {
     setToast(`${job.job_id}: → ${STATUS[s].label}`);
   }, [updateJob, profile, ledgerEntries]);
 
-  const handleCancel = useCallback((job) => {
-    setCancelJob(job);
+  const handleCloseTicket = useCallback((job) => {
+    setCloseTicketJob(job);
   }, []);
 
   const handleAddNote = useCallback((jobId, text, jobUuid, attachment) => {
@@ -91,15 +91,19 @@ export default function JobDetailPage() {
     router.push(`/jobs/${jobId}`);
   }, [router]);
 
-  const handleCancelConfirm = useCallback((reason, customText) => {
-    if (!cancelJob) return;
+  const handleCloseTicketConfirm = useCallback((reason, customText) => {
+    if (!closeTicketJob) return;
     const reasonLabel = CANCEL_REASONS.find(r => r.value === reason)?.label || reason;
     const detail = reason === 'other' && customText ? customText : reasonLabel;
-    updateJob(cancelJob.id, { status: 'cancelled', cancel_reason: reason, cancel_reason_text: reason === 'other' ? customText : '' }, profile?.name, { action: 'cancelled', detail });
-    reverseJobLedgerEntries(cancelJob.job_id, profile?.name);
-    setCancelJob(null);
-    setToast(`${cancelJob.job_id} cancelled.`);
-  }, [cancelJob, updateJob, reverseJobLedgerEntries, profile]);
+    // closed_from_status snapshots which stage this was closed from
+    // (potential/in_progress) — status itself becomes 'cancelled' either
+    // way, so this is the only place that distinction survives, and
+    // Reports' Closed Tickets breakdown reads it back out.
+    updateJob(closeTicketJob.id, { status: 'cancelled', closed_from_status: closeTicketJob.status, cancel_reason: reason, cancel_reason_text: reason === 'other' ? customText : '' }, profile?.name, { action: 'cancelled', detail });
+    reverseJobLedgerEntries(closeTicketJob.job_id, profile?.name);
+    setCloseTicketJob(null);
+    setToast(`${closeTicketJob.job_id} closed.`);
+  }, [closeTicketJob, updateJob, reverseJobLedgerEntries, profile]);
 
   const handleArchive = useCallback((job) => {
     setConfirm({
@@ -180,7 +184,7 @@ export default function JobDetailPage() {
               onCloseJob={() => handleStatus(job, 'completed')}
               onHold={(type) => handleHold(job, type)}
               onResume={() => handleResume(job)}
-              onCancel={() => handleCancel(job)}
+              onCloseTicket={() => handleCloseTicket(job)}
               onArchive={() => handleArchive(job)}
             />
           </div>
@@ -225,7 +229,7 @@ export default function JobDetailPage() {
             userName={profile?.name}
           />
         </div>
-        {cancelJob && <CancelModal job={cancelJob} onConfirm={handleCancelConfirm} onClose={() => setCancelJob(null)} />}
+        {closeTicketJob && <CloseTicketModal job={closeTicketJob} onConfirm={handleCloseTicketConfirm} onClose={() => setCloseTicketJob(null)} />}
         {reassignJob && <ReassignModal job={reassignJob} onConfirm={handleReassignConfirm} onClose={() => setReassignJob(null)} />}
         {confirm && <ConfirmModal {...confirm} onClose={() => setConfirm(null)} />}
         {toast && <Toast msg={typeof toast === 'string' ? toast : toast.msg} action={typeof toast === 'object' ? toast.action : null} onDone={() => setToast(null)} />}
