@@ -27,6 +27,7 @@ function UserModal({user,onSave,onClose}){
     <Modal w={500} onClose={guardedClose}>
       <div className="mheader"><div className="mtitle">{isEdit?"Edit User":"Add User"}</div><button className="mclose" onClick={guardedClose}>×</button></div>
       <div className="mbody">
+        {isEdit&&<div className="fg"><label className="fl">Staff ID</label><div className="text-body text-secondary" style={{fontFamily:"'JetBrains Mono',monospace"}}>{user.staff_id||"—"}</div></div>}
         <div className="fg"><label className="fl">Full Name *</label><input className="fi" value={f.name} onChange={e=>s("name",e.target.value)} style={{borderColor:err.name?"#EF4444":"#E8E4ED"}}/>{err.name&&<div className="ferr">{err.name}</div>}</div>
         <div className="fg"><label className="fl">Email *</label><input className="fi" value={f.email} onChange={e=>s("email",e.target.value)} placeholder="email@kretiv.co"/></div>
         <div className="fg"><label className="fl">Role *</label>
@@ -83,9 +84,9 @@ export default function Settings(){
         .filter-bar{padding:14px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
         .badge-r{display:inline-block;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600}.badge-d{display:inline-block;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600}
         .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-        .tbl-h{display:grid;grid-template-columns:44px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
+        .tbl-h{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
         .tbl-hc{font-size:11px;font-weight:500;color:#9B93A8;text-transform:uppercase;letter-spacing:.02em;padding:12px 4px}
-        .tbl-r{display:grid;grid-template-columns:44px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
+        .tbl-r{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
         .tbl-r:hover{background:#F9F8FB}.tbl-c{padding:0 4px}
         .tbl-c-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .tbl-c-wrap{display:flex;flex-wrap:wrap;gap:4px}
@@ -133,10 +134,11 @@ export default function Settings(){
             <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B6080",cursor:"pointer"}}><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)} style={{accentColor:"#E91E63"}}/>Show inactive</label>
           </div>
           <div className="card" style={{overflow:"auto"}}>
-            <div className="tbl-h">{["","Name","Email","Role","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
+            <div className="tbl-h">{["","Staff ID","Name","Email","Role","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
             {filtered.length===0?<div style={{padding:"48px 20px",textAlign:"center",color:"#9B93A8",fontSize:13}}>No users.</div>:filtered.map(u=>(
               <div key={u.id} className="tbl-r" style={{opacity:u.active?1:.55}}>
                 <div className="tbl-c"><Av name={u.name}/></div>
+                <div className="tbl-c text-sm text-secondary" style={{fontFamily:"'JetBrains Mono',monospace"}}>{u.staff_id||"—"}</div>
                 <div className="tbl-c tbl-c-trunc"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Since {formatDate(u.created_at)}</div></div>
                 <div className="tbl-c tbl-c-trunc text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
