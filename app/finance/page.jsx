@@ -49,6 +49,7 @@ const TYPE_META = {
   opening_balance: { label: 'Opening Balance', color: '#6B7280', sign: '' },
   director_loan_in: { label: 'Director Loan In', color: '#8B5CF6', sign: '+' },
   director_loan_repayment: { label: 'Loan Repayment', color: '#8B5CF6', sign: '-' },
+  bank_transfer: { label: 'Bank Transfer', color: '#3A86FF', sign: '' },
   reversal: { label: 'Reversal', color: '#9B93A8', sign: '' },
 };
 
@@ -681,7 +682,7 @@ export default function Finance() {
 
 function FinanceContent() {
   const { profile } = useAuth() || {};
-  const { jobs = [], ledgerEntries = [], users = [], postExpenseEntry, postOpeningBalanceAdjustment, postDirectorLoan } = useData() || {};
+  const { jobs = [], ledgerEntries = [], users = [], postExpenseEntry, postOpeningBalanceAdjustment, postDirectorLoan, postBankTransfer } = useData() || {};
   const visDepts = useVisibleDepts();
   const isBod = profile?.role === 'bod';
   const searchParams = useSearchParams();
@@ -693,7 +694,10 @@ function FinanceContent() {
   const [showExpense, setShowExpense] = useState(false);
   const [showOpening, setShowOpening] = useState(false);
   const [showLoan, setShowLoan] = useState(false);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const directors = users.filter(u => u.role === 'bod');
+  const bankKeys = Object.keys(BANK);
   const [toast, setToast] = useState(null);
   const [fDept, setFDept] = useState('all');
   const [fBank, setFBank] = useState('all');
@@ -709,15 +713,18 @@ function FinanceContent() {
   const blankExpForm = () => ({ category: 'subcontractor', department: '', jobId: '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
   const blankOpenForm = () => ({ bank: 'mbb', amount: '', notes: '' });
   const blankLoanForm = () => ({ direction: 'in', directorName: directors[0]?.name || '', amount: '', bank: 'mbb', date: new Date().toISOString().slice(0,10), notes: '' });
+  const blankTransferForm = () => ({ fromBank: bankKeys[0], toBank: bankKeys[1] || bankKeys[0], amount: '', date: new Date().toISOString().slice(0,10), notes: '' });
   const [expForm, setExpForm] = useState(blankExpForm);
   const [openForm, setOpenForm] = useState(blankOpenForm);
   const [loanForm, setLoanForm] = useState(blankLoanForm);
+  const [transferForm, setTransferForm] = useState(blankTransferForm);
   const [expReceiptFile, setExpReceiptFile] = useState(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const confirmDiscard = (dirty, closeFn) => { if (dirty && !window.confirm('Unsaved changes will be lost. Close this form?')) return; closeFn(); };
   const closeExpense = () => confirmDiscard(JSON.stringify(expForm) !== JSON.stringify(blankExpForm()) || !!expReceiptFile, () => { setShowExpense(false); setExpReceiptFile(null); });
   const closeOpening = () => confirmDiscard(JSON.stringify(openForm) !== JSON.stringify(blankOpenForm()), () => setShowOpening(false));
   const closeLoan = () => confirmDiscard(JSON.stringify(loanForm) !== JSON.stringify(blankLoanForm()), () => setShowLoan(false));
+  const closeTransfer = () => confirmDiscard(JSON.stringify(transferForm) !== JSON.stringify(blankTransferForm()), () => setShowTransfer(false));
 
   const deptKeys = Object.keys(DEPT).filter(k => !visDepts || visDepts.includes(k));
 
@@ -732,7 +739,7 @@ function FinanceContent() {
   const filteredEntries = useMemo(() => {
     let list = [...scopedEntries].sort((a,b) => new Date(b.date) - new Date(a.date));
     if (fDept !== 'all') list = list.filter(e => e.department === fDept);
-    if (fBank !== 'all') list = list.filter(e => e.bank === fBank);
+    if (fBank !== 'all') list = list.filter(e => e.bank === fBank || e.debit_account === `bank_${fBank}` || e.credit_account === `bank_${fBank}`);
     return list;
   }, [scopedEntries, fDept, fBank]);
 
@@ -829,6 +836,20 @@ function FinanceContent() {
     setToast(loanForm.direction === 'in' ? 'Director loan recorded.' : 'Loan repayment recorded.');
   };
 
+  const handleAddTransfer = () => {
+    if (!transferForm.amount || transferForm.fromBank === transferForm.toBank) return;
+    postBankTransfer({
+      fromBank: transferForm.fromBank,
+      toBank: transferForm.toBank,
+      amount: transferForm.amount,
+      date: transferForm.date ? new Date(transferForm.date).toISOString() : null,
+      notes: transferForm.notes,
+    }, profile?.name);
+    setShowTransfer(false);
+    setTransferForm(blankTransferForm());
+    setToast('Bank transfer recorded.');
+  };
+
   return (
     <>
       <style>{`
@@ -859,6 +880,8 @@ function FinanceContent() {
         .btn-primary{font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;padding:9px 20px;border-radius:8px;border:none;background:#E91E63;color:#fff;cursor:pointer}
         .btn-secondary{font-family:'Poppins',sans-serif;font-size:13px;font-weight:500;padding:9px 18px;border-radius:8px;border:1px solid #E8E4ED;background:#fff;color:#1A1025;cursor:pointer}
         .btn-header{font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;padding:9px 18px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;cursor:pointer}
+        .more-menu-item{display:block;width:100%;text-align:left;font-family:'Poppins',sans-serif;font-size:13px;font-weight:500;padding:10px 16px;border:none;background:#fff;color:#1A1025;cursor:pointer}
+        .more-menu-item:hover{background:#F5F3F7}
         .fmodal-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);animation:fadeIn .2s}
         .fmodal-box{background:#fff;border-radius:16px;max-width:94vw;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.18);animation:slideUp .25s}
         .fmodal-head{padding:20px 24px;border-bottom:1px solid #F0ECF4;display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:700}
@@ -876,8 +899,21 @@ function FinanceContent() {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
             <div><div style={{fontSize:20,fontWeight:700}}>Finance</div><div style={{fontSize:12,color:"rgba(255,255,255,.6)",marginTop:2}}>Revenue, expense &amp; ledger</div></div>
             <div style={{display:"flex",gap:8}}>
-              {isBod && <button className="btn-header" onClick={()=>setShowOpening(true)}>Adjust Bank Balance</button>}
-              {isBod && <button className="btn-header" onClick={()=>{ setLoanForm(blankLoanForm()); setShowLoan(true); }}>+ Director Loan</button>}
+              {isBod && (
+                <div style={{position:"relative"}}>
+                  <button className="btn-header" onClick={()=>setShowMoreMenu(p=>!p)}>More ▾</button>
+                  {showMoreMenu && (
+                    <>
+                      <div style={{position:"fixed",inset:0,zIndex:9}} onClick={()=>setShowMoreMenu(false)} />
+                      <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",background:"#fff",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.18)",overflow:"hidden",minWidth:180,zIndex:10}}>
+                        <button className="more-menu-item" onClick={()=>{setShowMoreMenu(false);setShowOpening(true);}}>Adjust Bank Balance</button>
+                        <button className="more-menu-item" onClick={()=>{setShowMoreMenu(false);setLoanForm(blankLoanForm());setShowLoan(true);}}>+ Director Loan</button>
+                        <button className="more-menu-item" onClick={()=>{setShowMoreMenu(false);setTransferForm(blankTransferForm());setShowTransfer(true);}}>+ Transfer Bank</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <button className="btn-header" onClick={()=>setShowExpense(true)}>+ Add Expense</button>
             </div>
           </div>
@@ -1105,6 +1141,28 @@ function FinanceContent() {
               <div className="fg"><label className="fl">Notes</label><input className="fi" value={loanForm.notes} onChange={e=>setLoanForm(p=>({...p,notes:e.target.value}))} placeholder="Optional" /></div>
             </div>
             <div className="fmodal-foot"><button className="btn-secondary" onClick={closeLoan}>Cancel</button><button className="btn-primary" onClick={handleAddLoan} disabled={!loanForm.amount || !loanForm.directorName.trim()}>Save</button></div>
+          </Modal>
+        )}
+
+        {showTransfer && (
+          <Modal width={400} onClose={closeTransfer}>
+            <div className="fmodal-head">Transfer Bank<button className="fmodal-close" onClick={closeTransfer}>×</button></div>
+            <div className="fmodal-body">
+              <div className="fg"><label className="fl">From *</label>
+                <select className="fs" value={transferForm.fromBank} onChange={e=>{ const fromBank=e.target.value; setTransferForm(p=>({...p,fromBank,toBank:p.toBank===fromBank?(bankKeys.find(b=>b!==fromBank)||fromBank):p.toBank})); }}>
+                  {bankKeys.map(b => <option key={b} value={b}>{BANK[b].label}</option>)}
+                </select>
+              </div>
+              <div className="fg"><label className="fl">To *</label>
+                <select className="fs" value={transferForm.toBank} onChange={e=>setTransferForm(p=>({...p,toBank:e.target.value}))}>
+                  {bankKeys.filter(b => b !== transferForm.fromBank).map(b => <option key={b} value={b}>{BANK[b].label}</option>)}
+                </select>
+              </div>
+              <div className="fg"><label className="fl">Amount (RM) *</label><input type="number" className="fi" value={transferForm.amount} onChange={e=>setTransferForm(p=>({...p,amount:e.target.value}))} placeholder="0.00" /></div>
+              <div className="fg"><label className="fl">Date</label><input type="date" className="fi" value={transferForm.date} onChange={e=>setTransferForm(p=>({...p,date:e.target.value}))} /></div>
+              <div className="fg"><label className="fl">Notes</label><input className="fi" value={transferForm.notes} onChange={e=>setTransferForm(p=>({...p,notes:e.target.value}))} placeholder="Optional" /></div>
+            </div>
+            <div className="fmodal-foot"><button className="btn-secondary" onClick={closeTransfer}>Cancel</button><button className="btn-primary" onClick={handleAddTransfer} disabled={!transferForm.amount || transferForm.fromBank === transferForm.toBank}>Save</button></div>
           </Modal>
         )}
 
