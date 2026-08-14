@@ -28,7 +28,7 @@ function FinanceSubmenu({ isMobile, collapsed, onNav }) {
     <div style={{ padding: '2px 0 6px' }}>
       {REPORT_MENU.map(r => (
         <div key={r.key} onClick={(e) => { e.stopPropagation(); onNav(`/finance?report=${r.key}`) }}
-          style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 34, padding: (isMobile || !collapsed) ? '7px 10px 7px 44px' : '7px 12px', cursor: 'pointer',
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 40, padding: (isMobile || !collapsed) ? '10px 18px 10px 44px' : '10px 12px', cursor: 'pointer',
             background: activeReport === r.key ? 'rgba(255,255,255,.08)' : 'transparent',
             color: activeReport === r.key ? '#fff' : 'rgba(255,255,255,.45)',
             fontSize: 12, fontWeight: activeReport === r.key ? 600 : 400, lineHeight: 1.3 }}>
@@ -52,7 +52,7 @@ function JobSubmenu({ isMobile, collapsed, onNav, onNewJob }) {
         const isActive = !j.action && activeView === j.key
         return (
           <div key={j.key} onClick={(e) => { e.stopPropagation(); j.action ? onNewJob() : onNav(`/jobs?view=${j.key}`) }}
-            style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 34, padding: (isMobile || !collapsed) ? '7px 10px 7px 44px' : '7px 12px', cursor: 'pointer',
+            style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 40, padding: (isMobile || !collapsed) ? '10px 18px 10px 44px' : '10px 12px', cursor: 'pointer',
               background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
               color: isActive ? '#fff' : (j.action ? '#E91E63' : 'rgba(255,255,255,.45)'),
               fontSize: 12, fontWeight: isActive ? 600 : 400, lineHeight: 1.3 }}>
@@ -165,7 +165,7 @@ export default function AppShell({ children }) {
               return (
                 <div key={item.key}>
                   <div onClick={()=>handleNav(item.path)}
-                    style={{ display:'flex', alignItems:'center', gap:12, height:44, padding:'0 20px', cursor:'pointer', position:'relative',
+                    style={{ display:'flex', alignItems:'center', gap:12, height:48, padding:'0 20px', cursor:'pointer', position:'relative',
                       background:active?'rgba(255,255,255,.06)':'transparent', color:active?'#fff':'rgba(255,255,255,.5)',
                       fontSize:13, fontWeight:active?600:400, transition:'all .15s', whiteSpace:'nowrap' }}>
                     {active && <div style={{ position:'absolute', left:0, top:7, bottom:7, width:3, background:'#E91E63', borderRadius:'0 2px 2px 0' }} />}
