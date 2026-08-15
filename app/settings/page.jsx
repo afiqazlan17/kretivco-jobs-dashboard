@@ -76,7 +76,7 @@ export default function Settings(){
 
   const handleToggle=u=>{if(u.active){setConfirm({title:"Deactivate?",msg:`${u.name} will no longer be able to log in. They can be reactivated later.`,label:"Deactivate",color:"#EF4444",onConfirm:()=>{updateUser(u.id,{active:false});setConfirm(null);setToast({msg:`${u.name} has been deactivated.`,type:"danger"})}});}else{updateUser(u.id,{active:true});setToast({msg:`${u.name} has been activated.`,type:"success"});}};
 
-  const caps=[["View all departments",1,0,0,0],["View own department(s)",1,1,1,1],["Create job",1,1,1,1],["Edit job",1,1,1,1],["Change status",1,1,1,1],["Archive/Close Ticket",1,1,1,1],["Delete job/customer/vendor",1,0,0,0],["Manage customers/vendors",1,1,0,0],["Reports & Finance",1,1,0,0],["Export",1,1,0,0],["User Management",1,0,0,0],["Settings",1,0,0,0]];
+  const caps=[["View all departments",1,0,0,0],["View own department(s)",1,1,1,1],["Create job",1,1,1,1],["Edit job",1,1,1,1],["Change status",1,1,1,1],["Archive/Close Ticket",1,1,1,1],["Manage customers/vendors",1,1,0,0],["Reports & Finance",1,1,0,0],["Export",1,1,0,0],["User Management",1,0,0,0],["Settings",1,0,0,0]];
 
   return(
     <>
