@@ -536,11 +536,18 @@ function JobMonitorContent() {
                     </div>
                   )}
 
-                  <div style={{marginBottom:14}}>
-                    <label className="field-label">Job Name *</label>
-                    <input className={`field-input${deptFieldErr(d,'type')?' field-input-err':''}`} value={f.type} onChange={e=>set('type',e.target.value)} placeholder="e.g: Design & Print Roti Bakar" />
-                    {deptFieldErr(d,'type') && <div className="field-error">Required.</div>}
-                  </div>
+                  {f.pkg ? (
+                    <div style={{marginBottom:14}}>
+                      <label className="field-label">Job Name</label>
+                      <div style={{fontSize:12.5,color:'#1A1025',padding:'10px 12px',borderRadius:8,background:'#F7F5FA',border:'1px dashed #D8D2E0'}}>{f.type} <span style={{color:'#9B93A8',fontWeight:400}}>(auto from package)</span></div>
+                    </div>
+                  ) : (
+                    <div style={{marginBottom:14}}>
+                      <label className="field-label">Job Name *</label>
+                      <input className={`field-input${deptFieldErr(d,'type')?' field-input-err':''}`} value={f.type} onChange={e=>set('type',e.target.value)} placeholder="e.g: Design & Print Roti Bakar" />
+                      {deptFieldErr(d,'type') && <div className="field-error">Required.</div>}
+                    </div>
+                  )}
 
                   <div style={{marginBottom:14}}>
                     <label className="field-label">PIC <span style={{fontWeight:400,color:'#9B93A8'}}>— optional, leave blank for department staff to self-assign</span></label>
