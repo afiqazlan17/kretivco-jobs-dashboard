@@ -6,6 +6,13 @@ const formatDate=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"numeric",mont
 
 function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
 function DTag({d}){if(!d)return<span className="text-sm text-muted">All</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
+const ALL_DEPTS=Object.keys(DEPT);
+function DeptCell({user}){
+  const vd=user.visible_departments;
+  const coversAll=vd?.length>0&&ALL_DEPTS.every(d=>vd.includes(d));
+  if(!vd?.length||coversAll)return<DTag d={coversAll?null:user.department}/>;
+  return<>{vd.map(d=><DTag key={d} d={d}/>)}</>;
+}
 function Av({name,sz=32}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04","#10B981","#F59E0B","#6366F1"];const i=(name?.charCodeAt(0)||0)%colors.length;return<div className="avatar" style={{width:sz,height:sz,fontSize:sz*.38,background:colors[i]+"18",color:colors[i]}}>{name?.charAt(0)||"?"}</div>}
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);const c=type==="danger"?"#EF4444":"#10B981";return<div className="toast" style={{borderLeftColor:c}}>{type==="danger"?"✕":"✓"} {msg}</div>}
@@ -82,11 +89,11 @@ export default function Settings(){
         .sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
         .sum-card{background:#fff;border-radius:12px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);border-left:4px solid}
         .filter-bar{padding:14px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-        .badge-r{display:inline-block;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600}.badge-d{display:inline-block;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600}
+        .badge-r{display:inline-block;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;white-space:nowrap}.badge-d{display:inline-block;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600}
         .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-        .tbl-h{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
+        .tbl-h{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 90px minmax(220px,1.6fr) 90px 160px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
         .tbl-hc{font-size:11px;font-weight:500;color:#9B93A8;text-transform:uppercase;letter-spacing:.02em;padding:12px 4px}
-        .tbl-r{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 110px minmax(180px,1.3fr) 90px 160px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
+        .tbl-r{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 90px minmax(220px,1.6fr) 90px 160px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
         .tbl-r:hover{background:#F9F8FB}.tbl-c{padding:0 4px}
         .tbl-c-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .tbl-c-wrap{display:flex;flex-wrap:wrap;gap:4px}
@@ -142,7 +149,7 @@ export default function Settings(){
                 <div className="tbl-c tbl-c-trunc"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Since {formatDate(u.created_at)}</div></div>
                 <div className="tbl-c tbl-c-trunc text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
-                <div className="tbl-c tbl-c-wrap">{u.visible_departments?.length>0?u.visible_departments.map(d=><DTag key={d} d={d}/>):<DTag d={u.department}/>}</div>
+                <div className="tbl-c tbl-c-wrap"><DeptCell user={u}/></div>
                 <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Active":"Inactive"}</div>
                 <div className="tbl-c" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   <button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button>
