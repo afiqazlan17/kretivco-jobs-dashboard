@@ -2,7 +2,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useAuth, useData } from '@/lib/hooks';
 import { DEPT, ROLE } from '@/lib/constants';
-const formatDate=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}):"—";
 
 function RBadge({r}){const m=ROLE[r];return m?<span className="badge-r" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
 function DTag({d}){if(!d)return<span className="text-sm text-muted">All</span>;const m=DEPT[d];return m?<span className="badge-d" style={{color:m.color,background:m.color+"15"}}>{m.label}</span>:null}
@@ -17,7 +16,7 @@ function Av({name,sz=32}){const colors=["#E91E63","#7209B7","#3A86FF","#E85D04",
 function Modal({w,children,onClose}){return<div className="overlay" onClick={onClose}><div className="mbox" style={{width:w}} onClick={e=>e.stopPropagation()}>{children}</div></div>}
 function Toast({msg,type,onDone}){useEffect(()=>{const t=setTimeout(onDone,2500);return()=>clearTimeout(t)},[onDone]);const c=type==="danger"?"#EF4444":"#10B981";return<div className="toast" style={{borderLeftColor:c}}>{type==="danger"?"✕":"✓"} {msg}</div>}
 
-function UserModal({user,onSave,onClose}){
+function UserModal({user,onSave,onClose,onToggleActive}){
   const isEdit=!!user;
   const [initial]=useState(()=>({name:user?.name||"",email:user?.email||"",role:user?.role||"staff",department:user?.department||"",visible_departments:user?.visible_departments||[]}));
   const[f,setF]=useState(initial);
@@ -53,7 +52,10 @@ function UserModal({user,onSave,onClose}){
           <><span className="text-green">✓</span> {(f.visible_departments||[]).length>0?`Can view: ${f.visible_departments.map(d=>DEPT[d]?.label).filter(Boolean).join(', ')}`:`${f.department?DEPT[f.department]?.label:"Department"} jobs only`}<br/><span className="text-green">✓</span> Full job actions (create/edit/status/close ticket/archive)<br/><span className="text-red">✕</span> Cannot delete jobs, or access Reports/Finance/Settings</>}
         </div></div>
       </div>
-      <div className="mfooter"><button className="btn-secondary" onClick={guardedClose}>Cancel</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Save":"Add"}</button></div>
+      <div className="mfooter" style={{justifyContent:isEdit?"space-between":"flex-end"}}>
+        {isEdit&&(user.active?<button className="btn-danger-sm" onClick={onToggleActive}>Deactivate</button>:<button className="btn-success-sm" onClick={onToggleActive}>Activate</button>)}
+        <div style={{display:"flex",gap:8}}><button className="btn-secondary" onClick={guardedClose}>Cancel</button><button className={changed?"btn-primary":"btn-disabled"} onClick={()=>{if(validate())onSave({...user,...f,department:needsDept?f.department:null,visible_departments:needsDept?(f.visible_departments||[]):[]})}}>{isEdit?"Save":"Add"}</button></div>
+      </div>
     </Modal>
   );
 }
@@ -91,9 +93,9 @@ export default function Settings(){
         .filter-bar{padding:14px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
         .badge-r{display:inline-block;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;white-space:nowrap}.badge-d{display:inline-block;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600}
         .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-        .tbl-h{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 90px minmax(220px,1.6fr) 90px 160px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
+        .tbl-h{display:grid;grid-template-columns:44px 90px 90px minmax(130px,1fr) minmax(170px,1.2fr) minmax(240px,1.7fr) 90px 90px;background:#F9F8FB;padding:0 20px;border-bottom:1px solid #F3F1F6;align-items:center}
         .tbl-hc{font-size:11px;font-weight:500;color:#9B93A8;text-transform:uppercase;letter-spacing:.02em;padding:12px 4px}
-        .tbl-r{display:grid;grid-template-columns:44px 90px minmax(130px,1fr) minmax(170px,1.2fr) 90px minmax(220px,1.6fr) 90px 160px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
+        .tbl-r{display:grid;grid-template-columns:44px 90px 90px minmax(130px,1fr) minmax(170px,1.2fr) minmax(240px,1.7fr) 90px 90px;padding:10px 20px;align-items:center;min-height:56px;border-bottom:1px solid #F3F1F6}
         .tbl-r:hover{background:#F9F8FB}.tbl-c{padding:0 4px}
         .tbl-c-trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .tbl-c-wrap{display:flex;flex-wrap:wrap;gap:4px}
@@ -141,20 +143,17 @@ export default function Settings(){
             <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#6B6080",cursor:"pointer"}}><input type="checkbox" checked={showInactive} onChange={e=>setShowInactive(e.target.checked)} style={{accentColor:"#E91E63"}}/>Show inactive</label>
           </div>
           <div className="card" style={{overflow:"auto"}}>
-            <div className="tbl-h">{["","Staff ID","Name","Email","Role","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
+            <div className="tbl-h">{["","Staff ID","Role","Name","Email","Department","Status",""].map((h,i)=><div key={i} className="tbl-hc">{h}</div>)}</div>
             {filtered.length===0?<div style={{padding:"48px 20px",textAlign:"center",color:"#9B93A8",fontSize:13}}>No users.</div>:filtered.map(u=>(
               <div key={u.id} className="tbl-r" style={{opacity:u.active?1:.55}}>
                 <div className="tbl-c"><Av name={u.name}/></div>
                 <div className="tbl-c text-sm text-secondary" style={{fontFamily:"'JetBrains Mono',monospace"}}>{u.staff_id||"—"}</div>
-                <div className="tbl-c tbl-c-trunc"><div className="text-body fw600">{u.name}</div><div className="text-xs text-muted">Since {formatDate(u.created_at)}</div></div>
-                <div className="tbl-c tbl-c-trunc text-body text-secondary">{u.email}</div>
                 <div className="tbl-c"><RBadge r={u.role}/></div>
+                <div className="tbl-c tbl-c-trunc text-body fw600">{u.name}</div>
+                <div className="tbl-c tbl-c-trunc text-body text-secondary">{u.email}</div>
                 <div className="tbl-c tbl-c-wrap"><DeptCell user={u}/></div>
                 <div className="tbl-c text-sm" style={{color:u.active?"#10B981":"#EF4444"}}><span className="dot" style={{background:u.active?"#10B981":"#EF4444"}}/>{u.active?"Active":"Inactive"}</div>
-                <div className="tbl-c" style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  <button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button>
-                  {u.active?<button className="btn-danger-sm" onClick={()=>handleToggle(u)}>Deactivate</button>:<button className="btn-success-sm" onClick={()=>handleToggle(u)}>Activate</button>}
-                </div>
+                <div className="tbl-c"><button className="btn-sm" onClick={()=>setEditUser(u)}>Edit</button></div>
               </div>
             ))}
           </div>
@@ -190,7 +189,7 @@ export default function Settings(){
         </div>
 
         {addModal&&<UserModal onSave={d=>{addUser({...d,id:crypto.randomUUID(),active:true,created_at:new Date().toISOString()});setAddModal(false);setToast({msg:`${d.name} added as ${ROLE[d.role]?.label}.`,type:"success"})}} onClose={()=>setAddModal(false)}/>}
-        {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} updated.`,type:"success"})}} onClose={()=>setEditUser(null)}/>}
+        {editUser&&<UserModal user={editUser} onSave={d=>{updateUser(d.id,d);setEditUser(null);setToast({msg:`${d.name} updated.`,type:"success"})}} onClose={()=>setEditUser(null)} onToggleActive={()=>{setEditUser(null);handleToggle(editUser)}}/>}
         {confirm&&<ConfirmModal {...confirm} onClose={()=>setConfirm(null)}/>}
         {resetJobsModal&&<Modal w={420} onClose={()=>{setResetJobsModal(false);setResetJobsInput('')}}>
           <div style={{padding:"24px"}}>
